@@ -1,6 +1,10 @@
 import * as THREE from "three"
 import _ from "lodash"
-import { CarcassAssembly, CarcassDimensions, CabinetType } from "../Carcass"
+import {
+  CarcassAssembly,
+  CarcassDimensions,
+  CabinetType,
+} from "../../../components/Carcass"
 
 export type CabinetData = {
   group: THREE.Group

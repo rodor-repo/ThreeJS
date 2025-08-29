@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ChevronLeft, ChevronRight, Settings, Palette, Ruler, DoorOpen } from 'lucide-react';
-import { CarcassDimensions, CarcassMaterial, CarcassMaterialData, DoorMaterial, DoorMaterialData } from './Carcass';
-import { categoriesData } from './categoriesData';
+import { CarcassDimensions, CarcassMaterial, CarcassMaterialData, DoorMaterial, DoorMaterialData } from '../../../components/Carcass';
+import { categoriesData } from '../../../components/categoriesData';
 
 interface ProductPanelProps {
   isVisible: boolean;
@@ -75,7 +75,7 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
 
   // Ref to track the last cabinet that was synced to prevent unnecessary re-syncing
   const lastSyncedCabinetRef = useRef<THREE.Group | null>(null);
-  
+
   // Ref to track the previous cabinet height for proportional scaling
   const previousCabinetHeightRef = useRef<number>(600);
 
@@ -97,7 +97,7 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
       const proportionalHeight = Math.round((dimensions.height / drawerQuantity) * 10) / 10;
       const newDrawerHeights = Array(drawerQuantity).fill(proportionalHeight);
       setDrawerHeights(newDrawerHeights);
-      
+
       // Update each drawer height in the carcass
       newDrawerHeights.forEach((height, index) => {
         onDrawerHeightChange?.(index, height);
@@ -108,7 +108,7 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
   // Function to balance remaining drawer heights when one drawer height is changed
   const balanceRemainingDrawerHeights = (changedIndex: number, newHeight: number) => {
     console.log('balanceRemainingDrawerHeights called with:', { changedIndex, newHeight, drawerEnabled, drawerQuantity });
-    
+
     if (!drawerEnabled || drawerQuantity <= 1) {
       console.log('Balance function early return - not enabled or quantity <= 1');
       return;
@@ -116,27 +116,27 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
 
     const newDrawerHeights = [...drawerHeights];
     newDrawerHeights[changedIndex] = newHeight;
-    
+
     console.log('Initial newDrawerHeights:', newDrawerHeights);
 
     // Calculate remaining height to distribute
     const usedHeight = newDrawerHeights.reduce((sum, height) => sum + (height || 0), 0);
     const remainingHeight = dimensions.height - usedHeight;
-    
+
     console.log('Height calculation:', { usedHeight, remainingHeight, dimensionsHeight: dimensions.height });
 
     if (remainingHeight > 0) {
       // Count how many drawers need height reassignment (all except the changed one)
       const remainingDrawers = drawerQuantity - 1;
-      
+
       console.log('Remaining drawers to balance:', remainingDrawers);
 
       if (remainingDrawers > 0) {
         // Distribute remaining height equally among remaining drawers
         const heightPerRemainingDrawer = Math.round((remainingHeight / remainingDrawers) * 10) / 10;
-        
+
         console.log('Height per remaining drawer:', heightPerRemainingDrawer);
-        
+
         for (let i = 0; i < drawerQuantity; i++) {
           if (i !== changedIndex) {
             newDrawerHeights[i] = Math.max(50, heightPerRemainingDrawer); // Ensure minimum 50mm
@@ -156,7 +156,7 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
     if (!drawerEnabled || drawerQuantity <= 0 || drawerHeights.length === 0) return;
 
     const scaleRatio = newHeight / oldHeight;
-    const newDrawerHeights = drawerHeights.map(height => 
+    const newDrawerHeights = drawerHeights.map(height =>
       Math.round((height * scaleRatio) * 10) / 10
     );
 
@@ -167,7 +167,7 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
       recalculateDrawerHeights();
     } else {
       setDrawerHeights(newDrawerHeights);
-      
+
       // Update each drawer height in the carcass
       newDrawerHeights.forEach((height, index) => {
         onDrawerHeightChange?.(index, height);
@@ -178,13 +178,13 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
   const handleDrawerQuantityChange = (quantity: number) => {
     console.log(`ProductPanel: Changing drawer quantity from ${drawerQuantity} to ${quantity}`);
     setDrawerQuantity(quantity);
-    
+
     // Always calculate proportional drawer heights: Cabinet Height / Drawer Quantity
     const proportionalHeight = Math.round((dimensions.height / quantity) * 10) / 10;
     const newDrawerHeights = Array(quantity).fill(proportionalHeight);
     console.log('ProductPanel: New proportional drawer heights for quantity change:', newDrawerHeights);
     setDrawerHeights(newDrawerHeights);
-    
+
     // Call the callback to update the carcass
     onDrawerQuantityChange?.(quantity);
   };
@@ -203,26 +203,26 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
   const handleDrawerHeightChange = (index: number, height: number) => {
     // Ensure proper decimal handling - max one digit after decimal point
     const roundedHeight = Math.round(height * 10) / 10;
-    
+
     console.log(`ProductPanel: handleDrawerHeightChange called with:`, { index, height, roundedHeight });
     console.log(`ProductPanel: Current drawer heights:`, drawerHeights);
     console.log(`ProductPanel: Updating drawer ${index} height from ${drawerHeights[index]} to ${roundedHeight}`);
-    
+
     // Set editing flag to prevent circular updates
     setIsEditingDrawerHeights(true);
     console.log('ProductPanel: Set editing flag to true');
-    
+
     // Balance remaining drawer heights based on the new height
     console.log('ProductPanel: Calling balanceRemainingDrawerHeights...');
     const balancedHeights = balanceRemainingDrawerHeights(index, roundedHeight);
     console.log('ProductPanel: balanceRemainingDrawerHeights returned:', balancedHeights);
-    
+
     // Call the callback to update the carcass for all drawers
     if (balancedHeights) {
       console.log('ProductPanel: Updating carcass with balanced heights...');
       // Update the changed drawer first
       onDrawerHeightChange?.(index, roundedHeight);
-      
+
       // Then update the remaining balanced drawers
       balancedHeights.forEach((height, i) => {
         if (i !== index) { // Don't call the callback twice for the changed drawer
@@ -231,7 +231,7 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
         }
       });
     }
-    
+
     // Clear editing flag after a short delay to allow carcass update to complete
     setTimeout(() => {
       setIsEditingDrawerHeights(false);
@@ -281,11 +281,11 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
       console.log('ProductPanel: Skipping drawer height sync - user is editing');
       return;
     }
-    
+
     if (selectedCabinet && selectedCabinet.drawerHeights && selectedCabinet.drawerHeights.length > 0) {
       // Only update if the lengths match and the values are actually different
       if (drawerHeights.length === selectedCabinet.drawerHeights.length) {
-        const hasChanges = selectedCabinet.drawerHeights.some((height, index) => 
+        const hasChanges = selectedCabinet.drawerHeights.some((height, index) =>
           Math.abs((drawerHeights[index] || 0) - height) > 0.1
         );
         if (hasChanges) {
@@ -308,51 +308,51 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
       console.log('ProductPanel: Skipping cabinet sync - user is editing dimensions');
       return;
     }
-    
+
     if (selectedCabinet) {
       // Check if this is a completely new cabinet selection by comparing the group reference
       const isNewCabinet = lastSyncedCabinetRef.current !== selectedCabinet.group;
-      
+
       // Only sync if this is a new cabinet selection
       if (isNewCabinet) {
         console.log('ProductPanel: New cabinet selected, syncing all properties');
-        
+
         // Get dimension constraints for the subcategory
         const constraints = getDimensionConstraints(selectedCabinet.subcategoryId);
-        
+
         // Sync dimensions with the actual cabinet dimensions
         const initialDimensions = {
           height: selectedCabinet.dimensions.height || constraints.height.default,
           width: selectedCabinet.dimensions.width || constraints.width.default,
           depth: selectedCabinet.dimensions.depth || constraints.depth.default
         };
-        
+
         setDimensions(initialDimensions);
-        
+
         // Update the previous height ref for proportional scaling
         previousCabinetHeightRef.current = initialDimensions.height;
-        
+
         // Sync material properties
         setMaterialColor(selectedCabinet.material.getColour());
         setMaterialThickness(selectedCabinet.material.getPanelThickness());
-        
+
         // Initialize kicker height from data for Base and Tall cabinets
         if (selectedCabinet.cabinetType === 'base' || selectedCabinet.cabinetType === 'tall') {
           const currentKickerHeight = categoriesData.legSettings?.default || 100;
           setKickerHeight(currentKickerHeight);
         }
-        
+
         // Sync door properties
         setDoorEnabled(selectedCabinet.doorEnabled || false);
         setDoorColor(selectedCabinet.doorMaterial?.getColour() || '#ffffff');
         setDoorThickness(selectedCabinet.doorMaterial?.getThickness() || 18);
         setDoorCount(selectedCabinet.doorCount || 2);
         setOverhangDoor(selectedCabinet.overhangDoor || false);
-        
+
         // Sync drawer properties - only sync if this is a new cabinet selection
         setDrawerEnabled(selectedCabinet.drawerEnabled || false);
         setDrawerQuantity(selectedCabinet.drawerQuantity || 3);
-        
+
         // Don't override user input by checking if we already have drawer heights set
         if (drawerHeights.length === 0) {
           if (selectedCabinet.drawerHeights && selectedCabinet.drawerHeights.length > 0) {
@@ -364,7 +364,7 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
             setDrawerHeights(newDrawerHeights);
           }
         }
-        
+
         // Update the ref to track this cabinet as synced
         lastSyncedCabinetRef.current = selectedCabinet.group;
       }
@@ -390,26 +390,26 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
   const handleDimensionChange = (field: keyof CarcassDimensions, value: number) => {
     console.log(`ProductPanel: handleDimensionChange called for ${field} with value ${value}`);
     console.log(`ProductPanel: Current editing state - isEditingDimensions: ${isEditingDimensions}`);
-    
+
     // Set editing flag to prevent synchronization conflicts
     setIsEditingDimensions(true);
-    
+
     // Validate the value is within the allowed range
     const constraints = getDimensionConstraints(selectedCabinet?.subcategoryId);
-    
+
     if (value < constraints[field].min || value > constraints[field].max) {
       // Value is out of range - show alert and don't change
       alert(`${field.charAt(0).toUpperCase() + field.slice(1)} must be between ${constraints[field].min}mm and ${constraints[field].max}mm`);
       setIsEditingDimensions(false);
       return;
     }
-    
+
     const newDimensions = { ...dimensions, [field]: value };
     console.log(`ProductPanel: Setting new dimensions:`, newDimensions);
     setDimensions(newDimensions);
-    
 
-    
+
+
     // Auto-adjust door count based on width
     if (field === 'width' && doorEnabled) {
       if (value > 600 && doorCount === 1) {
@@ -425,13 +425,13 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
         setDoorCountAutoAdjusted(false);
       }
     }
-    
+
     // Only call the callback if we're not currently editing to prevent circular updates
     if (onDimensionsChange && selectedCabinet) {
       console.log(`ProductPanel: Calling onDimensionsChange with:`, newDimensions);
       onDimensionsChange(newDimensions);
     }
-    
+
     // Clear editing flag after a short delay to allow carcass update to complete
     // Increased delay to ensure carcass update completes and prevents race conditions
     setTimeout(() => {
@@ -454,13 +454,13 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
         alert(`Material thickness must be between 6mm and 50mm`);
         return;
       }
-      
+
       setMaterialThickness(thickness);
       if (onMaterialChange && selectedCabinet) {
         // Update both panelThickness and backThickness to be the same
-        onMaterialChange({ 
+        onMaterialChange({
           panelThickness: thickness,
-          backThickness: thickness 
+          backThickness: thickness
         });
       }
     }
@@ -472,9 +472,9 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
       alert(`Kicker height must be between 50mm and 200mm`);
       return;
     }
-    
+
     setKickerHeight(value);
-    
+
     if (onKickerHeightChange && selectedCabinet) {
       onKickerHeightChange(value);
     }
@@ -482,7 +482,7 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
 
   const handleDoorToggle = (enabled: boolean) => {
     setDoorEnabled(enabled);
-    
+
     if (onDoorToggle && selectedCabinet) {
       onDoorToggle(enabled);
     }
@@ -491,7 +491,7 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
   const handleOverhangDoorToggle = (enabled: boolean) => {
     console.log('Overhang door toggle:', enabled);
     setOverhangDoor(enabled);
-    
+
     // Update overhang door setting
     if (onOverhangDoorToggle && selectedCabinet) {
       console.log('Calling onOverhangDoorToggle with:', enabled);
@@ -505,7 +505,7 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
     } else if (field === 'thickness') {
       setDoorThickness(value as number);
     }
-    
+
     if (onDoorMaterialChange && selectedCabinet) {
       onDoorMaterialChange({ [field]: value });
     }
@@ -513,7 +513,7 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
 
   const handleDoorCountChange = (count: number) => {
     setDoorCount(count);
-    
+
     if (onDoorCountChange && selectedCabinet) {
       onDoorCountChange(count);
     }
@@ -522,7 +522,7 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
   if (!isVisible) return null;
 
   return (
-    <div 
+    <div
       className="fixed right-0 top-0 h-full bg-white shadow-lg border-l border-gray-200 transition-all duration-300 ease-in-out z-50 product-panel"
       data-product-panel="true"
       onClick={(e) => e.stopPropagation()}
@@ -542,30 +542,29 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
         {isExpanded ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
       </button>
 
-      <div 
-        className={`h-full transition-all duration-300 ease-in-out ${
-          isExpanded ? 'w-80 sm:w-80 max-w-[90vw]' : 'w-0'
-        } overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100`}
+      <div
+        className={`h-full transition-all duration-300 ease-in-out ${isExpanded ? 'w-80 sm:w-80 max-w-[90vw]' : 'w-0'
+          } overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100`}
         onClick={(e) => e.stopPropagation()}
         onMouseDown={(e) => e.stopPropagation()}
         onMouseUp={(e) => e.stopPropagation()}
         onWheel={(e) => e.stopPropagation()}
       >
-        
-        <div 
+
+        <div
           className="bg-gray-50 px-2 sm:px-4 py-2 sm:py-3 border-b border-gray-200"
           onClick={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
           onMouseUp={(e) => e.stopPropagation()}
         >
           <div className="flex items-center justify-between">
-            <h2 
+            <h2
               className="text-lg font-semibold text-gray-800"
               onClick={(e) => e.stopPropagation()}
               onMouseDown={(e) => e.stopPropagation()}
               onMouseUp={(e) => e.stopPropagation()}
             >Product Panel</h2>
-            <button 
+            <button
               onClick={(e) => {
                 e.stopPropagation();
                 onClose();
@@ -576,7 +575,7 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
             >×</button>
           </div>
           {selectedCabinet && (
-            <p 
+            <p
               className="text-sm text-gray-600 mt-1"
               onClick={(e) => e.stopPropagation()}
               onMouseDown={(e) => e.stopPropagation()}
@@ -587,8 +586,8 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
           )}
         </div>
 
-        <div 
-          className="p-2 sm:p-4 space-y-1 min-h-full" 
+        <div
+          className="p-2 sm:p-4 space-y-1 min-h-full"
           onClick={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
           onMouseUp={(e) => e.stopPropagation()}
@@ -596,13 +595,13 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
         >
           {selectedCabinet ? (
             <>
-              <div 
+              <div
                 className="space-y-4"
                 onClick={(e) => e.stopPropagation()}
                 onMouseDown={(e) => e.stopPropagation()}
                 onMouseUp={(e) => e.stopPropagation()}
               >
-                <div 
+                <div
                   className="flex items-center space-x-2 text-gray-700 font-medium"
                   onClick={(e) => e.stopPropagation()}
                   onMouseDown={(e) => e.stopPropagation()}
@@ -611,56 +610,56 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
                   <Ruler size={20} />
                   <h3>Dimensions</h3>
                 </div>
-                
+
                 <div className="space-y-4">
                   <div
                     onClick={(e) => e.stopPropagation()}
                     onMouseDown={(e) => e.stopPropagation()}
                     onMouseUp={(e) => e.stopPropagation()}
                   >
-                    <label 
+                    <label
                       className="block text-sm font-medium text-gray-700 mb-2"
                       onClick={(e) => e.stopPropagation()}
                       onMouseDown={(e) => e.stopPropagation()}
                       onMouseUp={(e) => e.stopPropagation()}
                     >Height (mm)</label>
-                                        <div 
+                    <div
                       className="text-center mb-3"
                       onClick={(e) => e.stopPropagation()}
                       onMouseDown={(e) => e.stopPropagation()}
                       onMouseUp={(e) => e.stopPropagation()}
                     >
-                                             <input
-                         type="number"
-                         value={dimensions.height}
-                         onChange={(e) => handleDimensionChange('height', Number(e.target.value))}
-                         onFocus={() => setIsEditingDimensions(true)}
-                         onBlur={() => {
-                           // Clear editing flag when user finishes editing
-                           setTimeout(() => setIsEditingDimensions(false), 100);
-                         }}
-                         onClick={(e) => e.stopPropagation()}
-                         onMouseDown={(e) => e.stopPropagation()}
-                         onMouseUp={(e) => e.stopPropagation()}
-                         className="text-center text-lg font-semibold text-blue-600 bg-transparent border-b-2 border-blue-300 focus:border-blue-500 focus:outline-none px-2 py-1 w-24"
-                         min={dimensionConstraints.height.min}
-                         max={dimensionConstraints.height.max}
-                         step="10"
-                       />
-                      <span 
+                      <input
+                        type="number"
+                        value={dimensions.height}
+                        onChange={(e) => handleDimensionChange('height', Number(e.target.value))}
+                        onFocus={() => setIsEditingDimensions(true)}
+                        onBlur={() => {
+                          // Clear editing flag when user finishes editing
+                          setTimeout(() => setIsEditingDimensions(false), 100);
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onMouseUp={(e) => e.stopPropagation()}
+                        className="text-center text-lg font-semibold text-blue-600 bg-transparent border-b-2 border-blue-300 focus:border-blue-500 focus:outline-none px-2 py-1 w-24"
+                        min={dimensionConstraints.height.min}
+                        max={dimensionConstraints.height.max}
+                        step="10"
+                      />
+                      <span
                         className="text-lg font-semibold text-blue-600 ml-1"
                         onClick={(e) => e.stopPropagation()}
                         onMouseDown={(e) => e.stopPropagation()}
                         onMouseUp={(e) => e.stopPropagation()}
                       >mm</span>
                     </div>
-                    <div 
+                    <div
                       className="flex items-center space-x-3"
                       onClick={(e) => e.stopPropagation()}
                       onMouseDown={(e) => e.stopPropagation()}
                       onMouseUp={(e) => e.stopPropagation()}
                     >
-                      <span 
+                      <span
                         className="text-xs text-gray-500 w-12"
                         onClick={(e) => e.stopPropagation()}
                         onMouseDown={(e) => e.stopPropagation()}
@@ -684,7 +683,7 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
                         max={dimensionConstraints.height.max}
                         step="10"
                       />
-                      <span 
+                      <span
                         className="text-xs text-gray-500 w-12"
                         onClick={(e) => e.stopPropagation()}
                         onMouseDown={(e) => e.stopPropagation()}
@@ -692,55 +691,55 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
                       >{dimensionConstraints.height.max}</span>
                     </div>
                   </div>
-                  
+
                   <div
                     onClick={(e) => e.stopPropagation()}
                     onMouseDown={(e) => e.stopPropagation()}
                     onMouseUp={(e) => e.stopPropagation()}
                   >
-                    <label 
+                    <label
                       className="block text-sm font-medium text-gray-700 mb-2"
                       onClick={(e) => e.stopPropagation()}
                       onMouseDown={(e) => e.stopPropagation()}
                       onMouseUp={(e) => e.stopPropagation()}
                     >Width (mm)</label>
-                                        <div 
+                    <div
                       className="text-center mb-3"
                       onClick={(e) => e.stopPropagation()}
                       onMouseDown={(e) => e.stopPropagation()}
                       onMouseUp={(e) => e.stopPropagation()}
                     >
-                                             <input
-                         type="number"
-                         value={dimensions.width}
-                         onChange={(e) => handleDimensionChange('width', Number(e.target.value))}
-                         onFocus={() => setIsEditingDimensions(true)}
-                         onBlur={() => {
-                           // Clear editing flag when user finishes editing
-                           setTimeout(() => setIsEditingDimensions(false), 100);
-                         }}
-                         onClick={(e) => e.stopPropagation()}
-                         onMouseDown={(e) => e.stopPropagation()}
-                         onMouseUp={(e) => e.stopPropagation()}
-                         className="text-center text-lg font-semibold text-blue-600 bg-transparent border-b-2 border-blue-300 focus:border-blue-500 focus:outline-none px-2 py-1 w-24"
-                         min={dimensionConstraints.width.min}
-                         max={dimensionConstraints.width.max}
-                         step="10"
-                       />
-                      <span 
+                      <input
+                        type="number"
+                        value={dimensions.width}
+                        onChange={(e) => handleDimensionChange('width', Number(e.target.value))}
+                        onFocus={() => setIsEditingDimensions(true)}
+                        onBlur={() => {
+                          // Clear editing flag when user finishes editing
+                          setTimeout(() => setIsEditingDimensions(false), 100);
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onMouseUp={(e) => e.stopPropagation()}
+                        className="text-center text-lg font-semibold text-blue-600 bg-transparent border-b-2 border-blue-300 focus:border-blue-500 focus:outline-none px-2 py-1 w-24"
+                        min={dimensionConstraints.width.min}
+                        max={dimensionConstraints.width.max}
+                        step="10"
+                      />
+                      <span
                         className="text-lg font-semibold text-blue-600 ml-1"
                         onClick={(e) => e.stopPropagation()}
                         onMouseDown={(e) => e.stopPropagation()}
                         onMouseUp={(e) => e.stopPropagation()}
                       >mm</span>
                     </div>
-                    <div 
+                    <div
                       className="flex items-center space-x-3"
                       onClick={(e) => e.stopPropagation()}
                       onMouseDown={(e) => e.stopPropagation()}
                       onMouseUp={(e) => e.stopPropagation()}
                     >
-                      <span 
+                      <span
                         className="text-xs text-gray-500 w-12"
                         onClick={(e) => e.stopPropagation()}
                         onMouseDown={(e) => e.stopPropagation()}
@@ -764,7 +763,7 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
                         max={dimensionConstraints.width.max}
                         step="10"
                       />
-                      <span 
+                      <span
                         className="text-xs text-gray-500 w-12"
                         onClick={(e) => e.stopPropagation()}
                         onMouseDown={(e) => e.stopPropagation()}
@@ -772,55 +771,55 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
                       >{dimensionConstraints.width.max}</span>
                     </div>
                   </div>
-                  
+
                   <div
                     onClick={(e) => e.stopPropagation()}
                     onMouseDown={(e) => e.stopPropagation()}
                     onMouseUp={(e) => e.stopPropagation()}
                   >
-                    <label 
+                    <label
                       className="block text-sm font-medium text-gray-700 mb-2"
                       onClick={(e) => e.stopPropagation()}
                       onMouseDown={(e) => e.stopPropagation()}
                       onMouseUp={(e) => e.stopPropagation()}
                     >Depth (mm)</label>
-                                        <div 
+                    <div
                       className="text-center mb-3"
                       onClick={(e) => e.stopPropagation()}
                       onMouseDown={(e) => e.stopPropagation()}
                       onMouseUp={(e) => e.stopPropagation()}
                     >
-                                             <input
-                         type="number"
-                         value={dimensions.depth}
-                         onChange={(e) => handleDimensionChange('depth', Number(e.target.value))}
-                         onFocus={() => setIsEditingDimensions(true)}
-                         onBlur={() => {
-                           // Clear editing flag when user finishes editing
-                           setTimeout(() => setIsEditingDimensions(false), 100);
-                         }}
-                         onClick={(e) => e.stopPropagation()}
-                         onMouseDown={(e) => e.stopPropagation()}
-                         onMouseUp={(e) => e.stopPropagation()}
-                         className="text-center text-lg font-semibold text-blue-600 bg-transparent border-b-2 border-blue-300 focus:border-blue-500 focus:outline-none px-2 py-1 w-24"
-                         min={dimensionConstraints.depth.min}
-                         max={dimensionConstraints.depth.max}
-                         step="10"
-                       />
-                      <span 
+                      <input
+                        type="number"
+                        value={dimensions.depth}
+                        onChange={(e) => handleDimensionChange('depth', Number(e.target.value))}
+                        onFocus={() => setIsEditingDimensions(true)}
+                        onBlur={() => {
+                          // Clear editing flag when user finishes editing
+                          setTimeout(() => setIsEditingDimensions(false), 100);
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onMouseUp={(e) => e.stopPropagation()}
+                        className="text-center text-lg font-semibold text-blue-600 bg-transparent border-b-2 border-blue-300 focus:border-blue-500 focus:outline-none px-2 py-1 w-24"
+                        min={dimensionConstraints.depth.min}
+                        max={dimensionConstraints.depth.max}
+                        step="10"
+                      />
+                      <span
                         className="text-lg font-semibold text-blue-600 ml-1"
                         onClick={(e) => e.stopPropagation()}
                         onMouseDown={(e) => e.stopPropagation()}
                         onMouseUp={(e) => e.stopPropagation()}
                       >mm</span>
                     </div>
-                    <div 
+                    <div
                       className="flex items-center space-x-3"
                       onClick={(e) => e.stopPropagation()}
                       onMouseDown={(e) => e.stopPropagation()}
                       onMouseUp={(e) => e.stopPropagation()}
                     >
-                      <span 
+                      <span
                         className="text-xs text-gray-500 w-12"
                         onClick={(e) => e.stopPropagation()}
                         onMouseDown={(e) => e.stopPropagation()}
@@ -844,7 +843,7 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
                         max={dimensionConstraints.depth.max}
                         step="10"
                       />
-                      <span 
+                      <span
                         className="text-xs text-gray-500 w-12"
                         onClick={(e) => e.stopPropagation()}
                         onMouseDown={(e) => e.stopPropagation()}
@@ -857,25 +856,25 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
 
               {/* Kicker Height Section - Only show for Base and Tall cabinets */}
               {(selectedCabinet?.cabinetType === 'base' || selectedCabinet?.cabinetType === 'tall') && (
-                <div 
+                <div
                   className="space-y-4"
                   onClick={(e) => e.stopPropagation()}
                   onMouseDown={(e) => e.stopPropagation()}
                   onMouseUp={(e) => e.stopPropagation()}
                 >
-                  
+
                   <div
                     onClick={(e) => e.stopPropagation()}
                     onMouseDown={(e) => e.stopPropagation()}
                     onMouseUp={(e) => e.stopPropagation()}
                   >
-                    <label 
+                    <label
                       className="block text-sm font-medium text-gray-700 mb-2"
                       onClick={(e) => e.stopPropagation()}
                       onMouseDown={(e) => e.stopPropagation()}
                       onMouseUp={(e) => e.stopPropagation()}
                     >Kicker Height (mm)</label>
-                    <div 
+                    <div
                       className="text-center mb-3"
                       onClick={(e) => e.stopPropagation()}
                       onMouseDown={(e) => e.stopPropagation()}
@@ -893,20 +892,20 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
                         max="200"
                         step="5"
                       />
-                      <span 
+                      <span
                         className="text-lg font-semibold text-blue-600 ml-1"
                         onClick={(e) => e.stopPropagation()}
                         onMouseDown={(e) => e.stopPropagation()}
                         onMouseUp={(e) => e.stopPropagation()}
                       >mm</span>
                     </div>
-                    <div 
+                    <div
                       className="flex items-center space-x-3"
                       onClick={(e) => e.stopPropagation()}
                       onMouseDown={(e) => e.stopPropagation()}
                       onMouseUp={(e) => e.stopPropagation()}
                     >
-                      <span 
+                      <span
                         className="text-xs text-gray-500 w-12"
                         onClick={(e) => e.stopPropagation()}
                         onMouseDown={(e) => e.stopPropagation()}
@@ -924,14 +923,14 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
                         max="200"
                         step="5"
                       />
-                      <span 
+                      <span
                         className="text-xs text-gray-500 w-12"
                         onClick={(e) => e.stopPropagation()}
                         onMouseDown={(e) => e.stopPropagation()}
                         onMouseUp={(e) => e.stopPropagation()}
                       >200</span>
                     </div>
-                    <p 
+                    <p
                       className="text-xs text-gray-500 mt-1"
                       onClick={(e) => e.stopPropagation()}
                       onMouseDown={(e) => e.stopPropagation()}
@@ -943,13 +942,13 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
                 </div>
               )}
 
-              <div 
+              <div
                 className="space-y-1"
                 onClick={(e) => e.stopPropagation()}
                 onMouseDown={(e) => e.stopPropagation()}
                 onMouseUp={(e) => e.stopPropagation()}
               >
-                <div 
+                <div
                   className="flex items-center space-x-2 text-gray-700 font-medium"
                   onClick={(e) => e.stopPropagation()}
                   onMouseDown={(e) => e.stopPropagation()}
@@ -958,8 +957,8 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
                   <Palette size={20} />
                   <h3>Material Properties</h3>
                 </div>
-                
-                <div 
+
+                <div
                   className="space-y-3"
                   onClick={(e) => e.stopPropagation()}
                   onMouseDown={(e) => e.stopPropagation()}
@@ -970,13 +969,13 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
                     onMouseDown={(e) => e.stopPropagation()}
                     onMouseUp={(e) => e.stopPropagation()}
                   >
-                    <label 
+                    <label
                       className="block text-sm font-medium text-gray-700 mb-1"
                       onClick={(e) => e.stopPropagation()}
                       onMouseDown={(e) => e.stopPropagation()}
                       onMouseUp={(e) => e.stopPropagation()}
                     >Carcass Colour</label>
-                                        <div 
+                    <div
                       className="flex items-center space-x-2"
                       onClick={(e) => e.stopPropagation()}
                       onMouseDown={(e) => e.stopPropagation()}
@@ -991,43 +990,43 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
                         onMouseUp={(e) => e.stopPropagation()}
                         className="w-12 h-10 border border-gray-300 rounded-md cursor-pointer"
                       />
-                       <input
-                         type="text"
-                         value={materialColor}
-                         onChange={(e) => handleMaterialChange('colour', e.target.value)}
-                         onClick={(e) => e.stopPropagation()}
-                         onMouseDown={(e) => e.stopPropagation()}
-                         onMouseUp={(e) => e.stopPropagation()}
-                         className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                         placeholder="#ffffff"
-                       />
+                      <input
+                        type="text"
+                        value={materialColor}
+                        onChange={(e) => handleMaterialChange('colour', e.target.value)}
+                        onClick={(e) => e.stopPropagation()}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onMouseUp={(e) => e.stopPropagation()}
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="#ffffff"
+                      />
                     </div>
                   </div>
-                  
+
                   <div
                     onClick={(e) => e.stopPropagation()}
                     onMouseDown={(e) => e.stopPropagation()}
                     onMouseUp={(e) => e.stopPropagation()}
                   >
-                    <label 
+                    <label
                       className="block text-sm font-medium text-gray-700 mb-1"
                       onClick={(e) => e.stopPropagation()}
                       onMouseDown={(e) => e.stopPropagation()}
                       onMouseUp={(e) => e.stopPropagation()}
                     >Carcass Thickness</label>
-                                         <input
-                       type="number"
-                       value={materialThickness}
-                       onChange={(e) => handleMaterialChange('panelThickness', Number(e.target.value))}
-                       onClick={(e) => e.stopPropagation()}
-                       onMouseDown={(e) => e.stopPropagation()}
-                       onMouseUp={(e) => e.stopPropagation()}
-                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                       min="6"
-                       max="50"
-                       step="1"
-                     />
-                    <p 
+                    <input
+                      type="number"
+                      value={materialThickness}
+                      onChange={(e) => handleMaterialChange('panelThickness', Number(e.target.value))}
+                      onClick={(e) => e.stopPropagation()}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onMouseUp={(e) => e.stopPropagation()}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      min="6"
+                      max="50"
+                      step="1"
+                    />
+                    <p
                       className="text-xs text-gray-500 mt-1"
                       onClick={(e) => e.stopPropagation()}
                       onMouseDown={(e) => e.stopPropagation()}
@@ -1041,61 +1040,35 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
 
               {/* Door Controls - Disabled for Drawer cabinets */}
               {!isDrawerCabinet() && (
-                <div 
+                <div
                   className="space-y-1"
                   onClick={(e) => e.stopPropagation()}
                   onMouseDown={(e) => e.stopPropagation()}
                   onMouseUp={(e) => e.stopPropagation()}
                 >
-                <div 
-                  className="flex items-center space-x-2 mb-4"
-                  onClick={(e) => e.stopPropagation()}
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onMouseUp={(e) => e.stopPropagation()}
-                >
-                  <DoorOpen size={20} />
-                  <h3>Door Settings</h3>
-                </div>
-                
-                <div 
-                  className="space-y-3"
-                  onClick={(e) => e.stopPropagation()}
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onMouseUp={(e) => e.stopPropagation()}
-                >
-                  {/* Door Toggle */}
                   <div
+                    className="flex items-center space-x-2 mb-4"
                     onClick={(e) => e.stopPropagation()}
                     onMouseDown={(e) => e.stopPropagation()}
                     onMouseUp={(e) => e.stopPropagation()}
                   >
-                    <label 
-                      className="flex items-center space-x-2 cursor-pointer"
-                      onClick={(e) => e.stopPropagation()}
-                      onMouseDown={(e) => e.stopPropagation()}
-                      onMouseUp={(e) => e.stopPropagation()}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={doorEnabled}
-                        onChange={(e) => handleDoorToggle(e.target.checked)}
-                        onClick={(e) => e.stopPropagation()}
-                        onMouseDown={(e) => e.stopPropagation()}
-                        onMouseUp={(e) => e.stopPropagation()}
-                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                      />
-                      <span className="text-sm font-medium text-gray-700">Enable Doors</span>
-                    </label>
+                    <DoorOpen size={20} />
+                    <h3>Door Settings</h3>
                   </div>
 
-                  {/* Overhang Door Toggle - Only show for Top/Wall cabinets */}
-                  {doorEnabled && (selectedCabinet?.cabinetType === 'top') && (
+                  <div
+                    className="space-y-3"
+                    onClick={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onMouseUp={(e) => e.stopPropagation()}
+                  >
+                    {/* Door Toggle */}
                     <div
                       onClick={(e) => e.stopPropagation()}
                       onMouseDown={(e) => e.stopPropagation()}
                       onMouseUp={(e) => e.stopPropagation()}
                     >
-                      <label 
+                      <label
                         className="flex items-center space-x-2 cursor-pointer"
                         onClick={(e) => e.stopPropagation()}
                         onMouseDown={(e) => e.stopPropagation()}
@@ -1103,194 +1076,220 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
                       >
                         <input
                           type="checkbox"
-                          checked={overhangDoor}
-                          onChange={(e) => handleOverhangDoorToggle(e.target.checked)}
+                          checked={doorEnabled}
+                          onChange={(e) => handleDoorToggle(e.target.checked)}
                           onClick={(e) => e.stopPropagation()}
                           onMouseDown={(e) => e.stopPropagation()}
                           onMouseUp={(e) => e.stopPropagation()}
                           className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                         />
-                        <span className="text-sm font-medium text-gray-700">Overhang Door</span>
+                        <span className="text-sm font-medium text-gray-700">Enable Doors</span>
                       </label>
-                      <p 
-                        className="text-xs text-gray-500 mt-1 ml-6"
-                        onClick={(e) => e.stopPropagation()}
-                        onMouseDown={(e) => e.stopPropagation()}
-                        onMouseUp={(e) => e.stopPropagation()}
-                      >
-                        Makes door 20mm longer and positions it 20mm lower (Top/Wall cabinets only)
-                      </p>
                     </div>
-                  )}
 
-                  {/* Door Count */}
-                  {doorEnabled && (
-                    <div
-                      onClick={(e) => e.stopPropagation()}
-                      onMouseDown={(e) => e.stopPropagation()}
-                      onMouseUp={(e) => e.stopPropagation()}
-                    >
-                      <label 
-                        className="block text-sm font-medium text-gray-700 mb-1"
+                    {/* Overhang Door Toggle - Only show for Top/Wall cabinets */}
+                    {doorEnabled && (selectedCabinet?.cabinetType === 'top') && (
+                      <div
                         onClick={(e) => e.stopPropagation()}
                         onMouseDown={(e) => e.stopPropagation()}
                         onMouseUp={(e) => e.stopPropagation()}
-                      >Number of Doors</label>
-                      <select
-                        value={doorCount}
-                        onChange={(e) => handleDoorCountChange(Number(e.target.value))}
-                        onClick={(e) => e.stopPropagation()}
-                        onMouseDown={(e) => e.stopPropagation()}
-                        onMouseUp={(e) => e.stopPropagation()}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        disabled={!isOneDoorAllowed()}
                       >
-                        <option value={1} disabled={!isOneDoorAllowed()}>1 Door</option>
-                        <option value={2}>2 Doors</option>
-                      </select>
-                      {!isOneDoorAllowed() && (
-                        <p 
-                          className="text-xs text-blue-600 mt-1"
+                        <label
+                          className="flex items-center space-x-2 cursor-pointer"
                           onClick={(e) => e.stopPropagation()}
                           onMouseDown={(e) => e.stopPropagation()}
                           onMouseUp={(e) => e.stopPropagation()}
                         >
-                          ⓘ {doorCountAutoAdjusted ? 'Auto-switched to 2 doors' : '2 doors required'} for cabinets wider than 600mm
+                          <input
+                            type="checkbox"
+                            checked={overhangDoor}
+                            onChange={(e) => handleOverhangDoorToggle(e.target.checked)}
+                            onClick={(e) => e.stopPropagation()}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onMouseUp={(e) => e.stopPropagation()}
+                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                          />
+                          <span className="text-sm font-medium text-gray-700">Overhang Door</span>
+                        </label>
+                        <p
+                          className="text-xs text-gray-500 mt-1 ml-6"
+                          onClick={(e) => e.stopPropagation()}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onMouseUp={(e) => e.stopPropagation()}
+                        >
+                          Makes door 20mm longer and positions it 20mm lower (Top/Wall cabinets only)
                         </p>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Door Gap */}
-                  {doorEnabled && (
-                    <div
-                      onClick={(e) => e.stopPropagation()}
-                      onMouseDown={(e) => e.stopPropagation()}
-                      onMouseUp={(e) => e.stopPropagation()}
-                    >
-                      <label 
-                        className="block text-sm font-medium text-gray-700 mb-1"
-                        onClick={(e) => e.stopPropagation()}
-                        onMouseDown={(e) => e.stopPropagation()}
-                        onMouseUp={(e) => e.stopPropagation()}
-                      >Door Gap (mm)</label>
-                      <div 
-                        className="text-center mb-3"
-                        onClick={(e) => e.stopPropagation()}
-                        onMouseDown={(e) => e.stopPropagation()}
-                        onMouseUp={(e) => e.stopPropagation()}
-                      >
-                        <input
-                          type="number"
-                          value={2}
-                          disabled
-                          className="text-center text-lg font-semibold text-gray-400 bg-gray-100 border-b-2 border-gray-300 px-2 py-1 w-24 cursor-not-allowed"
-                          min="1"
-                          max="5"
-                          step="0.5"
-                        />
-                        <span 
-                          className="text-lg font-semibold text-gray-400 ml-1"
-                          onClick={(e) => e.stopPropagation()}
-                          onMouseDown={(e) => e.stopPropagation()}
-                          onMouseUp={(e) => e.stopPropagation()}
-                        >mm</span>
                       </div>
-                      <p 
-                        className="text-xs text-gray-500 mt-1"
-                        onClick={(e) => e.stopPropagation()}
-                        onMouseDown={(e) => e.stopPropagation()}
-                        onMouseUp={(e) => e.stopPropagation()}
-                      >
-                        Gap between doors and carcass edges (read-only)
-                      </p>
-                    </div>
-                  )}
+                    )}
 
-                  {/* Door Material Colour */}
-                  {doorEnabled && (
-                    <div
-                      onClick={(e) => e.stopPropagation()}
-                      onMouseDown={(e) => e.stopPropagation()}
-                      onMouseUp={(e) => e.stopPropagation()}
-                    >
-                      <label 
-                        className="block text-sm font-medium text-gray-700 mb-1"
-                        onClick={(e) => e.stopPropagation()}
-                        onMouseDown={(e) => e.stopPropagation()}
-                        onMouseUp={(e) => e.stopPropagation()}
-                      >Door Colour</label>
-                      <div 
-                        className="flex items-center space-x-2"
+                    {/* Door Count */}
+                    {doorEnabled && (
+                      <div
                         onClick={(e) => e.stopPropagation()}
                         onMouseDown={(e) => e.stopPropagation()}
                         onMouseUp={(e) => e.stopPropagation()}
                       >
-                        <input
-                          type="color"
-                          value={doorColor}
-                          onChange={(e) => handleDoorMaterialChange('colour', e.target.value)}
+                        <label
+                          className="block text-sm font-medium text-gray-700 mb-1"
                           onClick={(e) => e.stopPropagation()}
                           onMouseDown={(e) => e.stopPropagation()}
                           onMouseUp={(e) => e.stopPropagation()}
-                          className="w-16 h-12 border border-gray-300 rounded-md cursor-pointer"
-                        />
-                        <input
-                          type="text"
-                          value={doorColor}
-                          onChange={(e) => handleDoorMaterialChange('colour', e.target.value)}
+                        >Number of Doors</label>
+                        <select
+                          value={doorCount}
+                          onChange={(e) => handleDoorCountChange(Number(e.target.value))}
                           onClick={(e) => e.stopPropagation()}
                           onMouseDown={(e) => e.stopPropagation()}
                           onMouseUp={(e) => e.stopPropagation()}
-                                                   className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                         placeholder="#ffffff"
-                       />
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          disabled={!isOneDoorAllowed()}
+                        >
+                          <option value={1} disabled={!isOneDoorAllowed()}>1 Door</option>
+                          <option value={2}>2 Doors</option>
+                        </select>
+                        {!isOneDoorAllowed() && (
+                          <p
+                            className="text-xs text-blue-600 mt-1"
+                            onClick={(e) => e.stopPropagation()}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onMouseUp={(e) => e.stopPropagation()}
+                          >
+                            ⓘ {doorCountAutoAdjusted ? 'Auto-switched to 2 doors' : '2 doors required'} for cabinets wider than 600mm
+                          </p>
+                        )}
                       </div>
-                    </div>
-                  )}
+                    )}
 
-                  {/* Door Thickness */}
-                  {doorEnabled && (
-                    <div
-                      onClick={(e) => e.stopPropagation()}
-                      onMouseDown={(e) => e.stopPropagation()}
-                      onMouseUp={(e) => e.stopPropagation()}
-                    >
-                      <label 
-                        className="block text-sm font-medium text-gray-700 mb-1"
+                    {/* Door Gap */}
+                    {doorEnabled && (
+                      <div
                         onClick={(e) => e.stopPropagation()}
                         onMouseDown={(e) => e.stopPropagation()}
                         onMouseUp={(e) => e.stopPropagation()}
-                      >Door Thickness (mm)</label>
-                      <select
-                        value={doorThickness}
-                        onChange={(e) => handleDoorMaterialChange('thickness', Number(e.target.value))}
-                        onClick={(e) => e.stopPropagation()}
-                        onMouseDown={(e) => e.stopPropagation()}
-                        onMouseUp={(e) => e.stopPropagation()}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       >
-                        {doorMaterials.map(material => (
-                          <option key={material.id} value={material.thickness}>
-                            {material.name} ({material.thickness}mm)
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
+                        <label
+                          className="block text-sm font-medium text-gray-700 mb-1"
+                          onClick={(e) => e.stopPropagation()}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onMouseUp={(e) => e.stopPropagation()}
+                        >Door Gap (mm)</label>
+                        <div
+                          className="text-center mb-3"
+                          onClick={(e) => e.stopPropagation()}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onMouseUp={(e) => e.stopPropagation()}
+                        >
+                          <input
+                            type="number"
+                            value={2}
+                            disabled
+                            className="text-center text-lg font-semibold text-gray-400 bg-gray-100 border-b-2 border-gray-300 px-2 py-1 w-24 cursor-not-allowed"
+                            min="1"
+                            max="5"
+                            step="0.5"
+                          />
+                          <span
+                            className="text-lg font-semibold text-gray-400 ml-1"
+                            onClick={(e) => e.stopPropagation()}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onMouseUp={(e) => e.stopPropagation()}
+                          >mm</span>
+                        </div>
+                        <p
+                          className="text-xs text-gray-500 mt-1"
+                          onClick={(e) => e.stopPropagation()}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onMouseUp={(e) => e.stopPropagation()}
+                        >
+                          Gap between doors and carcass edges (read-only)
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Door Material Colour */}
+                    {doorEnabled && (
+                      <div
+                        onClick={(e) => e.stopPropagation()}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onMouseUp={(e) => e.stopPropagation()}
+                      >
+                        <label
+                          className="block text-sm font-medium text-gray-700 mb-1"
+                          onClick={(e) => e.stopPropagation()}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onMouseUp={(e) => e.stopPropagation()}
+                        >Door Colour</label>
+                        <div
+                          className="flex items-center space-x-2"
+                          onClick={(e) => e.stopPropagation()}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onMouseUp={(e) => e.stopPropagation()}
+                        >
+                          <input
+                            type="color"
+                            value={doorColor}
+                            onChange={(e) => handleDoorMaterialChange('colour', e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onMouseUp={(e) => e.stopPropagation()}
+                            className="w-16 h-12 border border-gray-300 rounded-md cursor-pointer"
+                          />
+                          <input
+                            type="text"
+                            value={doorColor}
+                            onChange={(e) => handleDoorMaterialChange('colour', e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onMouseUp={(e) => e.stopPropagation()}
+                            className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="#ffffff"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Door Thickness */}
+                    {doorEnabled && (
+                      <div
+                        onClick={(e) => e.stopPropagation()}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onMouseUp={(e) => e.stopPropagation()}
+                      >
+                        <label
+                          className="block text-sm font-medium text-gray-700 mb-1"
+                          onClick={(e) => e.stopPropagation()}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onMouseUp={(e) => e.stopPropagation()}
+                        >Door Thickness (mm)</label>
+                        <select
+                          value={doorThickness}
+                          onChange={(e) => handleDoorMaterialChange('thickness', Number(e.target.value))}
+                          onClick={(e) => e.stopPropagation()}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onMouseUp={(e) => e.stopPropagation()}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                          {doorMaterials.map(material => (
+                            <option key={material.id} value={material.thickness}>
+                              {material.name} ({material.thickness}mm)
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
               )}
 
               {/* Drawer Settings - Only show for Base > Drawer cabinets */}
               {isDrawerCabinet() && (
-                <div 
+                <div
                   className="bg-white rounded-lg p-4 mb-4 shadow-sm border border-gray-200"
                   onClick={(e) => e.stopPropagation()}
                   onMouseDown={(e) => e.stopPropagation()}
                   onMouseUp={(e) => e.stopPropagation()}
                 >
-                  <div 
+                  <div
                     className="flex items-center space-x-2 mb-4"
                     onClick={(e) => e.stopPropagation()}
                     onMouseDown={(e) => e.stopPropagation()}
@@ -1299,8 +1298,8 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
                     <Ruler size={20} />
                     <h3>Drawer Settings</h3>
                   </div>
-                  
-                  <div 
+
+                  <div
                     className="space-y-3"
                     onClick={(e) => e.stopPropagation()}
                     onMouseDown={(e) => e.stopPropagation()}
@@ -1312,7 +1311,7 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
                       onMouseDown={(e) => e.stopPropagation()}
                       onMouseUp={(e) => e.stopPropagation()}
                     >
-                      <label 
+                      <label
                         className="flex items-center space-x-2 cursor-pointer"
                         onClick={(e) => e.stopPropagation()}
                         onMouseDown={(e) => e.stopPropagation()}
@@ -1338,7 +1337,7 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
                         onMouseDown={(e) => e.stopPropagation()}
                         onMouseUp={(e) => e.stopPropagation()}
                       >
-                        <label 
+                        <label
                           className="block text-sm font-medium text-gray-700 mb-1"
                           onClick={(e) => e.stopPropagation()}
                           onMouseDown={(e) => e.stopPropagation()}
@@ -1366,7 +1365,7 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
                         onMouseDown={(e) => e.stopPropagation()}
                         onMouseUp={(e) => e.stopPropagation()}
                       >
-                        <label 
+                        <label
                           className="block text-sm font-medium text-gray-700 mb-2"
                           onClick={(e) => e.stopPropagation()}
                           onMouseDown={(e) => e.stopPropagation()}
@@ -1426,7 +1425,7 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
                             </div>
                           ))}
                         </div>
-                        
+
                         {/* Real-time height balance display */}
                         <div className="mt-2 p-2 bg-green-50 rounded text-xs text-green-700 border border-green-200">
                           <div className="flex justify-between items-center">
@@ -1436,16 +1435,15 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
                             </span>
                           </div>
                         </div>
-                        
+
                         <div className="flex items-center justify-between mt-2">
                           <div className="flex-1">
-                            <p className={`text-xs ${
-                              Math.round(drawerHeights.reduce((sum, height) => sum + (height || 0), 0) * 10) / 10 > dimensions.height
+                            <p className={`text-xs ${Math.round(drawerHeights.reduce((sum, height) => sum + (height || 0), 0) * 10) / 10 > dimensions.height
                                 ? 'text-red-500 font-medium'
                                 : Math.round(drawerHeights.reduce((sum, height) => sum + (height || 0), 0) * 10) / 10 === dimensions.height
-                                ? 'text-green-600 font-medium'
-                                : 'text-gray-500'
-                            }`}>
+                                  ? 'text-green-600 font-medium'
+                                  : 'text-gray-500'
+                              }`}>
                               Total: {Math.round(drawerHeights.reduce((sum, height) => sum + (height || 0), 0) * 10) / 10}mm / {dimensions.height}mm
                               {Math.round(drawerHeights.reduce((sum, height) => sum + (height || 0), 0) * 10) / 10 > dimensions.height && (
                                 <span className="block">⚠️ Total exceeds carcass height</span>
@@ -1456,16 +1454,15 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
                             </p>
                             {/* Progress bar showing height usage */}
                             <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
-                              <div 
-                                className={`h-2 rounded-full transition-all duration-300 ${
-                                  Math.round(drawerHeights.reduce((sum, height) => sum + (height || 0), 0) * 10) / 10 > dimensions.height
+                              <div
+                                className={`h-2 rounded-full transition-all duration-300 ${Math.round(drawerHeights.reduce((sum, height) => sum + (height || 0), 0) * 10) / 10 > dimensions.height
                                     ? 'bg-red-500'
                                     : Math.round(drawerHeights.reduce((sum, height) => sum + (height || 0), 0) * 10) / 10 === dimensions.height
-                                    ? 'bg-green-500'
-                                    : 'bg-blue-500'
-                                }`}
-                                style={{ 
-                                  width: `${Math.min(100, (drawerHeights.reduce((sum, height) => sum + (height || 0), 0) / dimensions.height) * 100)}%` 
+                                      ? 'bg-green-500'
+                                      : 'bg-blue-500'
+                                  }`}
+                                style={{
+                                  width: `${Math.min(100, (drawerHeights.reduce((sum, height) => sum + (height || 0), 0) / dimensions.height) * 100)}%`
                                 }}
                               ></div>
                             </div>
@@ -1507,7 +1504,7 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
                             </button>
                           </div>
                         </div>
-                        
+
                         {/* Height distribution summary */}
                         <div className="mt-3 p-2 bg-gray-50 rounded text-xs">
                           <p className="font-medium text-gray-700 mb-1">Height Distribution:</p>
@@ -1537,7 +1534,7 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
               )}
             </>
           ) : (
-            <div 
+            <div
               className="text-center text-gray-500 py-8"
               onClick={(e) => e.stopPropagation()}
               onMouseDown={(e) => e.stopPropagation()}

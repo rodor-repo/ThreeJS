@@ -3,7 +3,7 @@ import {
   CarcassDimensions,
   CarcassMaterial,
   DoorMaterial,
-} from "../Carcass"
+} from "../../../components/Carcass"
 
 export const applyDimensions = (c: CarcassAssembly, dims: CarcassDimensions) =>
   c.updateDimensions(dims)

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react"
 import * as THREE from "three"
-import type { CabinetData, WallDimensions } from "../components/three/types"
+import type { CabinetData, WallDimensions } from "../types"
 
 type CameraDragAPI = {
   startDrag: (x: number, y: number) => void

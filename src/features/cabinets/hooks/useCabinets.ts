@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useState } from "react"
 import * as THREE from "three"
-import { createCabinet as createCabinetEntry } from "../components/three/cabinet-factory"
+import { createCabinet as createCabinetEntry } from "../factory/cabinet-factory"
 import {
   clearHighlight,
   highlightSelected,
   pulseHover,
   unpulseHover,
-} from "../components/three/selection"
-import type { CabinetData } from "../components/three/types"
-import type { CabinetType } from "../components/Carcass"
+} from "../../scene/lib/selection"
+import type { CabinetData } from "../../scene/types"
+import type { CabinetType } from "../../../components/Carcass"
 
 export const useCabinets = (
   sceneRef: React.MutableRefObject<THREE.Scene | null>

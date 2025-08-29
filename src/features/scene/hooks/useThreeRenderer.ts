@@ -5,8 +5,8 @@ import {
   buildFloor,
   positionCamera,
   WALL_THICKNESS,
-} from "../components/three/scene-utils"
-import type { WallDimensions } from "../components/three/types"
+} from "../lib/scene-utils"
+import type { WallDimensions } from "../types"
 
 export const useThreeRenderer = (
   mountRef: React.RefObject<HTMLDivElement>,

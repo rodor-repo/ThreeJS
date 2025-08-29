@@ -1,5 +1,5 @@
 import React from 'react'
-import type { CabinetData } from './types'
+import type { CabinetData } from '../../scene/types'
 
 type Props = {
   cabinets: CabinetData[]

@@ -1,7 +1,7 @@
 import * as THREE from "three"
 import { describe, it, expect } from "vitest"
 import { createCabinet, getDefaultDimensions } from "./cabinet-factory"
-import { CarcassAssembly } from "../Carcass"
+import { CarcassAssembly } from "../../../components/Carcass"
 
 describe("cabinet-factory", () => {
   it("getDefaultDimensions returns sensible defaults per type", () => {

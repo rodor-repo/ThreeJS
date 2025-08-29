@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carcass Leg Demo</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+        }
+        #container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+        #info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            z-index: 1000;
+        }
+        h1 {
+            margin: 0 0 15px 0;
+            color: #333;
+        }
+        .spec {
+            margin: 5px 0;
+            color: #666;
+        }
+        .highlight {
+            color: #3B82F6;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="info">
+            <h1>🪑 Carcass Leg Demo</h1>
+            <div class="spec"><span class="highlight">Base Cabinet:</span> 4 legs (50mm diameter)</div>
+            <div class="spec"><span class="highlight">Tall Cabinet:</span> 4 legs (50mm diameter)</div>
+            <div class="spec"><span class="highlight">Top Cabinet:</span> No legs</div>
+            <div class="spec"><span class="highlight">Leg Color:</span> Black</div>
+            <div class="spec"><span class="highlight">Front Legs:</span> Set back 70mm</div>
+            <div class="spec"><span class="highlight">Leg Height:</span> 100mm</div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { LegDemo } from '../components/Carcass/LegDemo.js';
+        
+        // Initialize the demo when the page loads
+        window.addEventListener('DOMContentLoaded', () => {
+            const container = document.getElementById('container');
+            const demo = new LegDemo(container);
+            
+            // Handle window resize
+            window.addEventListener('resize', () => {
+                demo.resize();
+            });
+            
+            // Cleanup on page unload
+            window.addEventListener('beforeunload', () => {
+                demo.dispose();
+            });
+        });
+    </script>
+</body>
+</html>

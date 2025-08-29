@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Base Rail Positioning Test</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .controls {
+            display: flex;
+            gap: 20px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+        button {
+            padding: 10px 20px;
+            background: #3B82F6;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover {
+            background: #2563EB;
+        }
+        .info {
+            background: #EFF6FF;
+            padding: 15px;
+            border-radius: 4px;
+            border-left: 4px solid #3B82F6;
+            margin: 20px 0;
+        }
+        .canvas-container {
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+            margin: 20px 0;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 600px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Base Rail Positioning Test</h1>
+        
+        <div class="info">
+            <h3>Test Overview</h3>
+            <p>This test demonstrates the difference between Standard Base and Drawer Base cabinet positioning:</p>
+            <ul>
+                <li><strong>Standard Base:</strong> BaseRail positioned VERTICALLY at front edge (Z=0) with 60mm height</li>
+                <li><strong>Drawer Base:</strong> BaseRail positioned HORIZONTALLY like standard top panels</li>
+            </ul>
+        </div>
+
+        <div class="test-section">
+            <h2>Standard Base Cabinet (Vertical BaseRail)</h2>
+            <div class="canvas-container">
+                <canvas id="standardBaseCanvas"></canvas>
+            </div>
+            <div class="controls">
+                <button onclick="changeBaseRailDepth(60)">60mm BaseRail</button>
+                <button onclick="changeBaseRailDepth(80)">80mm BaseRail</button>
+                <button onclick="changeBaseRailDepth(100)">100mm BaseRail</button>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>Drawer Base Cabinet (Horizontal BaseRail)</h2>
+            <div class="canvas-container">
+                <canvas id="drawerBaseCanvas"></canvas>
+            </div>
+            <div class="controls">
+                <button onclick="toggleDrawers()">Toggle Drawers</button>
+                <button onclick="changeDrawerCount(3)">3 Drawers</button>
+                <button onclick="changeDrawerCount(5)">5 Drawers</button>
+            </div>
+        </div>
+
+        <div class="info">
+            <h3>Expected Results</h3>
+            <p><strong>Standard Base:</strong> The BaseRail should appear as a vertical strip at the front edge of the cabinet, 60mm tall and positioned at Z=0.</p>
+            <p><strong>Drawer Base:</strong> The BaseRail should appear as a horizontal panel at the top of the cabinet, spanning the full depth.</p>
+        </div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'https://unpkg.com/three@0.158.0/build/three.module.js';
+        
+        let standardBaseScene, standardBaseCamera, standardBaseRenderer;
+        let drawerBaseScene, drawerBaseCamera, drawerBaseRenderer;
+        let standardBaseCarcass, drawerBaseCarcass;
+
+        // Initialize Standard Base scene
+        function initStandardBase() {
+            const canvas = document.getElementById('standardBaseCanvas');
+            
+            standardBaseScene = new THREE.Scene();
+            standardBaseScene.background = new THREE.Color(0xf0f0f0);
+            
+            standardBaseCamera = new THREE.PerspectiveCamera(75, canvas.clientWidth / canvas.clientHeight, 0.1, 1000);
+            standardBaseCamera.position.set(0, 500, 800);
+            standardBaseCamera.lookAt(0, 400, 0);
+            
+            standardBaseRenderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+            standardBaseRenderer.setSize(canvas.clientWidth, canvas.clientHeight);
+            standardBaseRenderer.shadowMap.enabled = true;
+            
+            // Add lighting
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+            standardBaseScene.add(ambientLight);
+            
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(10, 10, 5);
+            directionalLight.castShadow = true;
+            standardBaseScene.add(directionalLight);
+            
+            // Create Standard Base cabinet (no drawers)
+            createStandardBaseCabinet();
+            
+            animateStandardBase();
+        }
+
+        // Initialize Drawer Base scene
+        function initDrawerBase() {
+            const canvas = document.getElementById('drawerBaseCanvas');
+            
+            drawerBaseScene = new THREE.Scene();
+            drawerBaseScene.background = new THREE.Color(0xf0f0f0);
+            
+            drawerBaseCamera = new THREE.PerspectiveCamera(75, canvas.clientWidth / canvas.clientHeight, 0.1, 1000);
+            drawerBaseCamera.position.set(0, 500, 800);
+            drawerBaseCamera.lookAt(0, 400, 0);
+            
+            drawerBaseRenderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+            drawerBaseRenderer.setSize(canvas.clientWidth, canvas.clientHeight);
+            drawerBaseRenderer.shadowMap.enabled = true;
+            
+            // Add lighting
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+            drawerBaseScene.add(ambientLight);
+            
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(10, 10, 5);
+            directionalLight.castShadow = true;
+            drawerBaseScene.add(directionalLight);
+            
+            // Create Drawer Base cabinet (with drawers)
+            createDrawerBaseCabinet();
+            
+            animateDrawerBase();
+        }
+
+        // Create a simple Standard Base cabinet representation
+        function createStandardBaseCabinet() {
+            // Create a group for the cabinet
+            standardBaseCarcass = new THREE.Group();
+            
+            // Create end panels (left and right)
+            const endGeometry = new THREE.BoxGeometry(18, 720, 600);
+            const endMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
+            
+            const leftEnd = new THREE.Mesh(endGeometry, endMaterial);
+            leftEnd.position.set(-291, 360, 0);
+            standardBaseCarcass.add(leftEnd);
+            
+            const rightEnd = new THREE.Mesh(endGeometry, endMaterial);
+            rightEnd.position.set(291, 360, 0);
+            standardBaseCarcass.add(rightEnd);
+            
+            // Create back panel
+            const backGeometry = new THREE.BoxGeometry(600, 720, 18);
+            const backMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
+            
+            const back = new THREE.Mesh(backGeometry, backMaterial);
+            back.position.set(0, 360, -291);
+            standardBaseCarcass.add(back);
+            
+            // Create bottom panel
+            const bottomGeometry = new THREE.BoxGeometry(564, 18, 582);
+            const bottomMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
+            
+            const bottom = new THREE.Mesh(bottomGeometry, bottomMaterial);
+            bottom.position.set(0, 9, -9);
+            standardBaseCarcass.add(bottom);
+            
+            // Create BaseRail (VERTICAL positioning)
+            const baseRailGeometry = new THREE.BoxGeometry(564, 60, 18); // Width, Height, Depth
+            const baseRailMaterial = new THREE.MeshLambertMaterial({ color: 0xCD853F });
+            
+            const baseRail = new THREE.Mesh(baseRailGeometry, baseRailMaterial);
+            baseRail.position.set(0, 660, 0); // Y: height - baseRailDepth, Z: 0 (front edge)
+            standardBaseCarcass.add(baseRail);
+            
+            // Add wireframe to BaseRail
+            const edges = new THREE.EdgesGeometry(baseRailGeometry);
+            const lineMaterial = new THREE.LineBasicMaterial({ color: 0x333333 });
+            const wireframe = new THREE.LineSegments(edges, lineMaterial);
+            wireframe.position.copy(baseRail.position);
+            standardBaseCarcass.add(wireframe);
+            
+            // Add labels
+            addLabels(standardBaseScene, 'Standard Base Cabinet\nBaseRail: VERTICAL (60mm)', 0x3B82F6, -400);
+            
+            standardBaseScene.add(standardBaseCarcass);
+        }
+
+        // Create a simple Drawer Base cabinet representation
+        function createDrawerBaseCabinet() {
+            // Create a group for the cabinet
+            drawerBaseCarcass = new THREE.Group();
+            
+            // Create end panels (left and right)
+            const endGeometry = new THREE.BoxGeometry(18, 730, 500);
+            const endMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
+            
+            const leftEnd = new THREE.Mesh(endGeometry, endMaterial);
+            leftEnd.position.set(-241, 365, 0);
+            drawerBaseCarcass.add(leftEnd);
+            
+            const rightEnd = new THREE.Mesh(endGeometry, endMaterial);
+            rightEnd.position.set(241, 365, 0);
+            drawerBaseCarcass.add(rightEnd);
+            
+            // Create back panel
+            const backGeometry = new THREE.BoxGeometry(500, 730, 18);
+            const backMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
+            
+            const back = new THREE.Mesh(backGeometry, backMaterial);
+            back.position.set(0, 365, -241);
+            drawerBaseCarcass.add(back);
+            
+            // Create bottom panel
+            const bottomGeometry = new THREE.BoxGeometry(464, 18, 482);
+            const bottomMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
+            
+            const bottom = new THREE.Mesh(bottomGeometry, bottomMaterial);
+            bottom.position.set(0, 9, -9);
+            drawerBaseCarcass.add(bottom);
+            
+            // Create BaseRail (HORIZONTAL positioning)
+            const baseRailGeometry = new THREE.BoxGeometry(464, 18, 482); // Width, Height, Depth
+            const baseRailMaterial = new THREE.MeshLambertMaterial({ color: 0xCD853F });
+            
+            const baseRail = new THREE.Mesh(baseRailGeometry, baseRailMaterial);
+            baseRail.position.set(0, 721, -120); // Y: height - thickness/2, Z: backThickness + depth/2
+            drawerBaseCarcass.add(baseRail);
+            
+            // Add wireframe to BaseRail
+            const edges = new THREE.EdgesGeometry(baseRailGeometry);
+            const lineMaterial = new THREE.LineBasicMaterial({ color: 0x333333 });
+            const wireframe = new THREE.LineSegments(edges, lineMaterial);
+            wireframe.position.copy(baseRail.position);
+            drawerBaseCarcass.add(wireframe);
+            
+            // Add labels
+            addLabels(drawerBaseScene, 'Drawer Base Cabinet\nBaseRail: HORIZONTAL', 0x10B981, 400);
+            
+            drawerBaseScene.add(drawerBaseCarcass);
+        }
+
+        function addLabels(scene, text, color, xOffset) {
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            canvas.width = 256;
+            canvas.height = 128;
+            
+            context.fillStyle = '#ffffff';
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            
+            context.fillStyle = `#${color.toString(16).padStart(6, '0')}`;
+            context.font = '16px Arial';
+            context.textAlign = 'center';
+            
+            const lines = text.split('\n');
+            lines.forEach((line, index) => {
+                context.fillText(line, canvas.width / 2, 40 + index * 25);
+            });
+
+            const texture = new THREE.CanvasTexture(canvas);
+            const material = new THREE.SpriteMaterial({ map: texture });
+            const sprite = new THREE.Sprite(material);
+            sprite.scale.set(200, 100, 1);
+            sprite.position.set(xOffset, 800, 0);
+            
+            scene.add(sprite);
+        }
+
+        function animateStandardBase() {
+            requestAnimationFrame(animateStandardBase);
+            
+            if (standardBaseCarcass) {
+                standardBaseCarcass.rotation.y += 0.005;
+            }
+            
+            standardBaseRenderer.render(standardBaseScene, standardBaseCamera);
+        }
+
+        function animateDrawerBase() {
+            requestAnimationFrame(animateDrawerBase);
+            
+            if (drawerBaseCarcass) {
+                drawerBaseCarcass.rotation.y += 0.005;
+            }
+            
+            drawerBaseRenderer.render(drawerBaseScene, drawerBaseCamera);
+        }
+
+        // Global functions for buttons
+        window.changeBaseRailDepth = function(depth) {
+            if (standardBaseCarcass) {
+                // Find the BaseRail mesh and update its height
+                standardBaseCarcass.children.forEach(child => {
+                    if (child.geometry && child.geometry.parameters.height === 60) {
+                        // Update geometry
+                        const newGeometry = new THREE.BoxGeometry(564, depth, 18);
+                        child.geometry.dispose();
+                        child.geometry = newGeometry;
+                        
+                        // Update position (Y: height - newDepth)
+                        child.position.y = 720 - depth;
+                        
+                        // Update wireframe
+                        const wireframe = standardBaseCarcass.children.find(c => c instanceof THREE.LineSegments);
+                        if (wireframe) {
+                            wireframe.geometry.dispose();
+                            wireframe.geometry = new THREE.EdgesGeometry(newGeometry);
+                            wireframe.position.y = 720 - depth;
+                        }
+                    }
+                });
+                
+                console.log(`BaseRail depth changed to ${depth}mm`);
+            }
+        };
+
+        window.toggleDrawers = function() {
+            console.log('Toggle drawers functionality would go here');
+        };
+
+        window.changeDrawerCount = function(count) {
+            console.log(`Change drawer count to ${count} functionality would go here`);
+        };
+
+        // Initialize scenes
+        initStandardBase();
+        initDrawerBase();
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            // Resize logic would go here
+        });
+    </script>
+</body>
+</html>

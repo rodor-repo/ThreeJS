@@ -9,7 +9,7 @@ Goal: Apply Single Responsibility Principle (SRP) to simplify `src/components/Th
 3. Isolate camera controls into a tiny hook `src/hooks/useCameraDrag.ts` (pure mouse-to-camera math, no ProductPanel coupling) — DONE
 4. Encapsulate selection/highlighting into `src/components/three/selection.ts` utilities — DONE
 5. Extract ProductPanel interaction mapping (adapters) into `src/components/three/cabinet-adapter.ts` to keep TS types and translation clean — DONE (wired but current handlers in `ThreeScene.tsx` still call Carcass methods directly; adapter available for consolidation)
-6. Add lightweight unit tests for math helpers and factory defaults with Vitest — IN PROGRESS
+6. Add lightweight unit tests for math helpers and factory defaults with Vitest — DONE
 7. Add README in `src/components/three/` that documents responsibilities and simple contracts — DONE
 
 ## Contracts (high level)

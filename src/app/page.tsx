@@ -6,7 +6,7 @@ import MainMenu from '@/components/MainMenu'
 import { Category, Subcategory } from '@/components/categoriesData'
 
 // Dynamically import the Three.js component to avoid SSR issues
-const ThreeScene = dynamic(() => import('../features/scene/ThreeScene'), {
+const ThreeScene = dynamic(() => import('@/features/scene/ThreeScene'), {
   ssr: false,
   loading: () => (
     <div className="flex items-center justify-center h-screen bg-gray-100">

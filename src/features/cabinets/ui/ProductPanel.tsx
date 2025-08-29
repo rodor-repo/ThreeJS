@@ -1,5 +1,5 @@
 import React from 'react'
-import type { CarcassDimensions, CarcassMaterial, CarcassMaterialData, DoorMaterial, DoorMaterialData } from '@/components/Carcass'
+import type { CarcassDimensions, CarcassMaterial, CarcassMaterialData, DoorMaterial, DoorMaterialData } from '@/features/carcass'
 import { useProductPanelState } from '../../cabinets/hooks/useProductPanelState'
 import ProductPanelView from './ProductPanelView'
 import type { ProductPanelProps } from './product-panel.types'

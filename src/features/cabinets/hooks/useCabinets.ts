@@ -8,7 +8,7 @@ import {
   unpulseHover,
 } from "../../scene/lib/selection"
 import type { CabinetData } from "../../scene/types"
-import type { CabinetType } from "@/components/Carcass"
+import type { CabinetType } from "@/features/carcass"
 
 export const useCabinets = (
   sceneRef: React.MutableRefObject<THREE.Scene | null>

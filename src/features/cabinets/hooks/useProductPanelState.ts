@@ -1,10 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { categoriesData } from "@/components/categoriesData"
 import type { Group } from "three"
-import type {
-  CarcassDimensions,
-  CarcassMaterialData,
-} from "@/components/Carcass"
+import type { CarcassDimensions, CarcassMaterialData } from "@/features/carcass"
 import type {
   ProductPanelCallbacks,
   SelectedCabinetSnapshot,

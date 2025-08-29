@@ -1,4 +1,4 @@
-import { CabinetType, DoorMaterial } from '@/components/Carcass'
+import { CabinetType, DoorMaterial } from '@/features/carcass'
 import { Subcategory } from '@/components/categoriesData'
 import { Settings } from 'lucide-react'
 import React, { useEffect, useRef, useState } from 'react'

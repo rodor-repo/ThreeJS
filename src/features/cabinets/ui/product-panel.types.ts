@@ -5,7 +5,7 @@ import type {
   CarcassMaterialData,
   DoorMaterial,
   DoorMaterialData,
-} from "@/components/Carcass"
+} from "@/features/carcass"
 
 export interface SelectedCabinetSnapshot {
   group: Group

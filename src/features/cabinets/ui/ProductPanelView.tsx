@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react'
 import _ from 'lodash'
 import { ChevronLeft, ChevronRight, Settings, Palette, Ruler, DoorOpen } from 'lucide-react'
-import type { CarcassDimensions } from '@/components/Carcass'
+import type { CarcassDimensions } from '@/features/carcass'
 import type { ProductPanelProps } from './product-panel.types'
 import DebugBalanceButton from './DebugBalanceButton'
 

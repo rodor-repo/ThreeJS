@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ChevronLeft, ChevronRight, Settings, Palette, Ruler, DoorOpen } from 'lucide-react';
-import { CarcassDimensions, CarcassMaterial, CarcassMaterialData, DoorMaterial, DoorMaterialData } from '../../../components/Carcass';
-import { categoriesData } from '../../../components/categoriesData';
+import { CarcassDimensions, CarcassMaterial, CarcassMaterialData, DoorMaterial, DoorMaterialData } from '@/components/Carcass';
+import { categoriesData } from '@/components/categoriesData';
 
 interface ProductPanelProps {
   isVisible: boolean;
@@ -1439,10 +1439,10 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
                         <div className="flex items-center justify-between mt-2">
                           <div className="flex-1">
                             <p className={`text-xs ${Math.round(drawerHeights.reduce((sum, height) => sum + (height || 0), 0) * 10) / 10 > dimensions.height
-                                ? 'text-red-500 font-medium'
-                                : Math.round(drawerHeights.reduce((sum, height) => sum + (height || 0), 0) * 10) / 10 === dimensions.height
-                                  ? 'text-green-600 font-medium'
-                                  : 'text-gray-500'
+                              ? 'text-red-500 font-medium'
+                              : Math.round(drawerHeights.reduce((sum, height) => sum + (height || 0), 0) * 10) / 10 === dimensions.height
+                                ? 'text-green-600 font-medium'
+                                : 'text-gray-500'
                               }`}>
                               Total: {Math.round(drawerHeights.reduce((sum, height) => sum + (height || 0), 0) * 10) / 10}mm / {dimensions.height}mm
                               {Math.round(drawerHeights.reduce((sum, height) => sum + (height || 0), 0) * 10) / 10 > dimensions.height && (
@@ -1456,10 +1456,10 @@ const ProductPanel: React.FC<ProductPanelProps> = ({
                             <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
                               <div
                                 className={`h-2 rounded-full transition-all duration-300 ${Math.round(drawerHeights.reduce((sum, height) => sum + (height || 0), 0) * 10) / 10 > dimensions.height
-                                    ? 'bg-red-500'
-                                    : Math.round(drawerHeights.reduce((sum, height) => sum + (height || 0), 0) * 10) / 10 === dimensions.height
-                                      ? 'bg-green-500'
-                                      : 'bg-blue-500'
+                                  ? 'bg-red-500'
+                                  : Math.round(drawerHeights.reduce((sum, height) => sum + (height || 0), 0) * 10) / 10 === dimensions.height
+                                    ? 'bg-green-500'
+                                    : 'bg-blue-500'
                                   }`}
                                 style={{
                                   width: `${Math.min(100, (drawerHeights.reduce((sum, height) => sum + (height || 0), 0) / dimensions.height) * 100)}%`

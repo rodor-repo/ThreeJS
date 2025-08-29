@@ -1,5 +1,5 @@
 import * as THREE from "three"
-import { CarcassAssembly } from "../../components/Carcass"
+import { CarcassAssembly } from "@/components/Carcass"
 
 export type WallDimensions = {
   height: number

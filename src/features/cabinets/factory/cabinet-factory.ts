@@ -4,7 +4,7 @@ import {
   CarcassAssembly,
   CarcassDimensions,
   CabinetType,
-} from "../../../components/Carcass"
+} from "@/components/Carcass"
 
 export type CabinetData = {
   group: THREE.Group

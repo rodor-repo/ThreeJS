@@ -90,12 +90,16 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
   // Handle subcategory selection for cabinet creation
   useEffect(() => {
     if (selectedSubcategory && sceneRef.current) {
-      console.log('Subcategory selected:', selectedSubcategory.category.name, '>', selectedSubcategory.subcategory.name);
+      console.log('Subcategory selected:', selectedSubcategory.category.name, '>', selectedSubcategory.subcategory.name)
 
-      // Create cabinet based on category and subcategory
-      createCabinet(selectedSubcategory.category.id as CabinetType, selectedSubcategory.subcategory.id);
+      // Map general categories to supported CabinetType values
+      const rawType = selectedSubcategory.category.id
+      const cabinetType: CabinetType = rawType === 'wardrobe' ? 'tall' : (rawType as CabinetType)
+
+      // Create cabinet based on mapped cabinet type and subcategory
+      createCabinet(cabinetType, selectedSubcategory.subcategory.id)
     }
-  }, [selectedSubcategory]);
+  }, [selectedSubcategory])
 
   // Reset dragging state when menu opens/closes
   useEffect(() => {

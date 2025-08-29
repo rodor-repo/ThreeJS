@@ -30,7 +30,14 @@ export const createCabinet = (
     customDimensions?: Partial<CarcassDimensions>
   }
 ): CabinetData => {
-  const baseDims = _.cloneDeep(defaultDimensions[type])
+  // Defensive fallback if an unsupported type sneaks in
+  const hasDefaults = !!defaultDimensions[type]
+  if (!hasDefaults) {
+    console.warn(
+      `Unsupported cabinet type "${type}" passed to createCabinet. Falling back to 'tall'.`
+    )
+  }
+  const baseDims = _.cloneDeep(defaultDimensions[hasDefaults ? type : "tall"])
   const dimensions: CarcassDimensions = {
     width: opts?.customDimensions?.width ?? baseDims.width,
     height: opts?.customDimensions?.height ?? baseDims.height,
@@ -89,6 +96,13 @@ export const createCabinet = (
   }
 }
 
-export const getDefaultDimensions = (type: CabinetType): CarcassDimensions => ({
-  ...defaultDimensions[type],
-})
+export const getDefaultDimensions = (type: CabinetType): CarcassDimensions => {
+  const hasDefaults = !!defaultDimensions[type]
+  if (!hasDefaults) {
+    console.warn(
+      `Unsupported cabinet type "${type}" in getDefaultDimensions. Using 'tall' defaults.`
+    )
+  }
+  const dims = defaultDimensions[hasDefaults ? type : "tall"]
+  return { ...dims }
+}

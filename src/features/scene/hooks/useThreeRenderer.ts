@@ -1,3 +1,5 @@
+// After using renderer.setAnimationLoop
+
 import { useEffect, useRef, useCallback } from "react"
 import * as THREE from "three"
 import {
@@ -177,44 +179,21 @@ export const useThreeRenderer = (
 
     window.addEventListener("resize", handleResize)
 
-    // Animation loop management
-    let frameId: number | null = null
-    let isAnimating = false
-
-    const animate = () => {
-      if (!isAnimating) return // Safety check
-
-      if (rendererRef.current && sceneRef.current && cameraRef.current) {
+    // Animation loop via Three.js
+    const renderLoop = () => {
+      if (rendererRef.current && sceneRef.current && cameraRef.current)
         rendererRef.current.render(sceneRef.current, cameraRef.current)
-      }
-
-      frameId = requestAnimationFrame(animate)
     }
-
-    const startAnimation = () => {
-      if (isAnimating) return // Prevent multiple loops
-      isAnimating = true
-      animate()
-    }
-
-    const stopAnimation = () => {
-      isAnimating = false
-      if (frameId !== null) {
-        cancelAnimationFrame(frameId)
-        frameId = null
-      }
-    }
-
-    // Start the animation loop
-    startAnimation()
+    renderer.setAnimationLoop(renderLoop)
 
     return () => {
       window.removeEventListener("resize", handleResize)
       if (mountRef.current && renderer.domElement) {
         mountRef.current.removeChild(renderer.domElement)
       }
+      // Stop Three.js animation loop before disposing
+      renderer.setAnimationLoop(null)
       renderer.dispose()
-      stopAnimation() // Properly stop animation loop
 
       if (sceneRef.current && wallRef.current)
         sceneRef.current.remove(wallRef.current)

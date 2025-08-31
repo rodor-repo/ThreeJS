@@ -177,14 +177,36 @@ export const useThreeRenderer = (
 
     window.addEventListener("resize", handleResize)
 
-    let frameId = 0
+    // Animation loop management
+    let frameId: number | null = null
+    let isAnimating = false
+
     const animate = () => {
-      frameId = requestAnimationFrame(animate)
+      if (!isAnimating) return // Safety check
+
       if (rendererRef.current && sceneRef.current && cameraRef.current) {
         rendererRef.current.render(sceneRef.current, cameraRef.current)
       }
+
+      frameId = requestAnimationFrame(animate)
     }
-    animate()
+
+    const startAnimation = () => {
+      if (isAnimating) return // Prevent multiple loops
+      isAnimating = true
+      animate()
+    }
+
+    const stopAnimation = () => {
+      isAnimating = false
+      if (frameId !== null) {
+        cancelAnimationFrame(frameId)
+        frameId = null
+      }
+    }
+
+    // Start the animation loop
+    startAnimation()
 
     return () => {
       window.removeEventListener("resize", handleResize)
@@ -192,7 +214,7 @@ export const useThreeRenderer = (
         mountRef.current.removeChild(renderer.domElement)
       }
       renderer.dispose()
-      cancelAnimationFrame(frameId)
+      stopAnimation() // Properly stop animation loop
 
       if (sceneRef.current && wallRef.current)
         sceneRef.current.remove(wallRef.current)

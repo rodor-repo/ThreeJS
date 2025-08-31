@@ -6,7 +6,7 @@ import type {
   ProductPanelCallbacks,
   SelectedCabinetSnapshot,
   DimensionConstraints,
-} from "../ui/product-panel.types"
+} from "../ui/productPanel.types"
 
 export type UseProductPanelStateArgs = {
   selectedCabinet?: SelectedCabinetSnapshot | null

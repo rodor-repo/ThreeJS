@@ -4,7 +4,7 @@ import {
   WALL_THICKNESS,
   lookAtWallCenter,
   positionCamera,
-} from "../lib/scene-utils"
+} from "../lib/sceneUtils"
 
 export type DragState = {
   isDragging: boolean

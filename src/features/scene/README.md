@@ -1,20 +1,20 @@
 # Three module responsibilities
 
-- scene-utils: wall/floor construction and camera helpers
-- cabinet-factory: pure creation of carcass assemblies with sensible defaults
+- sceneUtils: wall/floor construction and camera helpers
+- cabinetFactory: pure creation of carcass assemblies with sensible defaults
 - selection: selection/hover highlight utilities
 - cabinet-adapter: map UI/ProductPanel events to CarcassAssembly API
 - hooks and UI: renderer bootstrap, cabinets state, scene interactions, and small presentational controls
 
 Contracts
 
-- scene-utils
+- sceneUtils
   - buildWall(dims, color?) -> Group
   - buildFloor(length) -> { floor: Mesh, grid: GridHelper }
   - positionCamera(camera, dims, zoom)
   - lookAtWallCenter(camera, dims)
   - WALL_THICKNESS constant
-- cabinet-factory
+- cabinetFactory
   - createCabinet(type, subId, opts?) -> { group, carcass, cabinetType, subcategoryId }
 - selection
   - highlightSelected(group) / clearHighlight(group) / pulseHover(group) / unpulseHover(group)

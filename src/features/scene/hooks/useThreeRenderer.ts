@@ -7,7 +7,7 @@ import {
   buildFloor,
   positionCamera,
   WALL_THICKNESS,
-} from "../lib/scene-utils"
+} from "../lib/sceneUtils"
 import type { WallDimensions } from "../types"
 
 export const useThreeRenderer = (

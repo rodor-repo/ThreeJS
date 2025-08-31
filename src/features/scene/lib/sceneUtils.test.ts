@@ -6,9 +6,9 @@ import {
   positionCamera,
   lookAtWallCenter,
   getWallCenter,
-} from "./scene-utils"
+} from "./sceneUtils"
 
-describe("scene-utils", () => {
+describe("sceneUtils", () => {
   const dims = { height: 2400, length: 3600 }
 
   it("buildWall returns a group positioned at wall center", () => {

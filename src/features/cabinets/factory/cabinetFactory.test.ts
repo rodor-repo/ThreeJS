@@ -1,9 +1,9 @@
 import * as THREE from "three"
 import { describe, it, expect } from "vitest"
-import { createCabinet, getDefaultDimensions } from "./cabinet-factory"
+import { createCabinet, getDefaultDimensions } from "./cabinetFactory"
 import { CarcassAssembly } from "@/features/carcass"
 
-describe("cabinet-factory", () => {
+describe("cabinetFactory", () => {
   it("getDefaultDimensions returns sensible defaults per type", () => {
     expect(getDefaultDimensions("top").width).toBeGreaterThan(0)
     expect(getDefaultDimensions("base").depth).toBeGreaterThan(0)

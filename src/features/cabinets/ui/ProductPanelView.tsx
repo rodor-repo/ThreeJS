@@ -2,7 +2,7 @@ import React, { useMemo } from 'react'
 import _ from 'lodash'
 import { ChevronLeft, ChevronRight, Settings, Palette, Ruler, DoorOpen } from 'lucide-react'
 import type { CarcassDimensions } from '@/features/carcass'
-import type { ProductPanelProps } from './product-panel.types'
+import type { ProductPanelProps } from './productPanel.types'
 import DebugBalanceButton from './DebugBalanceButton'
 
 export type ProductPanelViewProps = ProductPanelProps & {
@@ -285,8 +285,8 @@ export const ProductPanelView: React.FC<ProductPanelViewProps> = ({
 
   return (
     <div
-      className="fixed right-0 top-0 h-full bg-white shadow-lg border-l border-gray-200 transition-all duration-300 ease-in-out z-50 product-panel"
-      data-product-panel="true"
+      className="fixed right-0 top-0 h-full bg-white shadow-lg border-l border-gray-200 transition-all duration-300 ease-in-out z-50 productPanel"
+      data-productPanel="true"
       onClick={stop}
       onMouseDown={stop}
       onMouseUp={stop}

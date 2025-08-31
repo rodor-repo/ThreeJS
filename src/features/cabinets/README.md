@@ -1,13 +1,13 @@
 # Cabinets module responsibilities
 
-- cabinet-factory: pure creation of carcass assemblies with sensible defaults
+- cabinetFactory: pure creation of carcass assemblies with sensible defaults
 - cabinet-adapter: map UI/ProductPanel events to CarcassAssembly API
 - hooks and UI: cabinets state, selection, and presentational controls
 - product panel: split by SRP into container, state hook, and view
 
 ## Contracts
 
-- cabinet-factory
+- cabinetFactory
   - createCabinet(type, subId, opts?) -> { group, carcass, cabinetType, subcategoryId }
 - cabinet-adapter
   - applyDimensions(c, dims) / applyMaterialProps(c, changes) / applyKicker(c, height)
@@ -43,7 +43,7 @@ Thinnest component that wires `useProductPanelState` to `ProductPanelView`
 
 - props: same public API as before to keep scene integration intact
 
-### product-panel.types
+### productPanel.types
 
 Centralized contracts between container, hook, and view
 

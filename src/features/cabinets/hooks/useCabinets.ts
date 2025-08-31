@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react"
 import * as THREE from "three"
-import { createCabinet as createCabinetEntry } from "../factory/cabinet-factory"
+import { createCabinet as createCabinetEntry } from "../factory/cabinetFactory"
 import {
   clearHighlight,
   highlightSelected,

@@ -27,9 +27,7 @@ export const useSceneInteractions = (
   const isEventOnProductPanel = useCallback((target: EventTarget | null) => {
     if (!target) return false
     const el = target as HTMLElement
-    return !!(
-      el.closest(".product-panel") || el.closest("[data-product-panel]")
-    )
+    return !!(el.closest(".productPanel") || el.closest("[data-productPanel]"))
   }, [])
 
   const isMouseOverSelectedCabinet = useCallback(

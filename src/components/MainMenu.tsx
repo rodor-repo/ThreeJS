@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Menu, X, ChevronRight } from 'lucide-react'
 import { categoriesData, Category, Subcategory } from './categoriesData'
+import FetchCategoriesComponent from './FetchCategoriesComponent'
 
 interface MainMenuProps {
   onCategorySelect: (category: Category) => void
@@ -136,6 +137,11 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySele
                 <p className="text-gray-600 mt-2">Select a category to get started</p>
               </div>
 
+              {/* Fetch Categories Component */}
+              <div className="p-2 sm:p-4 border-b border-gray-200">
+                <FetchCategoriesComponent />
+              </div>
+
               {/* Categories */}
               <div className="p-2 sm:p-4">
                 {loading ? (
@@ -158,11 +164,10 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySele
                       <motion.button
                         key={category.id}
                         onClick={() => handleCategorySelect(category)}
-                        className={`w-full p-4 rounded-lg border-2 transition-all duration-150 hover:shadow-md ${
-                          selectedCategory?.id === category.id
-                            ? 'border-blue-500 bg-blue-50 shadow-md'
-                            : 'border-gray-200 hover:border-gray-300'
-                        }`}
+                        className={`w-full p-4 rounded-lg border-2 transition-all duration-150 hover:shadow-md ${selectedCategory?.id === category.id
+                          ? 'border-blue-500 bg-blue-50 shadow-md'
+                          : 'border-gray-200 hover:border-gray-300'
+                          }`}
                         whileHover={{ scale: 1.01 }}
                         whileTap={{ scale: 0.99 }}
                       >

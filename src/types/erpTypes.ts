@@ -1,0 +1,230 @@
+type TypeOfGD = "Dim" | "Qty"
+export type userType = "Admin" | "Guest" | "Retail" | "Trade"
+
+export type WsProducts = {
+  /**
+   * GD stands for Global Dimensions
+   */
+  GDs: {
+    [GDId: string]: {
+      GD: string
+      // defaultValue: number
+      // max: number
+      // min: number
+      type: TypeOfGD
+      // description?: string
+      userType: "Admin" | "Guest" | "Retail" | "Trade"
+      visible: boolean
+    } & (
+      | {
+          valueType: "selection"
+          defaultValue: number | string
+          options: (number | string)[]
+
+          max?: undefined
+          min?: undefined
+        }
+      | {
+          valueType: "range"
+          defaultValue: number
+          max: number
+          min: number
+
+          options?: undefined
+        }
+    )
+  }
+
+  GPs: {
+    [GPId: string]: {
+      GP: string
+      // defaultValue: number
+      // max: number
+      // min: number
+      type: TypeOfGD
+      // description?: string
+      userType: "Admin" | "Guest" | "Retail" | "Trade"
+      visible: boolean
+    } & (
+      | {
+          valueType: "selection"
+          defaultValue: number | string
+          options: (number | string)[]
+
+          max?: undefined
+          min?: undefined
+        }
+      | {
+          valueType: "range"
+          defaultValue: number
+          max: number
+          min: number
+
+          options?: undefined
+        }
+    )
+  }
+
+  globalHelps: {
+    [helpId: string]: {
+      help: string
+      description?: string
+    }
+  }
+
+  GParts: {
+    [GPartId: string]: {
+      part: string
+      QtyId: string
+
+      longDimFormula: (string | number)[]
+      longEdge: 0 | 1 | 2
+      shortDimFormula: (string | number)[]
+      shortEdge: 0 | 1 | 2
+
+      materialType: string
+
+      SQMFormula: (string | number)[]
+      LMFormula: (string | number)[]
+    }
+  }
+
+  /**
+   * GSLs stands for General SQMs/LMs
+   */
+
+  GSLs: {
+    [GSLId: string]: {
+      GSL: string
+      type: "SQM" | "LM"
+      formula: (string | number)[]
+    }
+  }
+
+  /**
+   * GM stands for Global Materials
+   */
+  GMs: {
+    [GMId: string]: {
+      GM: string
+      priceRangeIds: string[]
+      // defaultPriceRangeId: string
+      defaultPriceLevel: string
+      defaultPriceLevelId: string
+      // defaultSKUId: string
+      // defaultSKU: string
+      defaultColorId: unknown
+      defaultColor: unknown
+      defaultFinish: unknown
+      defaultFinishId: unknown
+      defaultThickness: number
+      defaultBrandId: string
+      defaultMargin: number
+      defaultBuyingBoardsPerSQM: number
+      defaultBuyingEdgePerLM: number
+      defaultColorImgUrl?: string
+      defaultColorImgUrlAlt?: string
+    }
+  }
+
+  /**
+   * GH stands for Global Hardwares
+   */
+  GHs: {
+    [GHId: string]: {
+      GH: string
+      visible: boolean
+      materialType: string
+      access: userType
+      defaultSKUId: string
+      defaultSKUGroupId: string
+      acceptableCollectionId: string
+      hardwareQtyFormula: (string | number)[]
+      defaultMargin: number
+      defaultBuyingPrice: number
+    }
+  }
+
+  categories: {
+    [categoryId: string]: {
+      category: string
+      url: string
+      description?: string
+      indexPhoto?: string
+      indexPhotoAlt?: string
+      sortNum: string
+      SEO: {
+        title?: string
+        description?: string
+        canonicalUrl?: string
+        ogTitle?: string
+        ogDescription?: string
+        ogImageAlt?: string[]
+        // scriptTags?: {
+        //   [scriptTagId: string]: {
+        //     scriptTag: string
+        //     content: string
+        //     date: Timestamp
+        //   }
+        // }
+      }
+    }
+  }
+  subCategories: {
+    [subCategoryId: string]: {
+      subCategory: string
+      categoryId: string
+      description?: string
+      /**
+       * Url of the image
+       */
+      sortNum: string
+      indexPhoto?: string
+      indexPhotoAlt?: string
+    }
+  }
+
+  designs: {
+    [designId: string]: {
+      design: string
+      subCategoryId: string
+      description?: string
+      /**
+       * Url of the image
+       */
+      sortNum: string
+      indexPhoto?: string
+      indexPhotoAlt?: string
+    }
+  }
+
+  hingeSettings: {
+    x2: number
+    x3: number
+    x4: number
+    x5: number
+  }
+  products: {
+    [productId: string]: {
+      product: string
+      categoryId: string
+      subCategoryId: string
+      designId: string
+      // description?: string
+      shortDescription?: string
+      sortNum: string
+      status: "Active" | "Hidden"
+      indexImageAlt?: string[]
+      SEO: {
+        pageTitle?: string
+        metaDescription?: string
+        // tags?: string
+        tags?: string[]
+        canonicalUrl?: string
+        ogTitle?: string
+        ogDescription?: string
+        indexPhotoAlt?: string[]
+      }
+    }
+  }
+}

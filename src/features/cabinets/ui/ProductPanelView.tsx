@@ -286,7 +286,7 @@ export const ProductPanelView: React.FC<ProductPanelViewProps> = ({
   return (
     <div
       className="fixed right-0 top-0 h-full bg-white shadow-lg border-l border-gray-200 transition-all duration-300 ease-in-out z-50 productPanel"
-      data-productPanel="true"
+      data-product-panel="true"
       onClick={stop}
       onMouseDown={stop}
       onMouseUp={stop}

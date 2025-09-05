@@ -73,9 +73,13 @@ export async function calculateWsProductPrice(
       headers: {
         Authorization: `Bearer ${process.env.WEBSHOP_SECRET_KEY}`,
         "Content-Type": "application/json",
+        // Header alone won't prevent framework caching; see fetch options below
         "Cache-Control": "no-cache",
       },
       body: JSON.stringify(requestBody),
+      // Always compute price with fresh data; disable any caching layers
+      cache: "no-store",
+      next: { revalidate: 0 },
     })
   } catch (err: unknown) {
     const e = err as Error

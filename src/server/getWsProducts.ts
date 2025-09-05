@@ -10,8 +10,13 @@ export async function getWsProducts() {
       headers: {
         Authorization: `Bearer ${process.env.WEBSHOP_SECRET_KEY}`,
         "Content-Type": "application/json",
+        // Request header is not enough to bypass Next.js caching; see options below
         "Cache-Control": "no-cache",
       },
+      // Always fetch fresh data on the server
+      // next: { revalidate: 0 } also disables ISR caching for this request
+      cache: "no-store",
+      next: { revalidate: 0 },
     }
   )
 

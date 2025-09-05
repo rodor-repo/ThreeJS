@@ -14,10 +14,12 @@ export async function getWsProduct(productId: string) {
       headers: {
         Authorization: `Bearer ${process.env.WEBSHOP_SECRET_KEY}`,
         "Content-Type": "application/json",
+        // Header alone won't prevent Next from caching; see fetch options below
         "Cache-Control": "no-cache",
       },
-      // revalidate on demand if needed; keep same behavior as sibling util
-      // next: { revalidate: 0 }
+      // Force fresh data on every call
+      cache: "no-store",
+      next: { revalidate: 0 },
     }
   )
 
@@ -27,11 +29,12 @@ export async function getWsProduct(productId: string) {
     )
   }
 
-  const wsProduct: {
+  const data: {
     product: WsProduct
     materialOptions: MaterialOptionsResponse
+    defaultMaterialSelections: DefaultMaterialSelections
   } = await response.json()
-  return wsProduct
+  return data
 }
 
 export type MaterialOptionsResponse = {
@@ -53,5 +56,12 @@ export type MaterialOptionsResponse = {
         }
       }
     }
+  }
+}
+
+export type DefaultMaterialSelections = {
+  [materialId: string]: {
+    colorId: string | null
+    finishId: string | null
   }
 }

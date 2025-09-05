@@ -228,3 +228,129 @@ export type WsProducts = {
     }
   }
 }
+
+type WsProductMaterialType = "Carcass" | "Door" | "Benchtop"
+
+export type WsProduct = {
+  id: string
+  product: string
+  productId: string
+  categoryId: string
+  subCategoryId: string
+  designId: string
+
+  sortNum: string
+  status: "Active" | "Hidden"
+
+  application: ("joinerlinx" | "joinershop")[]
+
+  shortDescription?: string
+  longDescription?: string
+  tipsAndTricks?: string
+
+  SEO: {
+    pageTitle?: string
+    metaDescription?: string
+    tags?: string[]
+    canonicalUrl?: string
+    ogTitle?: string
+    ogDescription?: string
+    ogImageUrl?: string
+    ogImageUrlAlt?: string
+  }
+
+  shapes: {
+    [shapeId: string]: {
+      imageUrl?: string
+      imageUrlAlt?: string
+      isIndex: boolean
+      sortNum: string
+    }
+  }
+
+  relatedProducts: {
+    [productId: string]: {
+      designId: string
+      subCategoryId: string
+      productId: string
+      categoryId: string
+      sortNum: string
+    }
+  }
+
+  costing: {
+    fixAddOnCost?: number
+    assemblyCost?: number
+    costAdjustment?: number
+    installationCost?: number
+  }
+  createdAt: unknown // firestore Timestamp
+  dims: {
+    [dimId: string]: {
+      dim: string
+      GDId?: string
+      globalHelpId?: string
+      materialId: string
+      userType: userType
+      type: TypeOfGD
+      visible: boolean
+      dimIndex: string
+      sortNum: string
+    } & (
+      | {
+          valueType: "selection"
+          defaultValue: number | string
+          options: (number | string)[]
+
+          max?: undefined
+          min?: undefined
+        }
+      | {
+          valueType: "range"
+          defaultValue: number
+          max: number
+          min: number
+
+          options?: undefined
+        }
+    )
+  }
+  hardwares: {
+    [hardwareId: string]: {
+      hardware: string
+      GHId: string
+      SKUIds: string[]
+    }
+  }
+  materials: {
+    [materialId: string]: {
+      material: string
+      materialType: WsProductMaterialType
+      visible: boolean
+      GMId: string
+      priceRangeIds: string[]
+      defaultColor: string
+      sortNum: string
+    }
+  }
+  parts: {
+    [partId: string]: {
+      part: string
+      QtyId: string
+
+      longEdge: 0 | 1 | 2
+      longDimFormula: (string | number)[]
+
+      shortEdge: 0 | 1 | 2
+      shortDimFormula: (string | number)[]
+
+      /**
+       * A material of the same product
+       */
+      materialId: string
+
+      SQMFormulaId: string
+      LMFormulaId: string
+    }
+  }
+}

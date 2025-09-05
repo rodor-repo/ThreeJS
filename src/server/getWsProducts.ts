@@ -2,9 +2,9 @@
 
 import type { WsProducts } from "@/types/erpTypes"
 
-export async function getCategoriesAndSubCategoriesAction() {
+export async function getWsProducts() {
   const response = await fetch(
-    `${process.env.WEBSHOP_URL}/api/3D/three-js/categories-sub-categories`,
+    `${process.env.WEBSHOP_URL}/api/3D/three-js/wsProducts`,
     {
       method: "GET",
       headers: {
@@ -18,10 +18,7 @@ export async function getCategoriesAndSubCategoriesAction() {
     throw new Error(`Failed to fetch categories: ${response.statusText}`)
   }
 
-  const data: {
-    categories: WsProducts["categories"]
-    subCategories: WsProducts["subCategories"]
-  } = await response.json()
+  const WsProducts: WsProducts = await response.json()
 
-  return data
+  return WsProducts
 }

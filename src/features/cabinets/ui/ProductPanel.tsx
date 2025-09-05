@@ -5,11 +5,16 @@ import ProductPanelView from './ProductPanelView'
 import type { ProductPanelProps } from './productPanel.types'
 import _ from 'lodash'
 import { useQuery } from '@tanstack/react-query'
+import { getWsProduct, type MaterialOptionsResponse } from '@/server/getWsProduct'
 
 interface LocalProductPanelProps extends ProductPanelProps { }
 
 // In-memory per-cabinet state store to persist last user-edited values across panel reopens
-type PersistedPanelState = { values: Record<string, number | string>, materialColor: string }
+type PersistedPanelState = {
+  values: Record<string, number | string>
+  materialColor: string
+  materialSelections?: Record<string, { priceRangeId: string, colorId: string, finishId?: string }>
+}
 const cabinetPanelState = new Map<string, PersistedPanelState>()
 
 const ProductPanel: React.FC<LocalProductPanelProps> = props => {
@@ -26,22 +31,25 @@ const DynamicPanelWithQuery: React.FC<LocalProductPanelProps> = ({ isVisible, on
     queryKey: ['wsProduct', productId],
     queryFn: async () => {
       if (!productId) throw new Error('No productId')
-      const res = await fetch(`/api/wsProduct?id=${encodeURIComponent(productId)}`)
-      if (!res.ok) throw new Error('Failed to fetch product')
-      return res.json()
+      // Call Next.js Server Action directly for type-safe data
+      return await getWsProduct(productId)
     },
     enabled: !!productId && !!isVisible,
     staleTime: 5 * 60 * 1000,
     gcTime: 5 * 60 * 1000
   })
 
+  const wsProduct = data?.product
+  const materialOptions = data?.materialOptions
+
   if (!isVisible) return null
 
   return (
-    <DynamicDimsPanel
+    <DynamicPanel
       isVisible={isVisible}
       onClose={onClose}
-      wsProduct={data}
+      wsProduct={wsProduct}
+      materialOptions={materialOptions}
       selectedCabinet={selectedCabinet}
       onDimensionsChange={onDimensionsChange}
       onMaterialChange={onMaterialChange}
@@ -51,9 +59,9 @@ const DynamicPanelWithQuery: React.FC<LocalProductPanelProps> = ({ isVisible, on
   )
 }
 
-type DimsPanelProps = LocalProductPanelProps & { loading?: boolean, error?: boolean }
+type DynamicPanelProps = LocalProductPanelProps & { loading?: boolean, error?: boolean, materialOptions?: MaterialOptionsResponse }
 
-const DynamicDimsPanel: React.FC<DimsPanelProps> = ({ isVisible, onClose, wsProduct, selectedCabinet, onDimensionsChange, onMaterialChange, loading, error }) => {
+const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProduct, materialOptions, selectedCabinet, onDimensionsChange, onMaterialChange, loading, error }) => {
   const [isExpanded, setIsExpanded] = useState(true)
   const [values, setValues] = useState<Record<string, number | string>>(() => {
     const entries = Object.entries(wsProduct?.dims || {})
@@ -62,6 +70,8 @@ const DynamicDimsPanel: React.FC<DimsPanelProps> = ({ isVisible, onClose, wsProd
     return initial
   })
   const [materialColor, setMaterialColor] = useState<string>(selectedCabinet?.material.getColour() || '#ffffff')
+  const [materialSelections, setMaterialSelections] = useState<Record<string, { priceRangeId: string, colorId: string, finishId?: string }>>({})
+  const [openMaterialId, setOpenMaterialId] = useState<string | null>(null)
   const lastInitRef = useRef<string | null>(null)
   const cabinetKey = selectedCabinet?.group?.uuid
 
@@ -90,10 +100,12 @@ const DynamicDimsPanel: React.FC<DimsPanelProps> = ({ isVisible, onClose, wsProd
     const saved = cabinetPanelState.get(cabinetKey)
     const nextValues = saved?.values ? { ...defaults, ...saved.values } : defaults
     const nextColor = saved?.materialColor ?? (selectedCabinet?.material.getColour() || '#ffffff')
+    const nextSelections = saved?.materialSelections ?? {}
     setValues(nextValues)
     setMaterialColor(nextColor)
+    setMaterialSelections(nextSelections)
     // Persist initialized state and sync 3D primary dims
-    cabinetPanelState.set(cabinetKey, { values: nextValues, materialColor: nextColor })
+    cabinetPanelState.set(cabinetKey, { values: nextValues, materialColor: nextColor, materialSelections: nextSelections })
     lastInitRef.current = cabinetKey
     applyPrimaryDimsTo3D(nextValues)
   }, [wsProduct?.dims, cabinetKey])
@@ -236,6 +248,95 @@ const DynamicDimsPanel: React.FC<DimsPanelProps> = ({ isVisible, onClose, wsProd
               </div>
             </div>
 
+            {/* Materials selection */}
+            {wsProduct && (
+              <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-200">
+                <div className="flex items-center space-x-2 mb-2.5 text-gray-700 font-medium">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /></svg>
+                  <h3>Materials</h3>
+                </div>
+                <div className="space-y-4">
+                  {_(wsProduct.materials)
+                    .toPairs()
+                    .filter(([, m]) => m.visible !== false)
+                    .sortBy(([, m]) => Number(m.sortNum))
+                    .map(([materialId, m]) => {
+                      const mOpts = materialOptions?.[materialId]
+                      const prPairs = mOpts ? Object.entries(mOpts.priceRanges) : []
+                      const selected = materialSelections[materialId]
+                      const selectedPriceRangeId = selected?.priceRangeId || m.priceRangeIds?.[0] || prPairs?.[0]?.[0]
+                      const selectedPriceRange = selectedPriceRangeId && mOpts ? mOpts.priceRanges[selectedPriceRangeId] : undefined
+                      const colorPairs = selectedPriceRange ? Object.entries(selectedPriceRange.colorOptions) : []
+                      const selectedColorId = selected?.colorId || colorPairs?.[0]?.[0]
+                      const selectedColor = selectedColorId && selectedPriceRange ? selectedPriceRange.colorOptions[selectedColorId] : undefined
+                      const selectedFinishId = selected?.finishId || (selectedColor ? Object.keys(selectedColor.finishes)[0] : undefined)
+                      const selectedFinish = selectedFinishId && selectedColor ? selectedColor.finishes[selectedFinishId] : undefined
+
+                      return (
+                        <div key={materialId} className="border border-gray-200 rounded-md p-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <div className="text-sm font-medium text-gray-800 capitalize">{m.material}</div>
+                              <div className="mt-2">
+                                <label className="block text-xs text-gray-600 mb-1">Price range</label>
+                                <select
+                                  className="w-full text-sm px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent leading-tight"
+                                  value={selectedPriceRangeId || ''}
+                                  onChange={e => {
+                                    const priceRangeId = e.target.value
+                                    setMaterialSelections(prev => {
+                                      const next = { ...prev }
+                                      const firstColorId = mOpts?.priceRanges?.[priceRangeId] ? Object.keys(mOpts.priceRanges[priceRangeId].colorOptions)[0] : undefined
+                                      const firstFinishId = firstColorId && mOpts?.priceRanges?.[priceRangeId]?.colorOptions?.[firstColorId] ? Object.keys(mOpts.priceRanges[priceRangeId].colorOptions[firstColorId].finishes)[0] : undefined
+                                      next[materialId] = { priceRangeId, colorId: firstColorId || '', finishId: firstFinishId }
+                                      if (cabinetKey) cabinetPanelState.set(cabinetKey, { values, materialColor, materialSelections: next })
+                                      return next
+                                    })
+                                  }}
+                                >
+                                  {prPairs.map(([prId, pr]) => (
+                                    <option key={prId} value={prId}>{pr.priceRange}</option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
+                            <div className="min-w-[140px] text-right">
+                              <button
+                                className="inline-flex items-center gap-2 text-sm px-3 py-1.5 bg-gray-800 text-white rounded hover:bg-gray-900 disabled:opacity-50"
+                                disabled={!mOpts || prPairs.length === 0}
+                                onClick={() => setOpenMaterialId(materialId)}
+                              >
+                                <span>Select Colour</span>
+                              </button>
+                              <div className="mt-2 text-xs text-gray-600 truncate">
+                                {selectedColor ? (
+                                  <div className="flex items-center justify-end gap-2">
+                                    <div className="w-6 h-6 rounded bg-gray-100 overflow-hidden border border-gray-200">
+                                      {selectedColor.imageUrl ? (
+                                        <img src={selectedColor.imageUrl} alt={selectedColor.color} className="w-full h-full object-cover" />
+                                      ) : (
+                                        <div className="w-full h-full bg-gray-200" />
+                                      )}
+                                    </div>
+                                    <div className="max-w-[120px] text-right">
+                                      <div className="text-gray-800">{selectedColor.color}</div>
+                                      {selectedFinish && <div className="text-gray-500">{selectedFinish.finish}</div>}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <span className="text-gray-500">No color selected</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })
+                    .value()}
+                </div>
+              </div>
+            )}
+
             {/* Material color selection (simple) */}
             <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-200">
               <div className="flex items-center space-x-2 mb-2.5 text-gray-700 font-medium">
@@ -251,7 +352,7 @@ const DynamicDimsPanel: React.FC<DimsPanelProps> = ({ isVisible, onClose, wsProd
                     const color = e.target.value
                     setMaterialColor(color)
                     onMaterialChange?.({ colour: color })
-                    if (cabinetKey) cabinetPanelState.set(cabinetKey, { values, materialColor: color })
+                    if (cabinetKey) cabinetPanelState.set(cabinetKey, { values, materialColor: color, materialSelections })
                   }}
                 />
                 <input
@@ -262,7 +363,7 @@ const DynamicDimsPanel: React.FC<DimsPanelProps> = ({ isVisible, onClose, wsProd
                     const color = e.target.value
                     setMaterialColor(color)
                     onMaterialChange?.({ colour: color })
-                    if (cabinetKey) cabinetPanelState.set(cabinetKey, { values, materialColor: color })
+                    if (cabinetKey) cabinetPanelState.set(cabinetKey, { values, materialColor: color, materialSelections })
                   }}
                 />
               </div>
@@ -274,6 +375,7 @@ const DynamicDimsPanel: React.FC<DimsPanelProps> = ({ isVisible, onClose, wsProd
                 onClick={() => {
                   console.log('Selected dimensions:', values)
                   console.log('Material color:', materialColor)
+                  console.log('Material selections:', materialSelections)
                 }}
                 className="w-full text-sm px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700"
               >
@@ -283,6 +385,140 @@ const DynamicDimsPanel: React.FC<DimsPanelProps> = ({ isVisible, onClose, wsProd
           </div>
         )}
       </div>
+
+      {/* Fullscreen Color Select Modal */}
+      {openMaterialId && (() => {
+        const m = wsProduct?.materials?.[openMaterialId]
+        const mOpts = materialOptions?.[openMaterialId]
+        if (!m || !mOpts) return null
+        const prPairs = Object.entries(mOpts.priceRanges)
+        const sel = materialSelections[openMaterialId]
+        const priceRangeId = sel?.priceRangeId || m.priceRangeIds?.[0] || prPairs?.[0]?.[0]
+        const priceRange = priceRangeId ? mOpts.priceRanges[priceRangeId] : undefined
+        const colorPairs = priceRange ? Object.entries(priceRange.colorOptions) : []
+        const colorId = sel?.colorId || colorPairs?.[0]?.[0]
+        const selectedColor = colorId && priceRange ? priceRange.colorOptions[colorId] : undefined
+        const finishId = sel?.finishId || (selectedColor ? Object.keys(selectedColor.finishes)[0] : undefined)
+
+        const commit = () => {
+          const currentSel = materialSelections[openMaterialId]
+          const next = {
+            ...materialSelections,
+            [openMaterialId]: {
+              priceRangeId: currentSel?.priceRangeId || priceRangeId || '',
+              colorId: currentSel?.colorId || colorId || '',
+              finishId: currentSel?.finishId || finishId || undefined
+            }
+          }
+          if (currentSel) setMaterialSelections(next)
+          if (cabinetKey) cabinetPanelState.set(cabinetKey, { values, materialColor, materialSelections: next })
+          setOpenMaterialId(null)
+        }
+
+        return (
+          <div className="fixed inset-0 z-[60]">
+            <div className="absolute inset-0 bg-black/50" onClick={() => setOpenMaterialId(null)} />
+            <div className="absolute inset-0 flex flex-col">
+              {/* Top bar like webshop: show price 0 */}
+              <div className="bg-white shadow-sm border-b border-gray-200 px-4 py-3 flex items-center justify-between">
+                <div className="text-base font-medium">Select color – {m.material}</div>
+                <div className="text-sm"><span className="px-2 py-1 rounded bg-emerald-50 text-emerald-700">Price: $0</span></div>
+              </div>
+              <div className="flex-1 overflow-y-auto bg-white">
+                {/* Grid of color tiles */}
+                <div className="max-w-5xl mx-auto px-4 py-4">
+                  {/* Price range select duplicated here for convenience */}
+                  <div className="flex items-center gap-2 mb-4">
+                    <label className="text-sm text-gray-600">Price range</label>
+                    <select
+                      className="text-sm px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      value={priceRangeId || ''}
+                      onChange={e => {
+                        const prId = e.target.value
+                        const firstColor = Object.keys(mOpts.priceRanges[prId].colorOptions)[0]
+                        const firstFinish = firstColor ? Object.keys(mOpts.priceRanges[prId].colorOptions[firstColor].finishes)[0] : ''
+                        const next = { ...materialSelections, [openMaterialId]: { priceRangeId: prId, colorId: firstColor || '', finishId: firstFinish || undefined } }
+                        setMaterialSelections(next)
+                        if (cabinetKey) cabinetPanelState.set(cabinetKey, { values, materialColor, materialSelections: next })
+                      }}
+                    >
+                      {prPairs.map(([prId, pr]) => (
+                        <option key={prId} value={prId}>{pr.priceRange}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                    {colorPairs.map(([cId, c]) => {
+                      const isSelectedColor = cId === (materialSelections[openMaterialId]?.colorId || colorId)
+                      const currentSel = materialSelections[openMaterialId]
+                      const currentFinishId = currentSel?.finishId
+                      return (
+                        <div
+                          key={cId}
+                          role="button"
+                          tabIndex={0}
+                          className={`group relative rounded-lg overflow-hidden border ${isSelectedColor ? 'border-blue-600 ring-2 ring-blue-200' : 'border-gray-200'} hover:shadow focus:outline-none focus:ring-2 focus:ring-blue-300`}
+                          onClick={() => {
+                            const nextFinishId = Object.keys(c.finishes)[0] || ''
+                            const next = { ...materialSelections, [openMaterialId]: { priceRangeId: priceRangeId || '', colorId: cId, finishId: nextFinishId || undefined } }
+                            setMaterialSelections(next)
+                            if (cabinetKey) cabinetPanelState.set(cabinetKey, { values, materialColor, materialSelections: next })
+                          }}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault()
+                              const nextFinishId = Object.keys(c.finishes)[0] || ''
+                              const next = { ...materialSelections, [openMaterialId]: { priceRangeId: priceRangeId || '', colorId: cId, finishId: nextFinishId || undefined } }
+                              setMaterialSelections(next)
+                              if (cabinetKey) cabinetPanelState.set(cabinetKey, { values, materialColor, materialSelections: next })
+                            }
+                          }}
+                        >
+                          <div className="aspect-square w-full bg-gray-100">
+                            {c.imageUrl ? (
+                              <img src={c.imageUrl} alt={c.color} className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full bg-gray-200" />
+                            )}
+                          </div>
+                          <div className="p-2 text-left">
+                            <div className="text-sm text-gray-800 truncate">{c.color}</div>
+                            {/* Finishes under color name */}
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              {Object.entries(c.finishes).map(([fId, f]) => {
+                                const isSelectedFinish = isSelectedColor && fId === currentFinishId
+                                return (
+                                  <button
+                                    key={fId}
+                                    className={`px-2 py-1 rounded border text-xs ${isSelectedFinish ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'}`}
+                                    onClick={e => {
+                                      e.stopPropagation()
+                                      const next = { ...materialSelections, [openMaterialId]: { priceRangeId: priceRangeId || '', colorId: cId, finishId: fId } }
+                                      setMaterialSelections(next)
+                                      if (cabinetKey) cabinetPanelState.set(cabinetKey, { values, materialColor, materialSelections: next })
+                                    }}
+                                  >
+                                    {f.finish}
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+              <div className="bg-white border-t border-gray-200 px-4 py-3 flex items-center justify-end gap-2">
+                <button className="px-3 py-1.5 rounded border border-gray-300 text-gray-700 hover:bg-gray-50" onClick={() => setOpenMaterialId(null)}>Cancel</button>
+                <button className="px-3 py-1.5 rounded bg-blue-600 text-white hover:bg-blue-700" onClick={() => commit()}>Use selected</button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }

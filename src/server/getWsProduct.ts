@@ -26,6 +26,31 @@ export async function getWsProduct(productId: string) {
     )
   }
 
-  const wsProduct: WsProduct = await response.json()
+  const wsProduct: {
+    product: WsProduct
+    materialOptions: MaterialOptionsResponse
+  } = await response.json()
   return wsProduct
+}
+
+export type MaterialOptionsResponse = {
+  [materialId: string]: {
+    material: string
+    priceRanges: {
+      [priceRangeId: string]: {
+        priceRange: string
+        colorOptions: {
+          [colorId: string]: {
+            color: string
+            imageUrl: string
+            finishes: {
+              [finishId: string]: {
+                finish: string
+              }
+            }
+          }
+        }
+      }
+    }
+  }
 }

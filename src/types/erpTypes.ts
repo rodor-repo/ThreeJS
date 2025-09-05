@@ -232,7 +232,7 @@ export type WsProducts = {
 type WsProductMaterialType = "Carcass" | "Door" | "Benchtop"
 
 export type WsProduct = {
-  id: string
+  // id: string
   product: string
   productId: string
   categoryId: string

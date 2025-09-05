@@ -14,6 +14,7 @@ export async function getWsProduct(productId: string) {
       headers: {
         Authorization: `Bearer ${process.env.WEBSHOP_SECRET_KEY}`,
         "Content-Type": "application/json",
+        "Cache-Control": "no-cache",
       },
       // revalidate on demand if needed; keep same behavior as sibling util
       // next: { revalidate: 0 }

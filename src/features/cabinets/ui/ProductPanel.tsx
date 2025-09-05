@@ -6,6 +6,7 @@ import type { ProductPanelProps } from './productPanel.types'
 import _ from 'lodash'
 import { useQuery } from '@tanstack/react-query'
 import { getWsProduct, type MaterialOptionsResponse } from '@/server/getWsProduct'
+import { calculateWsProductPrice, type CalculatePriceRequest } from '@/server/calculateWsProductPrice'
 
 interface LocalProductPanelProps extends ProductPanelProps { }
 
@@ -14,6 +15,7 @@ type PersistedPanelState = {
   values: Record<string, number | string>
   materialColor: string
   materialSelections?: Record<string, { priceRangeId: string, colorId: string, finishId?: string }>
+  price?: { amount: number }
 }
 const cabinetPanelState = new Map<string, PersistedPanelState>()
 
@@ -62,6 +64,9 @@ const DynamicPanelWithQuery: React.FC<LocalProductPanelProps> = ({ isVisible, on
 type DynamicPanelProps = LocalProductPanelProps & { loading?: boolean, error?: boolean, materialOptions?: MaterialOptionsResponse }
 
 const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProduct, materialOptions, selectedCabinet, onDimensionsChange, onMaterialChange, loading, error }) => {
+
+  console.log({ wsProduct })
+
   const [isExpanded, setIsExpanded] = useState(true)
   const [values, setValues] = useState<Record<string, number | string>>(() => {
     const entries = Object.entries(wsProduct?.dims || {})
@@ -72,6 +77,9 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
   const [materialColor, setMaterialColor] = useState<string>(selectedCabinet?.material.getColour() || '#ffffff')
   const [materialSelections, setMaterialSelections] = useState<Record<string, { priceRangeId: string, colorId: string, finishId?: string }>>({})
   const [openMaterialId, setOpenMaterialId] = useState<string | null>(null)
+  const [price, setPrice] = useState<{ amount: number } | null>(null)
+  const [priceLoading, setPriceLoading] = useState(false)
+  const [priceError, setPriceError] = useState<string | null>(null)
   const lastInitRef = useRef<string | null>(null)
   const cabinetKey = selectedCabinet?.group?.uuid
 
@@ -104,8 +112,9 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
     setValues(nextValues)
     setMaterialColor(nextColor)
     setMaterialSelections(nextSelections)
+    setPrice(saved?.price ?? null)
     // Persist initialized state and sync 3D primary dims
-    cabinetPanelState.set(cabinetKey, { values: nextValues, materialColor: nextColor, materialSelections: nextSelections })
+    cabinetPanelState.set(cabinetKey, { values: nextValues, materialColor: nextColor, materialSelections: nextSelections, price: saved?.price })
     lastInitRef.current = cabinetKey
     applyPrimaryDimsTo3D(nextValues)
   }, [wsProduct?.dims, cabinetKey])
@@ -126,6 +135,30 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
     })
     onDimensionsChange({ width, height, depth })
   }
+
+  const calculatePriceNow = async () => {
+    if (!wsProduct?.productId || !cabinetKey) return
+    const payload: CalculatePriceRequest = {
+      productId: wsProduct.productId,
+      dims: values,
+      materialSelections
+    }
+    setPriceLoading(true)
+    setPriceError(null)
+    try {
+      const res = await calculateWsProductPrice(payload)
+      const next = { amount: res.price }
+      setPrice(next)
+      const persisted = cabinetPanelState.get(cabinetKey)
+      cabinetPanelState.set(cabinetKey, { ...(persisted || { values, materialColor, materialSelections }), price: next })
+    } catch (e: any) {
+      setPriceError(e?.message || 'Failed to calculate price')
+    } finally {
+      setPriceLoading(false)
+    }
+  }
+
+  // Price is calculated only on user action now
 
   if (!isVisible) return null
 
@@ -152,6 +185,22 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
         <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-gray-800">Product Panel</h2>
+            <div className="ml-2 flex items-center gap-2 text-sm text-gray-700">
+              {priceLoading ? (
+                <span className="text-gray-500">Calculating…</span>
+              ) : priceError ? (
+                <span className="text-red-600">Price N/A</span>
+              ) : price ? (
+                <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700">{`$${price.amount.toFixed(2)}`}</span>
+              ) : null}
+              <button
+                disabled={!wsProduct?.productId}
+                onClick={e => { e.stopPropagation(); calculatePriceNow() }}
+                className="px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {priceLoading ? 'Calculating…' : 'Calculate price'}
+              </button>
+            </div>
             <button onClick={e => { e.stopPropagation(); onClose() }} className="text-gray-500 hover:text-gray-700 transition-colors">×</button>
           </div>
           {wsProduct && <p className="text-sm text-gray-600 mt-1 truncate">{wsProduct.product}</p>}
@@ -216,8 +265,10 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
                             const val = Number(e.target.value)
                             const next = { ...values, [id]: val }
                             setValues(next)
-                            if (cabinetKey) cabinetPanelState.set(cabinetKey, { values: next, materialColor })
-                            if (cabinetKey) cabinetPanelState.set(cabinetKey, { values: next, materialColor })
+                            if (cabinetKey) {
+                              const persisted = cabinetPanelState.get(cabinetKey)
+                              cabinetPanelState.set(cabinetKey, { ...(persisted || {} as any), values: next, materialColor, materialSelections, price: price || persisted?.price })
+                            }
                             applyPrimaryDimsTo3D(next)
                           }}
                         />
@@ -234,7 +285,10 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
                           const val = e.target.value
                           const next = { ...values, [id]: val }
                           setValues(next)
-                          if (cabinetKey) cabinetPanelState.set(cabinetKey, { values: next, materialColor })
+                          if (cabinetKey) {
+                            const persisted = cabinetPanelState.get(cabinetKey)
+                            cabinetPanelState.set(cabinetKey, { ...(persisted || {} as any), values: next, materialColor, materialSelections, price: price || persisted?.price })
+                          }
                           applyPrimaryDimsTo3D(next)
                         }}
                       >
@@ -289,7 +343,10 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
                                       const firstColorId = mOpts?.priceRanges?.[priceRangeId] ? Object.keys(mOpts.priceRanges[priceRangeId].colorOptions)[0] : undefined
                                       const firstFinishId = firstColorId && mOpts?.priceRanges?.[priceRangeId]?.colorOptions?.[firstColorId] ? Object.keys(mOpts.priceRanges[priceRangeId].colorOptions[firstColorId].finishes)[0] : undefined
                                       next[materialId] = { priceRangeId, colorId: firstColorId || '', finishId: firstFinishId }
-                                      if (cabinetKey) cabinetPanelState.set(cabinetKey, { values, materialColor, materialSelections: next })
+                                      if (cabinetKey) {
+                                        const persisted = cabinetPanelState.get(cabinetKey)
+                                        cabinetPanelState.set(cabinetKey, { ...(persisted || {} as any), values, materialColor, materialSelections: next, price: price || persisted?.price })
+                                      }
                                       return next
                                     })
                                   }}
@@ -352,7 +409,10 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
                     const color = e.target.value
                     setMaterialColor(color)
                     onMaterialChange?.({ colour: color })
-                    if (cabinetKey) cabinetPanelState.set(cabinetKey, { values, materialColor: color, materialSelections })
+                    if (cabinetKey) {
+                      const persisted = cabinetPanelState.get(cabinetKey)
+                      cabinetPanelState.set(cabinetKey, { ...(persisted || {} as any), values, materialColor: color, materialSelections, price: price || persisted?.price })
+                    }
                   }}
                 />
                 <input
@@ -363,7 +423,10 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
                     const color = e.target.value
                     setMaterialColor(color)
                     onMaterialChange?.({ colour: color })
-                    if (cabinetKey) cabinetPanelState.set(cabinetKey, { values, materialColor: color, materialSelections })
+                    if (cabinetKey) {
+                      const persisted = cabinetPanelState.get(cabinetKey)
+                      cabinetPanelState.set(cabinetKey, { ...(persisted || {} as any), values, materialColor: color, materialSelections, price: price || persisted?.price })
+                    }
                   }}
                 />
               </div>
@@ -376,6 +439,7 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
                   console.log('Selected dimensions:', values)
                   console.log('Material color:', materialColor)
                   console.log('Material selections:', materialSelections)
+                  console.log('Price:', price)
                 }}
                 className="w-full text-sm px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700"
               >
@@ -411,9 +475,14 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
             }
           }
           if (currentSel) setMaterialSelections(next)
-          if (cabinetKey) cabinetPanelState.set(cabinetKey, { values, materialColor, materialSelections: next })
+          if (cabinetKey) {
+            const persisted = cabinetPanelState.get(cabinetKey)
+            cabinetPanelState.set(cabinetKey, { ...(persisted || {} as any), values, materialColor, materialSelections: next, price: price || persisted?.price })
+          }
           setOpenMaterialId(null)
         }
+
+        console.log({ wsProduct })
 
         return (
           <div className="fixed inset-0 z-[60]">
@@ -422,7 +491,22 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
               {/* Top bar like webshop: show price 0 */}
               <div className="bg-white shadow-sm border-b border-gray-200 px-4 py-3 flex items-center justify-between">
                 <div className="text-base font-medium">Select color – {m.material}</div>
-                <div className="text-sm"><span className="px-2 py-1 rounded bg-emerald-50 text-emerald-700">Price: $0</span></div>
+                <div className="text-sm flex items-center gap-2">
+                  {priceLoading ? (
+                    <span className="text-gray-500">Calculating…</span>
+                  ) : priceError ? (
+                    <span className="px-2 py-1 rounded bg-red-50 text-red-700">Price N/A</span>
+                  ) : price ? (
+                    <span className="px-2 py-1 rounded bg-emerald-50 text-emerald-700">Price: ${price.amount.toFixed(2)}</span>
+                  ) : null}
+                  <button
+                    disabled={!wsProduct?.productId}
+                    onClick={() => calculatePriceNow()}
+                    className="px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {priceLoading ? 'Calculating…' : 'Calculate price'}
+                  </button>
+                </div>
               </div>
               <div className="flex-1 overflow-y-auto bg-white">
                 {/* Grid of color tiles */}
@@ -439,7 +523,10 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
                         const firstFinish = firstColor ? Object.keys(mOpts.priceRanges[prId].colorOptions[firstColor].finishes)[0] : ''
                         const next = { ...materialSelections, [openMaterialId]: { priceRangeId: prId, colorId: firstColor || '', finishId: firstFinish || undefined } }
                         setMaterialSelections(next)
-                        if (cabinetKey) cabinetPanelState.set(cabinetKey, { values, materialColor, materialSelections: next })
+                        if (cabinetKey) {
+                          const persisted = cabinetPanelState.get(cabinetKey)
+                          cabinetPanelState.set(cabinetKey, { ...(persisted || {} as any), values, materialColor, materialSelections: next, price: price || persisted?.price })
+                        }
                       }}
                     >
                       {prPairs.map(([prId, pr]) => (
@@ -463,7 +550,10 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
                             const nextFinishId = Object.keys(c.finishes)[0] || ''
                             const next = { ...materialSelections, [openMaterialId]: { priceRangeId: priceRangeId || '', colorId: cId, finishId: nextFinishId || undefined } }
                             setMaterialSelections(next)
-                            if (cabinetKey) cabinetPanelState.set(cabinetKey, { values, materialColor, materialSelections: next })
+                            if (cabinetKey) {
+                              const persisted = cabinetPanelState.get(cabinetKey)
+                              cabinetPanelState.set(cabinetKey, { ...(persisted || {} as any), values, materialColor, materialSelections: next, price: price || persisted?.price })
+                            }
                           }}
                           onKeyDown={e => {
                             if (e.key === 'Enter' || e.key === ' ') {
@@ -471,7 +561,10 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
                               const nextFinishId = Object.keys(c.finishes)[0] || ''
                               const next = { ...materialSelections, [openMaterialId]: { priceRangeId: priceRangeId || '', colorId: cId, finishId: nextFinishId || undefined } }
                               setMaterialSelections(next)
-                              if (cabinetKey) cabinetPanelState.set(cabinetKey, { values, materialColor, materialSelections: next })
+                              if (cabinetKey) {
+                                const persisted = cabinetPanelState.get(cabinetKey)
+                                cabinetPanelState.set(cabinetKey, { ...(persisted || {} as any), values, materialColor, materialSelections: next, price: price || persisted?.price })
+                              }
                             }
                           }}
                         >
@@ -496,7 +589,10 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
                                       e.stopPropagation()
                                       const next = { ...materialSelections, [openMaterialId]: { priceRangeId: priceRangeId || '', colorId: cId, finishId: fId } }
                                       setMaterialSelections(next)
-                                      if (cabinetKey) cabinetPanelState.set(cabinetKey, { values, materialColor, materialSelections: next })
+                                      if (cabinetKey) {
+                                        const persisted = cabinetPanelState.get(cabinetKey)
+                                        cabinetPanelState.set(cabinetKey, { ...(persisted || {} as any), values, materialColor, materialSelections: next, price: price || persisted?.price })
+                                      }
                                     }}
                                   >
                                     {f.finish}

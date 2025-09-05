@@ -10,6 +10,7 @@ export async function getWsProducts() {
       headers: {
         Authorization: `Bearer ${process.env.WEBSHOP_SECRET_KEY}`,
         "Content-Type": "application/json",
+        "Cache-Control": "no-cache",
       },
     }
   )

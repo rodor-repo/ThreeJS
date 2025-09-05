@@ -6,6 +6,7 @@ import type {
   DoorMaterial,
   DoorMaterialData,
 } from "@/features/carcass"
+import type { WsProduct } from "@/types/erpTypes"
 
 export interface SelectedCabinetSnapshot {
   group: Group
@@ -13,6 +14,7 @@ export interface SelectedCabinetSnapshot {
   material: CarcassMaterial
   cabinetType: string
   subcategoryId?: string
+  productId?: string
   doorEnabled?: boolean
   doorCount?: number
   doorMaterial?: DoorMaterial
@@ -44,6 +46,8 @@ export interface ProductPanelProps extends ProductPanelCallbacks {
   isVisible: boolean
   onClose: () => void
   selectedCabinet?: SelectedCabinetSnapshot | null
+  /** When provided, ProductPanel will render dynamic dimension controls from this schema */
+  wsProduct?: WsProduct
 }
 
 export interface DimensionRange {

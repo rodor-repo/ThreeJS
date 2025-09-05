@@ -21,10 +21,15 @@ export const useCabinets = (
   const [showProductPanel, setShowProductPanel] = useState(false)
 
   const createCabinet = useCallback(
-    (categoryType: CabinetType, subcategoryType: string) => {
+    (
+      categoryType: CabinetType,
+      subcategoryType: string,
+      productId?: string
+    ) => {
       if (!sceneRef.current) return
       const data = createCabinetEntry(categoryType, subcategoryType, {
         indexOffset: cabinetCounter,
+        productId,
       })
       sceneRef.current.add(data.group)
       setCabinets((prev) => [...prev, data])

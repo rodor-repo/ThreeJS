@@ -19,4 +19,6 @@ export type CabinetData = {
   carcass: CarcassAssembly
   cabinetType: "base" | "top" | "tall"
   subcategoryId: string
+  /** Optional webshop productId associated with this 3D object */
+  productId?: string
 }

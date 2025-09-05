@@ -11,6 +11,7 @@ export type CabinetData = {
   carcass: CarcassAssembly
   cabinetType: CabinetType
   subcategoryId: string
+  productId?: string
 }
 
 type Defaults = Record<CabinetType, CarcassDimensions>
@@ -28,6 +29,7 @@ export const createCabinet = (
     indexOffset?: number
     spacing?: number
     customDimensions?: Partial<CarcassDimensions>
+    productId?: string
   }
 ): CabinetData => {
   // Defensive fallback if an unsupported type sneaks in
@@ -93,6 +95,7 @@ export const createCabinet = (
     carcass,
     cabinetType: type,
     subcategoryId,
+    productId: opts?.productId,
   }
 }
 

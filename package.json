@@ -12,6 +12,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.86.0",
     "@types/three": "^0.158.3",
     "framer-motion": "^12.23.12",
     "lodash": "^4.17.21",

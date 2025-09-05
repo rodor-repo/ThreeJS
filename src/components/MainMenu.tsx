@@ -10,7 +10,7 @@ import _ from 'lodash'
 
 interface MainMenuProps {
   onCategorySelect: (category: Category) => void
-  onSubcategorySelect?: (category: Category, subcategory: Subcategory) => void
+  onSubcategorySelect?: (category: Category, subcategory: Subcategory, productId?: string) => void
   selectedCategory?: Category | null
   onMenuStateChange?: (isOpen: boolean) => void
 }
@@ -147,7 +147,7 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySele
       name: 'Standard',
       dimensions: defaultDims
     }
-    onSubcategorySelect?.(demoCategory, demoSub)
+    onSubcategorySelect?.(demoCategory, demoSub, productId)
     // Close menus for responsiveness, like the previous behavior
     setShowSubmenu(false)
     setIsOpen(false)

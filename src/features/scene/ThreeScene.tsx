@@ -18,9 +18,11 @@ interface ThreeSceneProps {
   selectedCategory?: Category | null
   selectedSubcategory?: { category: Category; subcategory: Subcategory } | null
   isMenuOpen?: boolean
+  /** Optional productId selected from the menu to associate with the created 3D object */
+  selectedProductId?: string
 }
 
-const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChange, selectedCategory, selectedSubcategory, isMenuOpen = false }) => {
+const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChange, selectedCategory, selectedSubcategory, isMenuOpen = false, selectedProductId }) => {
   const mountRef = useRef<HTMLDivElement>(null);
   const [showModal, setShowModal] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
@@ -97,9 +99,9 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
       const cabinetType: CabinetType = rawType === 'wardrobe' ? 'tall' : (rawType as CabinetType)
 
       // Create cabinet based on mapped cabinet type and subcategory
-      createCabinet(cabinetType, selectedSubcategory.subcategory.id)
+      createCabinet(cabinetType, selectedSubcategory.subcategory.id, selectedProductId)
     }
-  }, [selectedSubcategory])
+  }, [selectedSubcategory, selectedProductId])
 
   // Reset dragging state when menu opens/closes
   useEffect(() => {
@@ -156,6 +158,8 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     setShowModal(false)
   }
   const handleModalOpen = () => setShowModal(true)
+
+  // When the product panel opens for a selected cabinet, try loading its WsProduct config
 
   return (
     <div className="relative w-full h-screen overflow-hidden">
@@ -218,6 +222,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
           material: selectedCabinet.carcass.config.material,
           cabinetType: selectedCabinet.cabinetType,
           subcategoryId: selectedCabinet.subcategoryId,
+          productId: selectedCabinet.productId,
           doorEnabled: selectedCabinet.carcass.config.doorEnabled,
           doorCount: selectedCabinet.carcass.config.doorCount,
           doorMaterial: selectedCabinet.carcass.config.doorMaterial,

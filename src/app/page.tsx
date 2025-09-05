@@ -31,6 +31,7 @@ export default function Home() {
 
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null)
   const [selectedSubcategory, setSelectedSubcategory] = useState<{ category: Category; subcategory: Subcategory } | null>(null)
+  const [selectedProductId, setSelectedProductId] = useState<string | undefined>(undefined)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
 
   const handleCategorySelect = (category: Category) => {
@@ -40,10 +41,12 @@ export default function Home() {
     // You can add logic here to handle different categories
   }
 
-  const handleSubcategorySelect = (category: Category, subcategory: Subcategory) => {
+  const handleSubcategorySelect = (category: Category, subcategory: Subcategory, productId?: string) => {
     setSelectedCategory(category)
     setSelectedSubcategory({ category, subcategory })
     console.log('Selected subcategory:', subcategory.name, 'from category:', category.name)
+    if (productId) console.log('Selected productId:', productId)
+    setSelectedProductId(productId)
     // You can add logic here to handle different subcategories
   }
 
@@ -67,6 +70,7 @@ export default function Home() {
         onDimensionsChange={setWallDimensions}
         selectedCategory={selectedCategory}
         selectedSubcategory={selectedSubcategory}
+        selectedProductId={selectedProductId}
         isMenuOpen={isMenuOpen}
       />
     </main>

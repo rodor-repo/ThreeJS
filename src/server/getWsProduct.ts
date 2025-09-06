@@ -5,6 +5,14 @@ import type { WsProduct } from "@/types/erpTypes"
 export async function getWsProduct(productId: string) {
   if (!productId) throw new Error("productId is required")
 
+  if (
+    !process.env.WEBSHOP_URL ||
+    !process.env.WEBSHOP_SECRET_KEY ||
+    !process.env.VERCEL_AUTOMATION_BYPASS_SECRET
+  ) {
+    throw new Error("Missing required environment variables")
+  }
+
   const response = await fetch(
     `${process.env.WEBSHOP_URL}/api/3D/three-js/wsProduct/${encodeURIComponent(
       productId
@@ -16,6 +24,8 @@ export async function getWsProduct(productId: string) {
         "Content-Type": "application/json",
         // Header alone won't prevent Next from caching; see fetch options below
         "Cache-Control": "no-cache",
+        "x-vercel-protection-bypass":
+          process.env.VERCEL_AUTOMATION_BYPASS_SECRET,
       },
       // Force fresh data on every call
       cache: "no-store",

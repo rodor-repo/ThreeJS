@@ -49,6 +49,14 @@ export async function calculateWsProductPrice(
 ): Promise<CalculatePriceResponse> {
   if (!payload?.productId) throw new Error("productId is required")
 
+  if (
+    !process.env.WEBSHOP_URL ||
+    !process.env.WEBSHOP_SECRET_KEY ||
+    !process.env.VERCEL_AUTOMATION_BYPASS_SECRET
+  ) {
+    throw new Error("Missing required environment variables")
+  }
+
   const url =
     process.env.WEBSHOP_CALCULATE_PRICE_URL ||
     (process.env.WEBSHOP_URL
@@ -75,6 +83,8 @@ export async function calculateWsProductPrice(
         "Content-Type": "application/json",
         // Header alone won't prevent framework caching; see fetch options below
         "Cache-Control": "no-cache",
+        "x-vercel-protection-bypass":
+          process.env.VERCEL_AUTOMATION_BYPASS_SECRET,
       },
       body: JSON.stringify(requestBody),
       // Always compute price with fresh data; disable any caching layers

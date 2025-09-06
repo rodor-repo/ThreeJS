@@ -16,7 +16,7 @@ export async function getWsProducts() {
       // Always fetch fresh data on the server
       // next: { revalidate: 0 } also disables ISR caching for this request
       cache: "no-store",
-      next: { revalidate: 0 },
+      // next: { revalidate: 0 },
     }
   )
 

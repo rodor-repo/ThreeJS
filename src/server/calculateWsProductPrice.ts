@@ -79,7 +79,7 @@ export async function calculateWsProductPrice(
       body: JSON.stringify(requestBody),
       // Always compute price with fresh data; disable any caching layers
       cache: "no-store",
-      next: { revalidate: 0 },
+      // next: { revalidate: 0 },
     })
   } catch (err: unknown) {
     const e = err as Error

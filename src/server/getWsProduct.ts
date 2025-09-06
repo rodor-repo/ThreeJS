@@ -19,7 +19,7 @@ export async function getWsProduct(productId: string) {
       },
       // Force fresh data on every call
       cache: "no-store",
-      next: { revalidate: 0 },
+      // next: { revalidate: 0 },
     }
   )
 

@@ -702,8 +702,8 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
                 </div>
               </div>
               <div className="bg-white border-t border-gray-200 px-4 py-3 flex items-center justify-end gap-2">
-                <button className="px-3 py-1.5 rounded border border-gray-300 text-gray-700 hover:bg-gray-50" onClick={() => setOpenMaterialId(null)}>Cancel</button>
-                <button className="px-3 py-1.5 rounded bg-blue-600 text-white hover:bg-blue-700" onClick={() => commit()}>Use selected</button>
+                <button className="px-3 py-1.5 rounded border border-gray-300 text-gray-700 hover:bg-gray-50" onClick={() => setOpenMaterialId(null)}>Close</button>
+                <button className="px-3 py-1.5 rounded bg-blue-600 text-white hover:bg-blue-700" onClick={() => commit()}>Confirm</button>
               </div>
             </div>
           </div>

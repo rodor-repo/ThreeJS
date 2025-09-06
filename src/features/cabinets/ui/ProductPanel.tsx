@@ -103,9 +103,9 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
   }, [selectedCabinet])
 
 
-  const envWidthGDId = process.env.NEXT_PUBLIC_WIDTH_GDID
-  const envHeightGDId = process.env.NEXT_PUBLIC_HEIGHT_GDID
-  const envDepthGDId = process.env.NEXT_PUBLIC_DEPTH_GDID
+  const envWidthGDIds = process.env.NEXT_PUBLIC_WIDTH_GDID?.split(',') || []
+  const envHeightGDIds = process.env.NEXT_PUBLIC_HEIGHT_GDID?.split(',') || []
+  const envDepthGDIds = process.env.NEXT_PUBLIC_DEPTH_GDID?.split(',') || []
 
   const dimsList = useMemo(() => {
     const entries = Object.entries(wsProduct?.dims || {})
@@ -247,9 +247,9 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
     dimsList.forEach(([id, dimObj]) => {
       if (!dimObj.GDId) return
       const v = vals[id]
-      if (dimObj.GDId === envWidthGDId) width = toNum(v) || width
-      if (dimObj.GDId === envHeightGDId) height = toNum(v) || height
-      if (dimObj.GDId === envDepthGDId) depth = toNum(v) || depth
+      if (envWidthGDIds.includes(dimObj.GDId)) width = toNum(v) || width
+      if (envHeightGDIds.includes(dimObj.GDId)) height = toNum(v) || height
+      if (envDepthGDIds.includes(dimObj.GDId)) depth = toNum(v) || depth
     })
     onDimensionsChange({ width, height, depth })
     console.log('[ProductPanel] Applied primary dims to 3D', { width, height, depth })
@@ -321,9 +321,9 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
                         {dimObj.dim}
                       </label>
                       <div className="flex items-center gap-2">
-                        {dimObj.GDId === envWidthGDId && <span className="px-1.5 py-0.5 text-[10px] rounded-full bg-blue-50 text-blue-600">Width</span>}
-                        {dimObj.GDId === envHeightGDId && <span className="px-1.5 py-0.5 text-[10px] rounded-full bg-blue-50 text-blue-600">Height</span>}
-                        {dimObj.GDId === envDepthGDId && <span className="px-1.5 py-0.5 text-[10px] rounded-full bg-blue-50 text-blue-600">Depth</span>}
+                        {dimObj.GDId && envWidthGDIds.includes(dimObj.GDId) && <span className="px-1.5 py-0.5 text-[10px] rounded-full bg-blue-50 text-blue-600">Width</span>}
+                        {dimObj.GDId && envHeightGDIds.includes(dimObj.GDId) && <span className="px-1.5 py-0.5 text-[10px] rounded-full bg-blue-50 text-blue-600">Height</span>}
+                        {dimObj.GDId && envDepthGDIds.includes(dimObj.GDId) && <span className="px-1.5 py-0.5 text-[10px] rounded-full bg-blue-50 text-blue-600">Depth</span>}
                       </div>
                     </div>
 

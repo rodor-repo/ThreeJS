@@ -5,8 +5,9 @@ import ProductPanelView from './ProductPanelView'
 import type { ProductPanelProps } from './productPanel.types'
 import _ from 'lodash'
 import { useQuery } from '@tanstack/react-query'
-import { getWsProduct, type MaterialOptionsResponse, type DefaultMaterialSelections } from '@/server/getWsProduct'
+import { getProductData, type MaterialOptionsResponse, type DefaultMaterialSelections } from '@/server/getProductData'
 import { calculateWsProductPrice, type CalculatePriceRequest } from '@/server/calculateWsProductPrice'
+import { GDThreeJsType } from '@/types/erpTypes'
 
 interface LocalProductPanelProps extends ProductPanelProps { }
 
@@ -30,11 +31,11 @@ export default ProductPanel
 const DynamicPanelWithQuery: React.FC<LocalProductPanelProps> = ({ isVisible, onClose, selectedCabinet, onDimensionsChange, onMaterialChange }) => {
   const productId = selectedCabinet?.productId
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['wsProduct', productId],
+    queryKey: ['productData', productId],
     queryFn: async () => {
       if (!productId) throw new Error('No productId')
       // Call Next.js Server Action directly for type-safe data
-      return await getWsProduct(productId)
+      return await getProductData(productId)
     },
     enabled: !!productId && !!isVisible,
     staleTime: 5 * 60 * 1000,
@@ -44,6 +45,7 @@ const DynamicPanelWithQuery: React.FC<LocalProductPanelProps> = ({ isVisible, on
   const wsProduct = data?.product
   const materialOptions = data?.materialOptions
   const defaultMaterialSelections = data?.defaultMaterialSelections
+  const threeJsGDs = data?.threeJsGDs
 
   // Debug: log fetched data shape when visible
   useEffect(() => {
@@ -66,6 +68,7 @@ const DynamicPanelWithQuery: React.FC<LocalProductPanelProps> = ({ isVisible, on
       onClose={onClose}
       wsProduct={wsProduct}
       materialOptions={materialOptions}
+      threeJsGDs={threeJsGDs}
       defaultMaterialSelections={defaultMaterialSelections}
       selectedCabinet={selectedCabinet}
       onDimensionsChange={onDimensionsChange}
@@ -76,9 +79,9 @@ const DynamicPanelWithQuery: React.FC<LocalProductPanelProps> = ({ isVisible, on
   )
 }
 
-type DynamicPanelProps = LocalProductPanelProps & { loading?: boolean, error?: boolean, materialOptions?: MaterialOptionsResponse, defaultMaterialSelections?: DefaultMaterialSelections }
+type DynamicPanelProps = LocalProductPanelProps & { loading?: boolean, error?: boolean, materialOptions?: MaterialOptionsResponse, defaultMaterialSelections?: DefaultMaterialSelections, threeJsGDs: Record<GDThreeJsType, string[]> | undefined }
 
-const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProduct, materialOptions, defaultMaterialSelections, selectedCabinet, onDimensionsChange, onMaterialChange, loading, error }) => {
+const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProduct, materialOptions, defaultMaterialSelections, selectedCabinet, onDimensionsChange, onMaterialChange, loading, error, threeJsGDs }) => {
 
 
   const [isExpanded, setIsExpanded] = useState(true)
@@ -103,9 +106,12 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
   }, [selectedCabinet])
 
 
-  const envWidthGDIds = process.env.NEXT_PUBLIC_WIDTH_GDID?.split(',') || []
-  const envHeightGDIds = process.env.NEXT_PUBLIC_HEIGHT_GDID?.split(',') || []
-  const envDepthGDIds = process.env.NEXT_PUBLIC_DEPTH_GDID?.split(',') || []
+  // const envWidthGDIds = process.env.NEXT_PUBLIC_WIDTH_GDID?.split(',') || []
+  // const envHeightGDIds = process.env.NEXT_PUBLIC_HEIGHT_GDID?.split(',') || []
+  // const envDepthGDIds = process.env.NEXT_PUBLIC_DEPTH_GDID?.split(',') || []
+  const widthGDIds = threeJsGDs?.["width"] || []
+  const heightGDIds = threeJsGDs?.["height"] || []
+  const depthGDIds = threeJsGDs?.["depth"] || []
 
   const dimsList = useMemo(() => {
     const entries = Object.entries(wsProduct?.dims || {})
@@ -247,9 +253,9 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
     dimsList.forEach(([id, dimObj]) => {
       if (!dimObj.GDId) return
       const v = vals[id]
-      if (envWidthGDIds.includes(dimObj.GDId)) width = toNum(v) || width
-      if (envHeightGDIds.includes(dimObj.GDId)) height = toNum(v) || height
-      if (envDepthGDIds.includes(dimObj.GDId)) depth = toNum(v) || depth
+      if (widthGDIds.includes(dimObj.GDId)) width = toNum(v) || width
+      if (heightGDIds.includes(dimObj.GDId)) height = toNum(v) || height
+      if (depthGDIds.includes(dimObj.GDId)) depth = toNum(v) || depth
     })
     onDimensionsChange({ width, height, depth })
     console.log('[ProductPanel] Applied primary dims to 3D', { width, height, depth })
@@ -321,9 +327,9 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
                         {dimObj.dim}
                       </label>
                       <div className="flex items-center gap-2">
-                        {dimObj.GDId && envWidthGDIds.includes(dimObj.GDId) && <span className="px-1.5 py-0.5 text-[10px] rounded-full bg-blue-50 text-blue-600">Width</span>}
-                        {dimObj.GDId && envHeightGDIds.includes(dimObj.GDId) && <span className="px-1.5 py-0.5 text-[10px] rounded-full bg-blue-50 text-blue-600">Height</span>}
-                        {dimObj.GDId && envDepthGDIds.includes(dimObj.GDId) && <span className="px-1.5 py-0.5 text-[10px] rounded-full bg-blue-50 text-blue-600">Depth</span>}
+                        {dimObj.GDId && widthGDIds.includes(dimObj.GDId) && <span className="px-1.5 py-0.5 text-[10px] rounded-full bg-blue-50 text-blue-600">Width</span>}
+                        {dimObj.GDId && heightGDIds.includes(dimObj.GDId) && <span className="px-1.5 py-0.5 text-[10px] rounded-full bg-blue-50 text-blue-600">Height</span>}
+                        {dimObj.GDId && depthGDIds.includes(dimObj.GDId) && <span className="px-1.5 py-0.5 text-[10px] rounded-full bg-blue-50 text-blue-600">Depth</span>}
                       </div>
                     </div>
 

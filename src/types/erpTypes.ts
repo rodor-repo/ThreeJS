@@ -27,7 +27,7 @@ export type WsProducts = {
   GDs: {
     [GDId: string]: {
       GD: string
-      subCategoryId: string
+      // subCategoryId: string
       type: TypeOfGD
       userType: "Admin" | "Guest" | "Retail" | "Trade"
       visible: boolean

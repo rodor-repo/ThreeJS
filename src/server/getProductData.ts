@@ -1,8 +1,8 @@
 "use server"
 
-import type { WsProduct } from "@/types/erpTypes"
+import type { GDThreeJsType, WsProduct } from "@/types/erpTypes"
 
-export async function getWsProduct(productId: string) {
+export async function getProductData(productId: string) {
   if (!productId) throw new Error("productId is required")
 
   if (
@@ -43,6 +43,7 @@ export async function getWsProduct(productId: string) {
     product: WsProduct
     materialOptions: MaterialOptionsResponse
     defaultMaterialSelections: DefaultMaterialSelections
+    threeJsGDs: Record<GDThreeJsType, string[]>
   } = await response.json()
   return data
 }

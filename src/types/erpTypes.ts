@@ -1,6 +1,25 @@
 type TypeOfGD = "Dim" | "Qty"
 export type userType = "Admin" | "Guest" | "Retail" | "Trade"
 
+export type GDThreeJsType =
+  | "height"
+  | "depth"
+  | "width"
+  | "kicker"
+  | "shelfQty"
+  | "doorQty"
+  | "drawerQty"
+  | "drawerH1"
+  | "drawerH2"
+  | "drawerH3"
+  | "drawerH4"
+  | "drawerH5"
+  | "widthExt"
+  | "depthExt"
+  | "fingerPull90"
+  | "fingerPullBevel"
+  | "doorOverhang"
+
 export type WsProducts = {
   /**
    * GD stands for Global Dimensions
@@ -8,13 +27,11 @@ export type WsProducts = {
   GDs: {
     [GDId: string]: {
       GD: string
-      // defaultValue: number
-      // max: number
-      // min: number
+      subCategoryId: string
       type: TypeOfGD
-      // description?: string
       userType: "Admin" | "Guest" | "Retail" | "Trade"
       visible: boolean
+      threeJsType?: GDThreeJsType
     } & (
       | {
           valueType: "selection"

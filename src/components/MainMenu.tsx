@@ -17,7 +17,7 @@ interface MainMenuProps {
 
 const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySelect, selectedCategory, onMenuStateChange }) => {
   const [isOpen, setIsOpen] = useState(false)
-  const [wsData, setWsData] = useState<WsProducts | null>(null)
+  const [wsProducts, setWsProducts] = useState<WsProducts | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedCategoryForSubmenu, setSelectedCategoryForSubmenu] = useState<Category | null>(null)
@@ -32,7 +32,7 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySele
     setError(null)
     try {
       const data = await getWsProducts()
-      setWsData(data)
+      setWsProducts(data)
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to load categories'
       setError(msg)
@@ -55,11 +55,11 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySele
 
   // Map WsProducts data to UI-friendly Category/Subcategory shapes used across app
   const mappedCategories: Category[] = useMemo(() => {
-    if (!wsData) return []
-    const categoryEntries = _.sortBy(Object.entries(wsData.categories), ([, c]) => Number(c.sortNum))
+    if (!wsProducts) return []
+    const categoryEntries = _.sortBy(Object.entries(wsProducts.categories), ([, c]) => Number(c.sortNum))
     return categoryEntries.map(([categoryId, cat], idx) => {
       const subs = _.sortBy(
-        Object.entries(wsData.subCategories).filter(([, sc]) => sc.categoryId === categoryId),
+        Object.entries(wsProducts.subCategories).filter(([, sc]) => sc.categoryId === categoryId),
         ([, sc]) => Number(sc.sortNum)
       ).map(([subId, sc]) => ({ id: subId, name: sc.subCategory, dimensions: defaultDims }))
       return {
@@ -71,12 +71,12 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySele
         subcategories: subs
       }
     })
-  }, [wsData])
+  }, [wsProducts])
 
   // Designs grouped by subCategoryId
   const designsBySubId = useMemo(() => {
-    if (!wsData) return {} as Record<string, Array<{ id: string; name: string; img?: string }>>
-    const entries = _.sortBy(Object.entries(wsData.designs), ([, d]) => Number(d.sortNum))
+    if (!wsProducts) return {} as Record<string, Array<{ id: string; name: string; img?: string }>>
+    const entries = _.sortBy(Object.entries(wsProducts.designs), ([, d]) => Number(d.sortNum))
     const mapped = entries.map(([id, d]) => ({ id, name: d.design, img: d.indexPhotoAlt?.[0], subId: d.subCategoryId }))
     const grouped = _.groupBy(mapped, 'subId')
     const result: Record<string, Array<{ id: string; name: string; img?: string }>> = {}
@@ -84,12 +84,12 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySele
       result[subId] = arr.map(({ id, name, img }) => ({ id, name, img }))
     })
     return result
-  }, [wsData])
+  }, [wsProducts])
 
   // Products grouped by designId
   const productsByDesignId = useMemo(() => {
-    if (!wsData) return {} as Record<string, Array<{ id: string; name: string; img?: string }>>
-    const active = Object.entries(wsData.products).filter(([, p]) => p.status === 'Active')
+    if (!wsProducts) return {} as Record<string, Array<{ id: string; name: string; img?: string }>>
+    const active = Object.entries(wsProducts.products).filter(([, p]) => p.status === 'Active' && !p.disabled3D)
     const sorted = _.sortBy(active, ([, p]) => Number(p.sortNum))
     const mapped = sorted.map(([id, p]) => ({ id, name: p.product, img: p.indexImageAlt?.[0], designId: p.designId }))
     const grouped = _.groupBy(mapped, 'designId')
@@ -98,7 +98,7 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySele
       result[designId] = arr.map(({ id, name, img }) => ({ id, name, img }))
     })
     return result
-  }, [wsData])
+  }, [wsProducts])
 
   const handleCategorySelect = (category: Category) => {
     onCategorySelect(category)

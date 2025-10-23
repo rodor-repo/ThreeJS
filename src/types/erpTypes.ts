@@ -227,7 +227,8 @@ export type WsProducts = {
   }
   products: {
     [productId: string]: {
-      disabled3D?: boolean
+      // disabled3D?: boolean
+      enabled3D?: boolean
       product: string
       categoryId: string
       subCategoryId: string
@@ -265,7 +266,8 @@ export type WsProduct = {
   status: "Active" | "Hidden"
 
   // application: ("joinerlinx" | "joinershop")[]
-  disabled3D?: boolean
+  // disabled3D?: boolean
+  enabled3D?: boolean
 
   shortDescription?: string
   longDescription?: string

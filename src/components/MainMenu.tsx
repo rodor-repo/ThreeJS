@@ -90,7 +90,8 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySele
   // Products grouped by designId
   const productsByDesignId = useMemo(() => {
     if (!wsProducts) return {} as Record<string, Array<{ id: string; name: string; img?: string }>>
-    const active = Object.entries(wsProducts.products).filter(([, p]) => p.status === 'Active' && !p.disabled3D)
+    // const active = Object.entries(wsProducts.products).filter(([, p]) => p.status === 'Active' && !p.disabled3D)
+    const active = Object.entries(wsProducts.products).filter(([, p]) => p.status === 'Active' && p.enabled3D === true)
     const sorted = _.sortBy(active, ([, p]) => Number(p.sortNum))
     const mapped = sorted.map(([id, p]) => ({ id, name: p.product, img: p.indexImageAlt?.[0], designId: p.designId }))
     const grouped = _.groupBy(mapped, 'designId')
@@ -100,6 +101,39 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySele
     })
     return result
   }, [wsProducts])
+
+  // Calculate which designs have active products
+  const designsWithProducts = useMemo(() => {
+    const set = new Set<string>()
+    Object.keys(productsByDesignId).forEach(designId => {
+      if (productsByDesignId[designId].length > 0) {
+        set.add(designId)
+      }
+    })
+    return set
+  }, [productsByDesignId])
+
+  // Calculate which subcategories have active designs
+  const subcategoriesWithProducts = useMemo(() => {
+    const set = new Set<string>()
+    Object.entries(designsBySubId).forEach(([subId, designs]) => {
+      if (designs.some(design => designsWithProducts.has(design.id))) {
+        set.add(subId)
+      }
+    })
+    return set
+  }, [designsBySubId, designsWithProducts])
+
+  // Calculate which categories have active subcategories
+  const categoriesWithProducts = useMemo(() => {
+    const set = new Set<string>()
+    mappedCategories.forEach(category => {
+      if (category.subcategories.some(sub => subcategoriesWithProducts.has(sub.id))) {
+        set.add(category.id)
+      }
+    })
+    return set
+  }, [mappedCategories, subcategoriesWithProducts])
 
   const handleCategorySelect = (category: Category) => {
     onCategorySelect(category)
@@ -254,36 +288,45 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySele
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {mappedCategories.map((category) => (
-                      <motion.button
-                        key={category.id}
-                        onClick={() => handleCategorySelect(category)}
-                        className={`w-full p-4 rounded-lg border-2 transition-all duration-150 hover:shadow-md ${selectedCategory?.id === category.id
-                          ? 'border-blue-500 bg-blue-50 shadow-md'
-                          : 'border-gray-200 hover:border-gray-300'
+                    {mappedCategories.map((category) => {
+                      const isEnabled = categoriesWithProducts.has(category.id)
+                      return (
+                        <motion.button
+                          key={category.id}
+                          onClick={() => isEnabled && handleCategorySelect(category)}
+                          disabled={!isEnabled}
+                          className={`w-full p-4 rounded-lg border-2 transition-all duration-150 ${
+                            isEnabled
+                              ? `hover:shadow-md ${
+                                  selectedCategory?.id === category.id
+                                    ? 'border-blue-500 bg-blue-50 shadow-md'
+                                    : 'border-gray-200 hover:border-gray-300'
+                                }`
+                              : 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
                           }`}
-                        whileHover={{ scale: 1.01 }}
-                        whileTap={{ scale: 0.99 }}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-3">
-                            <div
-                              className="text-2xl"
-                              style={{ color: category.color }}
-                            >
-                              {category.icon}
+                          whileHover={isEnabled ? { scale: 1.01 } : {}}
+                          whileTap={isEnabled ? { scale: 0.99 } : {}}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-3">
+                              <div
+                                className="text-2xl"
+                                style={{ color: isEnabled ? category.color : '#9CA3AF' }}
+                              >
+                                {category.icon}
+                              </div>
+                              <div className="text-left">
+                                <h3 className={`font-semibold ${isEnabled ? 'text-gray-800' : 'text-gray-400'}`}>
+                                  {category.name}
+                                </h3>
+                                {/* Category description removed per UI note */}
+                              </div>
                             </div>
-                            <div className="text-left">
-                              <h3 className="font-semibold text-gray-800">
-                                {category.name}
-                              </h3>
-                              {/* Category description removed per UI note */}
-                            </div>
+                            <ChevronRight size={20} className={isEnabled ? 'text-gray-400' : 'text-gray-300'} />
                           </div>
-                          <ChevronRight size={20} className="text-gray-400" />
-                        </div>
-                      </motion.button>
-                    ))}
+                        </motion.button>
+                      )
+                    })}
                   </div>
                 )}
               </div>
@@ -326,19 +369,29 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySele
                   {/* Subcategories */}
                   <div className="p-2 sm:p-4">
                     <div className="space-y-3">
-                      {selectedCategoryForSubmenu.subcategories.map((subcategory) => (
-                        <motion.button
-                          key={subcategory.id}
-                          onClick={() => openDesignsForSubcategory(subcategory)}
-                          className="w-full p-4 rounded-lg border-2 border-gray-200 hover:border-gray-300 transition-all duration-150 hover:shadow-md hover:bg-gray-50"
-                          whileHover={{ scale: 1.01 }}
-                          whileTap={{ scale: 0.99 }}
-                        >
-                          <div className="text-left">
-                            <h3 className="font-semibold text-gray-800">{subcategory.name}</h3>
-                          </div>
-                        </motion.button>
-                      ))}
+                      {selectedCategoryForSubmenu.subcategories.map((subcategory) => {
+                        const isEnabled = subcategoriesWithProducts.has(subcategory.id)
+                        return (
+                          <motion.button
+                            key={subcategory.id}
+                            onClick={() => isEnabled && openDesignsForSubcategory(subcategory)}
+                            disabled={!isEnabled}
+                            className={`w-full p-4 rounded-lg border-2 transition-all duration-150 ${
+                              isEnabled
+                                ? 'border-gray-200 hover:border-gray-300 hover:shadow-md hover:bg-gray-50'
+                                : 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
+                            }`}
+                            whileHover={isEnabled ? { scale: 1.01 } : {}}
+                            whileTap={isEnabled ? { scale: 0.99 } : {}}
+                          >
+                            <div className="text-left">
+                              <h3 className={`font-semibold ${isEnabled ? 'text-gray-800' : 'text-gray-400'}`}>
+                                {subcategory.name}
+                              </h3>
+                            </div>
+                          </motion.button>
+                        )
+                      })}
                     </div>
                   </div>
                 </motion.div>
@@ -376,14 +429,16 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySele
                       {(designsBySubId[selectedSubcategoryForDesigns.id] || []).map((design) => {
                         const isExpanded = !!expandedDesigns[design.id]
                         const products = productsByDesignId[design.id] || []
+                        const isEnabled = designsWithProducts.has(design.id)
                         return (
-                          <div key={design.id} className="border-2 border-gray-200 rounded-lg overflow-hidden">
+                          <div key={design.id} className={`border-2 rounded-lg overflow-hidden ${isEnabled ? 'border-gray-200' : 'border-gray-200 bg-gray-50 opacity-50'}`}>
                             <button
-                              onClick={() => toggleDesignExpand(design.id)}
-                              className="w-full p-4 flex items-center justify-between hover:bg-gray-50 transition-colors duration-150"
+                              onClick={() => isEnabled && toggleDesignExpand(design.id)}
+                              disabled={!isEnabled}
+                              className={`w-full p-4 flex items-center justify-between transition-colors duration-150 ${isEnabled ? 'hover:bg-gray-50 cursor-pointer' : 'cursor-not-allowed'}`}
                             >
-                              <span className="font-semibold text-gray-800">{design.name}</span>
-                              <ChevronRight size={18} className={`text-gray-500 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                              <span className={`font-semibold ${isEnabled ? 'text-gray-800' : 'text-gray-400'}`}>{design.name}</span>
+                              <ChevronRight size={18} className={`transition-transform ${isExpanded ? 'rotate-90' : ''} ${isEnabled ? 'text-gray-500' : 'text-gray-300'}`} />
                             </button>
 
                             <AnimatePresence initial={false}>

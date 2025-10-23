@@ -90,7 +90,8 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySele
   // Products grouped by designId
   const productsByDesignId = useMemo(() => {
     if (!wsProducts) return {} as Record<string, Array<{ id: string; name: string; img?: string }>>
-    const active = Object.entries(wsProducts.products).filter(([, p]) => p.status === 'Active' && !p.disabled3D)
+    // const active = Object.entries(wsProducts.products).filter(([, p]) => p.status === 'Active' && !p.disabled3D)
+    const active = Object.entries(wsProducts.products).filter(([, p]) => p.status === 'Active' && p.enabled3D === true)
     const sorted = _.sortBy(active, ([, p]) => Number(p.sortNum))
     const mapped = sorted.map(([id, p]) => ({ id, name: p.product, img: p.indexImageAlt?.[0], designId: p.designId }))
     const grouped = _.groupBy(mapped, 'designId')

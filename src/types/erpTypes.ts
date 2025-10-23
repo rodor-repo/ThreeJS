@@ -212,6 +212,10 @@ export type WsProducts = {
       sortNum: string
       indexPhoto?: string
       indexPhotoAlt?: string
+
+      // 3D related
+      type3D?: "base" | "tall" | "overhead"
+      features3D?: ("fingerPull90" | "fingerPullBevel" | "drawer")[]
     }
   }
 

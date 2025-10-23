@@ -11,6 +11,7 @@ import { useThreeRenderer } from './hooks/useThreeRenderer'
 import type { Category, WallDimensions as WallDims } from './types'
 import { CameraControls } from './ui/CameraControls'
 import { WallSettingsModal } from './ui/WallSettingsModal'
+import { WsProducts } from '@/types/erpTypes'
 
 interface ThreeSceneProps {
   wallDimensions: WallDims
@@ -20,9 +21,10 @@ interface ThreeSceneProps {
   isMenuOpen?: boolean
   /** Optional productId selected from the menu to associate with the created 3D object */
   selectedProductId?: string
+  wsProducts?: WsProducts | null
 }
 
-const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChange, selectedCategory, selectedSubcategory, isMenuOpen = false, selectedProductId }) => {
+const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChange, selectedCategory, selectedSubcategory, isMenuOpen = false, selectedProductId, wsProducts }) => {
   const mountRef = useRef<HTMLDivElement>(null);
   const [showModal, setShowModal] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
@@ -95,8 +97,31 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
       console.log('Subcategory selected:', selectedSubcategory.category.name, '>', selectedSubcategory.subcategory.name)
 
       // Map general categories to supported CabinetType values
-      const rawType = selectedSubcategory.category.id
-      const cabinetType: CabinetType = rawType === 'wardrobe' ? 'tall' : (rawType as CabinetType)
+      // const rawType = selectedSubcategory.category.id
+      // const cabinetType: CabinetType = rawType === 'wardrobe' ? 'tall' : (rawType as CabinetType)
+
+      if (!wsProducts) throw new Error("WsProducts data is required to create cabinets.")
+
+      const productEntry = wsProducts.products[selectedProductId || '']
+      const designId = productEntry?.designId
+      const designEntry = wsProducts.designs[designId || '']
+      if (!designEntry) {
+        throw new Error(`Design entry not found for designId: ${designId}`)
+      }
+
+      const { type3D, design } = designEntry
+
+      if (!type3D) {
+        throw new Error(`3D type not specified in design entry for design: ${design}`)
+      }
+
+      const legacyCategoryMap: Record<NonNullable<WsProducts["designs"][string]["type3D"]>, CabinetType> = {
+        'base': 'base',
+        'overhead': 'top',
+        tall: 'tall',
+      }
+
+      const cabinetType = legacyCategoryMap[type3D] || "base"
 
       // Create cabinet based on mapped cabinet type and subcategory
       createCabinet(cabinetType, selectedSubcategory.subcategory.id, selectedProductId)

@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic'
 import { useState } from 'react'
 import MainMenu from '@/components/MainMenu'
 import { Category, Subcategory } from '@/components/categoriesData'
+import { WsProducts } from '@/types/erpTypes'
 
 // Dynamically import the Three.js component to avoid SSR issues
 const ThreeScene = dynamic(() => import('@/features/scene/ThreeScene'), {
@@ -33,6 +34,8 @@ export default function Home() {
   const [selectedSubcategory, setSelectedSubcategory] = useState<{ category: Category; subcategory: Subcategory } | null>(null)
   const [selectedProductId, setSelectedProductId] = useState<string | undefined>(undefined)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const [wsProducts, setWsProducts] = useState<WsProducts | null>(null)
+
 
   const handleCategorySelect = (category: Category) => {
     setSelectedCategory(category)
@@ -62,6 +65,8 @@ export default function Home() {
         onSubcategorySelect={handleSubcategorySelect}
         selectedCategory={selectedCategory}
         onMenuStateChange={handleMenuStateChange}
+        wsProducts={wsProducts}
+        setWsProducts={setWsProducts}
       />
 
       {/* Three.js Scene */}
@@ -72,6 +77,8 @@ export default function Home() {
         selectedSubcategory={selectedSubcategory}
         selectedProductId={selectedProductId}
         isMenuOpen={isMenuOpen}
+        wsProducts={wsProducts}
+
       />
     </main>
   )

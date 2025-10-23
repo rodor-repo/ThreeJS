@@ -13,11 +13,12 @@ interface MainMenuProps {
   onSubcategorySelect?: (category: Category, subcategory: Subcategory, productId?: string) => void
   selectedCategory?: Category | null
   onMenuStateChange?: (isOpen: boolean) => void
+  wsProducts: WsProducts | null
+  setWsProducts: React.Dispatch<React.SetStateAction<WsProducts | null>>
 }
 
-const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySelect, selectedCategory, onMenuStateChange }) => {
+const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySelect, selectedCategory, onMenuStateChange, wsProducts, setWsProducts }) => {
   const [isOpen, setIsOpen] = useState(false)
-  const [wsProducts, setWsProducts] = useState<WsProducts | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedCategoryForSubmenu, setSelectedCategoryForSubmenu] = useState<Category | null>(null)

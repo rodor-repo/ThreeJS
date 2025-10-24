@@ -1,4 +1,7 @@
 import * as THREE from 'three';
+import { createMeshGroup, updateMeshGeometry } from '../utils/meshUtils';
+import { createEndPanelGeometry } from '../utils/geometryUtils';
+import { disposeMeshAndGroup } from '../utils/disposeUtils';
 
 export interface CarcassEndProps {
   height: number;      // Height of the cabinet (Y Axes)
@@ -22,33 +25,22 @@ export class CarcassEnd {
     this.thickness = props.thickness;
     this.position = props.position;
 
-    // Create geometry for end panel
-    // X-axis: thickness (PullPush direction)
-    // Y-axis: height
-    // Z-axis: depth
-    const geometry = new THREE.BoxGeometry(this.thickness, this.height, this.depth);
+    // Create geometry for end panel using utility
+    const geometry = createEndPanelGeometry({
+      thickness: this.thickness,
+      height: this.height,
+      depth: this.depth
+    });
 
-    // Use provided material or create default
-    const material = props.material || new THREE.MeshLambertMaterial({
+    // Create mesh group with default material config
+    const meshGroup = createMeshGroup(geometry, props.material, {
       color: 0x8B4513, // Brown color for wood
       transparent: true,
       opacity: 0.9
     });
 
-    // Create mesh
-    this.mesh = new THREE.Mesh(geometry, material);
-    this.mesh.castShadow = true;
-    this.mesh.receiveShadow = true;
-
-    // Create group to contain mesh and wireframe
-    this.group = new THREE.Group();
-    this.group.add(this.mesh);
-
-    // Add wireframe outline
-    const edges = new THREE.EdgesGeometry(geometry);
-    const lineMaterial = new THREE.LineBasicMaterial({ color: 0x333333 });
-    const wireframe = new THREE.LineSegments(edges, lineMaterial);
-    this.group.add(wireframe);
+    this.mesh = meshGroup.mesh;
+    this.group = meshGroup.group;
 
     // Position the end panel according to new logic
     this.updatePosition();
@@ -81,19 +73,14 @@ export class CarcassEnd {
     this.depth = depth;
     this.thickness = thickness;
 
-    // Update geometry
-    const newGeometry = new THREE.BoxGeometry(this.thickness, this.height, this.depth);
-    this.mesh.geometry.dispose();
-    this.mesh.geometry = newGeometry;
-
-    // Update wireframe
-    this.group.children.forEach((child, index) => {
-      if (index === 1 && child instanceof THREE.LineSegments) { // Wireframe is second child
-        child.geometry.dispose();
-        const newEdges = new THREE.EdgesGeometry(newGeometry);
-        child.geometry = newEdges;
-      }
+    // Update geometry using utility
+    const newGeometry = createEndPanelGeometry({
+      thickness: this.thickness,
+      height: this.height,
+      depth: this.depth
     });
+    
+    updateMeshGeometry(this.mesh, this.group, newGeometry);
 
     // Update position
     this.updatePosition();
@@ -106,28 +93,6 @@ export class CarcassEnd {
   }
 
   public dispose(): void {
-    this.mesh.geometry.dispose();
-    if (this.mesh.material) {
-      if (Array.isArray(this.mesh.material)) {
-        this.mesh.material.forEach(mat => mat.dispose());
-      } else {
-        this.mesh.material.dispose();
-      }
-    }
-
-    this.group.children.forEach(child => {
-      if (child instanceof THREE.Mesh || child instanceof THREE.LineSegments) {
-        if (child.geometry) {
-          child.geometry.dispose();
-        }
-        if (child.material) {
-          if (Array.isArray(child.material)) {
-            child.material.forEach((mat: THREE.Material) => mat.dispose());
-          } else {
-            child.material.dispose();
-          }
-        }
-      }
-    });
+    disposeMeshAndGroup(this.mesh, this.group);
   }
 }

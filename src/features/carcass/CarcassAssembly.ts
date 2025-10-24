@@ -11,6 +11,24 @@ import { CarcassMaterial, CarcassMaterialData } from "./Material"
 import { DoorMaterial } from "./DoorMaterial"
 import { MaterialLoader } from "./MaterialLoader"
 import { categoriesData } from "../../components/categoriesData"
+import {
+  calculatePanelWidth,
+  calculateEffectiveDepth,
+  calculateRightEndXPosition,
+  calculateCabinetYPosition,
+  calculateDoorDimensions,
+  calculateDrawerWidth,
+  calculateShelfPositions,
+} from "./utils/carcass-dimension-utils"
+import {
+  roundToDecimal,
+  distributeHeightEqually,
+  validateTotalHeight,
+  scaleHeightsProportionally,
+  clamp,
+  approximatelyEqual,
+  calculateRatio,
+} from "./utils/carcass-math-utils"
 
 export interface CarcassDimensions {
   width: number // Width of the cabinet (X Axes)
@@ -151,20 +169,24 @@ export class CarcassAssembly {
       material: this.config.material.getMaterial(),
     })
 
-    // Position the right end panel correctly
-    // End Right Surface: (EndRWidth+BackWidth,0,0) to (0,EndRHeight,EndRDepth)
-    // The right end is positioned at: Width - (Thickness/2) (center of the panel)
-    const rightEndX =
-      this.dimensions.width - this.config.material.getThickness() / 2
+    // Position the right end panel correctly using utility function
+    const rightEndX = calculateRightEndXPosition(
+      this.dimensions.width,
+      this.config.material.getThickness()
+    )
     this.rightEnd.setXPosition(rightEndX)
   }
 
   private createBackPanel(): void {
     // Back: BackHeight= Height (Y Axes), BackWidth =Width - 2x Thickness (X Axes), BackThickness= Thickness (Z Axes)
-    // Width should be: Carcass width - (EndLThickness + EndRThickness) = Width - (2 × Thickness)
+    const panelWidth = calculatePanelWidth(
+      this.dimensions.width,
+      this.config.material.getThickness()
+    )
+
     this.back = new CarcassBack({
       height: this.dimensions.height,
-      width: this.dimensions.width - this.config.material.getThickness() * 2, // Account for both end panels
+      width: panelWidth,
       thickness: this.config.material.getThickness(),
       leftEndThickness: this.config.material.getThickness(),
       material: this.config.material.getMaterial(),
@@ -173,13 +195,18 @@ export class CarcassAssembly {
 
   private createBottomPanel(): void {
     // Bottom: BottomHeight= Depth (Z Axes), BottomWidth =Width - 2x Thickness (X Axes), BottomThickness= Thickness (Y Axes)
-    // Width should be: Carcass width - (EndLThickness + EndRThickness) = Width - (2 × Thickness)
-    // This ensures the panel fits exactly between the two end panels
-    const panelWidth =
-      this.dimensions.width - this.config.material.getThickness() * 2
+    const panelWidth = calculatePanelWidth(
+      this.dimensions.width,
+      this.config.material.getThickness()
+    )
+    const effectiveDepth = calculateEffectiveDepth(
+      this.dimensions.depth,
+      this.config.material.getThickness()
+    )
+
     this.bottom = new CarcassBottom({
-      depth: this.dimensions.depth - this.config.material.getThickness(), // Account for back panel
-      width: panelWidth, // Account for both end panels
+      depth: effectiveDepth,
+      width: panelWidth,
       thickness: this.config.material.getThickness(),
       leftEndThickness: this.config.material.getThickness(),
       backThickness: this.config.material.getThickness(),
@@ -189,10 +216,14 @@ export class CarcassAssembly {
 
   private createTopPanel(): void {
     // Top: TopHeight= Depth (Z Axes), TopWidth =Width - 2x Thickness (X Axes), TopThickness= Thickness (Y Axes)
-    // Width should be: Carcass width - (EndLThickness + EndRThickness) = Width - (2 × Thickness)
-    // This ensures the panel fits exactly between the two end panels
-    const panelWidth =
-      this.dimensions.width - this.config.material.getThickness() * 2
+    const panelWidth = calculatePanelWidth(
+      this.dimensions.width,
+      this.config.material.getThickness()
+    )
+    const effectiveDepth = calculateEffectiveDepth(
+      this.dimensions.depth,
+      this.config.material.getThickness()
+    )
 
     // Get Base Rail depth from data using MaterialLoader
     const baseRailDepth = MaterialLoader.getBaseRailDepth(this.cabinetType)
@@ -202,8 +233,8 @@ export class CarcassAssembly {
       this.cabinetType === "base" && this.config.drawerEnabled
 
     this.top = new CarcassTop({
-      depth: this.dimensions.depth - this.config.material.getThickness(), // Account for back panel
-      width: panelWidth, // Account for both end panels
+      depth: effectiveDepth,
+      width: panelWidth,
       thickness: this.config.material.getThickness(),
       height: this.dimensions.height,
       leftEndThickness: this.config.material.getThickness(),
@@ -223,33 +254,38 @@ export class CarcassAssembly {
       const endHeight =
         this.dimensions.height - this.config.material.getThickness() - 100 // End below top panel
 
-      if (endHeight > startHeight) {
-        const totalShelfSpace = endHeight - startHeight
-        const spacing = Math.min(
-          this.config.shelfSpacing,
-          totalShelfSpace / (this.config.shelfCount + 1)
-        )
+      // Calculate shelf positions using utility function
+      const shelfPositions = calculateShelfPositions(
+        startHeight,
+        endHeight,
+        this.config.shelfCount,
+        this.config.shelfSpacing
+      )
 
-        // Calculate panel width to ensure it fits exactly between end panels
-        const panelWidth =
-          this.dimensions.width - this.config.material.getThickness() * 2
+      // Calculate panel dimensions
+      const panelWidth = calculatePanelWidth(
+        this.dimensions.width,
+        this.config.material.getThickness()
+      )
+      const effectiveDepth = calculateEffectiveDepth(
+        this.dimensions.depth,
+        this.config.material.getThickness()
+      )
 
-        for (let i = 0; i < this.config.shelfCount; i++) {
-          const height = startHeight + (i + 1) * spacing
+      // Create shelves at calculated positions
+      shelfPositions.forEach((height) => {
+        const shelf = new CarcassShelf({
+          depth: effectiveDepth,
+          width: panelWidth,
+          thickness: this.config.material.getThickness(),
+          height: height,
+          leftEndThickness: this.config.material.getThickness(),
+          backThickness: this.config.material.getThickness(),
+          material: this.config.material.getMaterial(),
+        })
 
-          const shelf = new CarcassShelf({
-            depth: this.dimensions.depth - this.config.material.getThickness(), // Account for back panel
-            width: panelWidth, // Account for both end panels
-            thickness: this.config.material.getThickness(),
-            height: height,
-            leftEndThickness: this.config.material.getThickness(),
-            backThickness: this.config.material.getThickness(),
-            material: this.config.material.getMaterial(),
-          })
-
-          this.shelves.push(shelf)
-        }
-      }
+        this.shelves.push(shelf)
+      })
     }
   }
 
@@ -289,38 +325,38 @@ export class CarcassAssembly {
 
     // Only create drawers if they are enabled
     if (this.config.drawerEnabled && this.config.drawerQuantity) {
-      // Calculate drawer width accounting for end panel thicknesses
-      // The carcass extends from x=0 to x=width, but end panels take up thickness
+      // Calculate drawer width using utility function
       const endPanelThickness = this.config.material.getPanelThickness()
-      const drawerWidth = this.dimensions.width - endPanelThickness * 2
+      const drawerWidth = calculateDrawerWidth(
+        this.dimensions.width,
+        endPanelThickness
+      )
       const drawerDepth = this.dimensions.depth
 
       // Calculate default drawer heights if not provided
       let drawerHeights = this.config.drawerHeights || []
       if (drawerHeights.length === 0) {
-        // Calculate equal distribution ensuring it fits within carcass height
-        const defaultHeight =
-          Math.round(
-            (this.dimensions.height / this.config.drawerQuantity) * 10
-          ) / 10
-        drawerHeights = Array(this.config.drawerQuantity).fill(defaultHeight)
+        // Calculate equal distribution using utility function
+        drawerHeights = distributeHeightEqually(
+          this.dimensions.height,
+          this.config.drawerQuantity
+        )
         this.config.drawerHeights = [...drawerHeights]
       } else {
-        // Validate existing heights and ensure they fit within carcass height
-        const totalHeight = drawerHeights.reduce(
-          (sum, height) => sum + height,
-          0
+        // Validate existing heights using utility function
+        const validation = validateTotalHeight(
+          drawerHeights,
+          this.dimensions.height
         )
-        if (totalHeight > this.dimensions.height) {
+        if (!validation.isValid) {
           // Redistribute equally to fit within carcass height
-          const adjustedHeight =
-            Math.round(
-              (this.dimensions.height / this.config.drawerQuantity) * 10
-            ) / 10
-          drawerHeights = Array(this.config.drawerQuantity).fill(adjustedHeight)
+          drawerHeights = distributeHeightEqually(
+            this.dimensions.height,
+            this.config.drawerQuantity
+          )
           this.config.drawerHeights = [...drawerHeights]
           console.log(
-            `Total drawer height exceeded carcass height. Redistributed to ${adjustedHeight}mm each.`
+            `Total drawer height exceeded carcass height. Redistributed to ${drawerHeights[0]}mm each.`
           )
         }
       }
@@ -329,9 +365,7 @@ export class CarcassAssembly {
       for (let i = 0; i < this.config.drawerQuantity; i++) {
         const drawerHeight =
           drawerHeights[i] ||
-          Math.round(
-            (this.dimensions.height / this.config.drawerQuantity) * 10
-          ) / 10
+          roundToDecimal(this.dimensions.height / this.config.drawerQuantity)
         const drawer = new CarcassDrawer({
           width: drawerWidth,
           height: drawerHeight,
@@ -361,22 +395,26 @@ export class CarcassAssembly {
 
     // Only create doors if they are enabled
     if (this.config.doorEnabled) {
-      const doorWidth = this.dimensions.width
-      const doorHeight = this.dimensions.height
       const doorDepth = this.dimensions.depth
 
-      if (this.config.doorCount === 2) {
-        // Get door gap from data.js
-        const doorGap = categoriesData.doorSettings?.gap || 2
+      // Get door gap from data.js
+      const doorGap = categoriesData.doorSettings?.gap || 2
 
-        // Create two doors side by side with gap applied
-        const singleDoorWidth = doorWidth / 2 - doorGap
-        const doorHeightWithGap = doorHeight - doorGap * 2
+      // Calculate door dimensions using utility function
+      const doorDimensions = calculateDoorDimensions(
+        this.dimensions.width,
+        this.dimensions.height,
+        doorGap,
+        this.config.doorCount || 1
+      )
+
+      if (this.config.doorCount === 2) {
+        // Create two doors side by side
 
         // Left door
         const leftDoor = new CarcassDoor({
-          width: singleDoorWidth,
-          height: doorHeightWithGap,
+          width: doorDimensions.width,
+          height: doorDimensions.height,
           depth: doorDepth,
           thickness: this.config.material.getThickness(),
           material: this.config.doorMaterial!,
@@ -391,8 +429,8 @@ export class CarcassAssembly {
 
         // Right door
         const rightDoor = new CarcassDoor({
-          width: singleDoorWidth,
-          height: doorHeightWithGap,
+          width: doorDimensions.width,
+          height: doorDimensions.height,
           depth: doorDepth,
           thickness: this.config.material.getThickness(),
           material: this.config.doorMaterial!,
@@ -407,16 +445,10 @@ export class CarcassAssembly {
 
         this.doors.push(leftDoor, rightDoor)
       } else {
-        // Get door gap from data.js
-        const doorGap = categoriesData.doorSettings?.gap || 2
-
-        // Create single centered door with gap applied
-        const doorWidthWithGap = doorWidth - doorGap * 2
-        const doorHeightWithGap = doorHeight - doorGap * 2
-
+        // Create single centered door
         const door = new CarcassDoor({
-          width: doorWidthWithGap,
-          height: doorHeightWithGap,
+          width: doorDimensions.width,
+          height: doorDimensions.height,
           depth: doorDepth,
           thickness: this.config.material.getThickness(),
           material: this.config.doorMaterial!,
@@ -435,23 +467,10 @@ export class CarcassAssembly {
   }
 
   private positionCarcass(): void {
-    // Position based on cabinet type
-    switch (this.cabinetType) {
-      case "top":
-        // Top cabinets are positioned at wall height (typically 2400mm from floor)
-        this.group.position.set(0, 2400, 0)
-        break
-      case "base":
-        // Base cabinets are positioned above the floor by leg height
-        const baseLegHeight = MaterialLoader.getLegHeight()
-        this.group.position.set(0, baseLegHeight, 0)
-        break
-      case "tall":
-        // Tall cabinets are positioned above the floor by leg height
-        const tallLegHeight = MaterialLoader.getLegHeight()
-        this.group.position.set(0, tallLegHeight, 0)
-        break
-    }
+    // Position based on cabinet type using utility function
+    const legHeight = MaterialLoader.getLegHeight()
+    const yPosition = calculateCabinetYPosition(this.cabinetType, legHeight)
+    this.group.position.set(0, yPosition, 0)
   }
 
   public updateDimensions(newDimensions: CarcassDimensions): void {
@@ -470,14 +489,18 @@ export class CarcassAssembly {
       this.config.material.getThickness()
     )
 
-    // Update right end position
-    const rightEndX =
-      this.dimensions.width - this.config.material.getThickness() / 2
+    // Update right end position using utility function
+    const rightEndX = calculateRightEndXPosition(
+      this.dimensions.width,
+      this.config.material.getThickness()
+    )
     this.rightEnd.setXPosition(rightEndX)
 
-    // Calculate panel width to ensure it fits exactly between end panels
-    const panelWidth =
-      this.dimensions.width - this.config.material.getThickness() * 2
+    // Calculate panel width using utility function
+    const panelWidth = calculatePanelWidth(
+      this.dimensions.width,
+      this.config.material.getThickness()
+    )
 
     // Update back panel with corrected width: Width - (EndLThickness + EndRThickness)
     this.back.updateDimensions(
@@ -487,19 +510,25 @@ export class CarcassAssembly {
       this.config.material.getThickness()
     )
 
-    // Update bottom panel with corrected width: Width - (EndLThickness + EndRThickness)
+    // Calculate effective depth using utility function
+    const effectiveDepth = calculateEffectiveDepth(
+      this.dimensions.depth,
+      this.config.material.getThickness()
+    )
+
+    // Update bottom panel
     this.bottom.updateDimensions(
-      this.dimensions.depth - this.config.material.getThickness(),
-      panelWidth, // Account for both end panels
+      effectiveDepth,
+      panelWidth,
       this.config.material.getThickness(),
       this.config.material.getThickness(),
       this.config.material.getThickness()
     )
 
-    // Update top panel with corrected width: Width - (EndLThickness + EndRThickness)
+    // Update top panel
     this.top.updateDimensions(
-      this.dimensions.depth - this.config.material.getThickness(),
-      panelWidth, // Account for both end panels
+      effectiveDepth,
+      panelWidth,
       this.config.material.getThickness(),
       this.config.material.getThickness(),
       this.config.material.getThickness()
@@ -662,22 +691,22 @@ export class CarcassAssembly {
   private updateDoors(): void {
     // Only update doors if they are enabled
     if (this.config.doorEnabled && this.doors.length > 0) {
-      const doorWidth = this.dimensions.width
-      const doorHeight = this.dimensions.height
       const doorDepth = this.dimensions.depth
+      const doorGap = categoriesData.doorSettings?.gap || 2
+
+      // Calculate door dimensions using utility function
+      const doorDimensions = calculateDoorDimensions(
+        this.dimensions.width,
+        this.dimensions.height,
+        doorGap,
+        this.config.doorCount || 1
+      )
 
       if (this.config.doorCount === 2 && this.doors.length === 2) {
-        // Get door gap from data.js
-        const doorGap = categoriesData.doorSettings?.gap || 2
-
-        // Update two doors side by side with gap applied
-        const singleDoorWidth = doorWidth / 2 - doorGap
-        const doorHeightWithGap = doorHeight - doorGap * 2
-
         // Update left door
         this.doors[0].updateDimensions(
-          singleDoorWidth,
-          doorHeightWithGap,
+          doorDimensions.width,
+          doorDimensions.height,
           doorDepth,
           this.config.material.getThickness()
         )
@@ -685,23 +714,17 @@ export class CarcassAssembly {
 
         // Update right door
         this.doors[1].updateDimensions(
-          singleDoorWidth,
-          doorHeightWithGap,
+          doorDimensions.width,
+          doorDimensions.height,
           doorDepth,
           this.config.material.getThickness()
         )
         this.doors[1].updateCarcassWidth(this.dimensions.width)
       } else if (this.doors.length === 1) {
-        // Get door gap from data.js
-        const doorGap = categoriesData.doorSettings?.gap || 2
-
-        // Update single door with gap applied
-        const doorWidthWithGap = doorWidth - doorGap * 2
-        const doorHeightWithGap = doorHeight - doorGap * 2
-
+        // Update single door
         this.doors[0].updateDimensions(
-          doorWidthWithGap,
-          doorHeightWithGap,
+          doorDimensions.width,
+          doorDimensions.height,
           doorDepth,
           this.config.material.getThickness()
         )
@@ -848,9 +871,8 @@ export class CarcassAssembly {
 
     // Calculate new drawer heights ensuring they fit within carcass height
     if (quantity > 0) {
-      // Calculate default equal distribution
-      const defaultHeight =
-        Math.round((this.dimensions.height / quantity) * 10) / 10
+      // Calculate default equal distribution using utility function
+      const defaultHeight = roundToDecimal(this.dimensions.height / quantity)
       let newDrawerHeights: number[] = []
 
       if (existingHeights.length > 0 && quantity >= existingHeights.length) {
@@ -867,22 +889,26 @@ export class CarcassAssembly {
         // If decreasing quantity, keep only the first N heights
         newDrawerHeights = existingHeights.slice(0, quantity)
       } else {
-        // If no existing heights or quantity is 0, create default heights
-        newDrawerHeights = Array(quantity).fill(defaultHeight)
+        // If no existing heights or quantity is 0, create default heights using utility function
+        newDrawerHeights = distributeHeightEqually(
+          this.dimensions.height,
+          quantity
+        )
       }
 
-      // Ensure total height doesn't exceed carcass height
-      const totalHeight = newDrawerHeights.reduce(
-        (sum, height) => sum + height,
-        0
+      // Ensure total height doesn't exceed carcass height using utility function
+      const totalHeightValidation = validateTotalHeight(
+        newDrawerHeights,
+        this.dimensions.height
       )
-      if (totalHeight > this.dimensions.height) {
-        // Redistribute equally to fit within carcass height
-        const adjustedHeight =
-          Math.round((this.dimensions.height / quantity) * 10) / 10
-        newDrawerHeights = Array(quantity).fill(adjustedHeight)
+      if (!totalHeightValidation.isValid) {
+        // Redistribute equally to fit within carcass height using utility function
+        newDrawerHeights = distributeHeightEqually(
+          this.dimensions.height,
+          quantity
+        )
         console.log(
-          `Total drawer height exceeded carcass height. Redistributed to ${adjustedHeight}mm each.`
+          `Total drawer height exceeded carcass height. Redistributed to ${newDrawerHeights[0]}mm each.`
         )
       }
 
@@ -927,23 +953,18 @@ export class CarcassAssembly {
       height
     )
 
-    // Ensure proper decimal handling - max one digit after decimal point
-    height = Math.round(height * 10) / 10
+    // Ensure proper decimal handling using utility function
+    height = roundToDecimal(height)
 
-    // Validate the height value
+    // Validate the height value using utility function
     const minHeight = 50 // Minimum drawer height
     const maxHeight = this.dimensions.height // Maximum drawer height
+    height = clamp(height, minHeight, maxHeight)
 
-    if (height < minHeight) {
-      console.warn(
-        `Drawer height ${height}mm is below minimum ${minHeight}mm. Setting to minimum.`
-      )
-      height = minHeight
-    } else if (height > maxHeight) {
-      console.warn(
-        `Drawer height ${height}mm exceeds carcass height ${maxHeight}mm. Setting to maximum.`
-      )
-      height = maxHeight
+    if (height === minHeight) {
+      console.warn(`Drawer height clamped to minimum ${minHeight}mm.`)
+    } else if (height === maxHeight) {
+      console.warn(`Drawer height clamped to maximum ${maxHeight}mm.`)
     }
 
     // Update the drawer height in the config
@@ -973,12 +994,11 @@ export class CarcassAssembly {
    */
   public getDrawerHeights(): number[] {
     if (!this.config.drawerHeights || this.config.drawerHeights.length === 0) {
-      // Return default heights if none are set
-      const defaultHeight =
-        Math.round(
-          (this.dimensions.height / (this.config.drawerQuantity || 1)) * 10
-        ) / 10
-      return Array(this.config.drawerQuantity || 1).fill(defaultHeight)
+      // Return default heights if none are set using utility function
+      return distributeHeightEqually(
+        this.dimensions.height,
+        this.config.drawerQuantity || 1
+      )
     }
     return [...this.config.drawerHeights]
   }
@@ -999,11 +1019,8 @@ export class CarcassAssembly {
     totalHeight: number
     remainingHeight: number
   } {
-    const totalHeight = this.getTotalDrawerHeight()
-    const remainingHeight = this.dimensions.height - totalHeight
-    const isValid = totalHeight <= this.dimensions.height
-
-    return { isValid, totalHeight, remainingHeight }
+    // Use utility function for validation
+    return validateTotalHeight(this.getDrawerHeights(), this.dimensions.height)
   }
 
   /**
@@ -1036,9 +1053,10 @@ export class CarcassAssembly {
     const remainingHeight = totalCarcassHeight - totalExplicitHeight
 
     if (remainingHeight > 0 && unchangedDrawerCount > 0) {
-      // Distribute remaining height equally among unchanged drawers with proper decimal handling
-      const heightPerDrawer =
-        Math.round((remainingHeight / unchangedDrawerCount) * 10) / 10
+      // Distribute remaining height equally among unchanged drawers using utility function
+      const heightPerDrawer = roundToDecimal(
+        remainingHeight / unchangedDrawerCount
+      )
 
       for (let i = 0; i < totalDrawerQuantity; i++) {
         if (i !== changedIndex && !this.config.drawerHeights[i]) {
@@ -1047,23 +1065,22 @@ export class CarcassAssembly {
       }
 
       console.log(
-        `Redistributed ${
-          Math.round(remainingHeight * 10) / 10
-        }mm among ${unchangedDrawerCount} unchanged drawers: ${heightPerDrawer}mm each`
+        `Redistributed ${roundToDecimal(
+          remainingHeight
+        )}mm among ${unchangedDrawerCount} unchanged drawers: ${heightPerDrawer}mm each`
       )
     } else if (remainingHeight < 0) {
       console.warn(
-        `Total drawer height (${
-          Math.round(totalExplicitHeight * 10) / 10
-        }mm) exceeds carcass height (${totalCarcassHeight}mm)`
+        `Total drawer height (${roundToDecimal(
+          totalExplicitHeight
+        )}mm) exceeds carcass height (${totalCarcassHeight}mm)`
       )
 
       // If total exceeds carcass height, we need to adjust the changed drawer height
       const excessHeight = Math.abs(remainingHeight)
-      const adjustedHeight =
-        Math.round(
-          (this.config.drawerHeights[changedIndex] - excessHeight) * 10
-        ) / 10
+      const adjustedHeight = roundToDecimal(
+        this.config.drawerHeights[changedIndex] - excessHeight
+      )
 
       // Ensure the adjusted height is at least 50mm (minimum drawer height)
       if (adjustedHeight >= 50) {
@@ -1095,8 +1112,7 @@ export class CarcassAssembly {
 
         if (remainingForThisDrawer >= 50) {
           // Minimum drawer height
-          this.config.drawerHeights[i] =
-            Math.round(remainingForThisDrawer * 10) / 10
+          this.config.drawerHeights[i] = roundToDecimal(remainingForThisDrawer)
         } else {
           // If not enough height, set to minimum and redistribute
           this.config.drawerHeights[i] = 50
@@ -1112,14 +1128,15 @@ export class CarcassAssembly {
   private resetDrawerHeightsToDefault(): void {
     if (!this.config.drawerQuantity) return
 
-    const defaultHeight =
-      Math.round((this.dimensions.height / this.config.drawerQuantity) * 10) /
-      10
-    this.config.drawerHeights = Array(this.config.drawerQuantity).fill(
-      defaultHeight
+    // Use utility function to distribute heights equally
+    this.config.drawerHeights = distributeHeightEqually(
+      this.dimensions.height,
+      this.config.drawerQuantity
     )
 
-    console.log(`Reset drawer heights to default: ${defaultHeight}mm each`)
+    console.log(
+      `Reset drawer heights to default: ${this.config.drawerHeights[0]}mm each`
+    )
   }
 
   /**
@@ -1153,10 +1170,11 @@ export class CarcassAssembly {
       return []
     }
 
-    const defaultHeight =
-      Math.round((this.dimensions.height / this.config.drawerQuantity) * 10) /
-      10
-    return Array(this.config.drawerQuantity).fill(defaultHeight)
+    // Use utility function to distribute heights equally
+    return distributeHeightEqually(
+      this.dimensions.height,
+      this.config.drawerQuantity
+    )
   }
 
   private updateDrawerPositions(): void {
@@ -1166,9 +1184,9 @@ export class CarcassAssembly {
     const allDrawerHeights = this.drawers.map(
       (drawer, index) =>
         this.config.drawerHeights?.[index] ||
-        Math.round(
-          (this.dimensions.height / (this.config.drawerQuantity || 1)) * 10
-        ) / 10
+        roundToDecimal(
+          this.dimensions.height / (this.config.drawerQuantity || 1)
+        )
     )
 
     // Update each drawer's dimensions and position
@@ -1188,9 +1206,12 @@ export class CarcassAssembly {
 
   private updateDrawers(): void {
     if (this.config.drawerEnabled && this.drawers.length > 0) {
-      // Calculate drawer width accounting for end panel thicknesses
+      // Calculate drawer width using utility function
       const endPanelThickness = this.config.material.getPanelThickness()
-      const drawerWidth = this.dimensions.width - endPanelThickness * 2
+      const drawerWidth = calculateDrawerWidth(
+        this.dimensions.width,
+        endPanelThickness
+      )
       const drawerDepth = this.dimensions.depth
 
       // Check if we need to recalculate drawer heights due to cabinet height change
@@ -1200,33 +1221,38 @@ export class CarcassAssembly {
           (sum, height) => sum + height,
           0
         )
-        const heightRatio = this.dimensions.height / totalCurrentHeight
+        const heightRatio = calculateRatio(
+          this.dimensions.height,
+          totalCurrentHeight
+        )
 
         // If the ratio is significantly different (more than 1% change), recalculate proportionally
-        if (Math.abs(heightRatio - 1) > 0.01) {
+        if (!approximatelyEqual(heightRatio, 1, 0.01)) {
           console.log(
             `Cabinet height changed. Recalculating drawer heights proportionally. Ratio: ${heightRatio}`
           )
 
-          // Recalculate drawer heights proportionally
-          this.config.drawerHeights = drawerHeights.map(
-            (height) => Math.round(height * heightRatio * 10) / 10
+          // Recalculate drawer heights proportionally using utility function
+          this.config.drawerHeights = scaleHeightsProportionally(
+            drawerHeights,
+            this.dimensions.height
           )
 
-          // Ensure the total doesn't exceed the new cabinet height
-          const totalNewHeight = this.config.drawerHeights!.reduce(
-            (sum, height) => sum + height,
-            0
+          // Ensure the total doesn't exceed the new cabinet height using utility function
+          const validation = validateTotalHeight(
+            this.config.drawerHeights,
+            this.dimensions.height
           )
-          if (totalNewHeight > this.dimensions.height) {
-            // If still too tall, reset to equal distribution
+          if (!validation.isValid) {
+            // If still too tall, reset to equal distribution using utility function
             const quantity =
               this.config.drawerQuantity ?? this.drawers.length ?? 1
-            const defaultHeight =
-              Math.round((this.dimensions.height / quantity) * 10) / 10
-            this.config.drawerHeights = Array(quantity).fill(defaultHeight)
+            this.config.drawerHeights = distributeHeightEqually(
+              this.dimensions.height,
+              quantity
+            )
             console.log(
-              `Total drawer height still exceeds cabinet height after proportional adjustment. Reset to equal distribution: ${defaultHeight}mm each.`
+              `Total drawer height still exceeds cabinet height after proportional adjustment. Reset to equal distribution: ${this.config.drawerHeights[0]}mm each.`
             )
           }
         }
@@ -1236,9 +1262,9 @@ export class CarcassAssembly {
       this.drawers.forEach((drawer, index) => {
         const drawerHeight =
           this.config.drawerHeights?.[index] ||
-          Math.round(
-            (this.dimensions.height / (this.config.drawerQuantity || 1)) * 10
-          ) / 10
+          roundToDecimal(
+            this.dimensions.height / (this.config.drawerQuantity || 1)
+          )
         drawer.updateDimensions(drawerWidth, drawerHeight, drawerDepth)
         drawer.updateCarcassHeight(this.dimensions.height)
       })

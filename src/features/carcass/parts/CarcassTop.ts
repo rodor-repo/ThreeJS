@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { createMeshGroup, updateMeshGeometry, disposeCarcassPart } from '../utils/carcass-geometry-utils';
+import { calculateEffectiveDepth, calculatePanelCenterX } from '../utils/carcass-dimension-utils';
 
 export interface CarcassTopProps {
   depth: number;       // Depth of the cabinet (Z Axes)
@@ -38,90 +40,60 @@ export class CarcassTop {
     this.isDrawerBase = props.isDrawerBase || false; // Default to Standard Base (not Drawer Base)
 
     // Create geometry for top panel
-    let geometry: THREE.BoxGeometry;
-    
-    if (this.cabinetType === 'base') {
-      if (this.isDrawerBase) {
-        // For Drawer Base cabinets - HORIZONTAL positioning:
-        // X-axis: width (between the two ends)
-        // Y-axis: thickness (PullPush direction)
-        // Z-axis: depth (use full depth minus back thickness)
-        const effectiveDepth = this.depth - this.backThickness;
-        geometry = new THREE.BoxGeometry(this.width, this.thickness, effectiveDepth);
-      } else {
-        // For Standard Base cabinets - VERTICAL positioning:
-        // Height: 60mm (Y axis - this.baseRailDepth)
-        // Width: Carcass Width - 2×CarcassThickness (X axis)
-        // Depth: CarcassThickness (Z axis)
-        geometry = new THREE.BoxGeometry(this.width, this.baseRailDepth, this.thickness);
-      }
-    } else {
-      // For other cabinet types - HORIZONTAL positioning:
-      // X-axis: width (between the two ends)
-      // Y-axis: thickness (PullPush direction)
-      // Z-axis: depth (use full depth minus back thickness)
-      const effectiveDepth = this.depth - this.backThickness;
-      geometry = new THREE.BoxGeometry(this.width, this.thickness, effectiveDepth);
-    }
+    const geometry = this.createGeometry();
 
-    // Use provided material or create default
-    const material = props.material || new THREE.MeshLambertMaterial({
-      color: 0x8B4513, // Brown color for wood
-      transparent: true,
-      opacity: 0.9
-    });
-
-    // Create mesh
-    this.mesh = new THREE.Mesh(geometry, material);
-    this.mesh.castShadow = true;
-    this.mesh.receiveShadow = true;
-
-    // Create group to contain mesh and wireframe
-    this.group = new THREE.Group();
-    this.group.add(this.mesh);
-
-    // Add wireframe outline
-    const edges = new THREE.EdgesGeometry(geometry);
-    const lineMaterial = new THREE.LineBasicMaterial({ color: 0x333333 });
-    const wireframe = new THREE.LineSegments(edges, lineMaterial);
-    this.group.add(wireframe);
+    // Create mesh group with wireframe
+    const { group, mesh } = createMeshGroup(geometry, props.material);
+    this.group = group;
+    this.mesh = mesh;
 
     // Position the top panel according to new logic
     this.updatePosition();
   }
 
-  private updatePosition(): void {
+  private createGeometry(): THREE.BoxGeometry {
     if (this.cabinetType === 'base') {
       if (this.isDrawerBase) {
-        // For Drawer Base cabinets - HORIZONTAL positioning:
-        // Position at the front edge of end panels (Z = 0)
-        // Standard horizontal positioning like other cabinet types
+        // For Drawer Base cabinets - HORIZONTAL positioning
+        const effectiveDepth = calculateEffectiveDepth(this.depth, this.backThickness);
+        return new THREE.BoxGeometry(this.width, this.thickness, effectiveDepth);
+      } else {
+        // For Standard Base cabinets - VERTICAL positioning
+        return new THREE.BoxGeometry(this.width, this.baseRailDepth, this.thickness);
+      }
+    } else {
+      // For other cabinet types - HORIZONTAL positioning
+      const effectiveDepth = calculateEffectiveDepth(this.depth, this.backThickness);
+      return new THREE.BoxGeometry(this.width, this.thickness, effectiveDepth);
+    }
+  }
+
+  private updatePosition(): void {
+    const xPosition = calculatePanelCenterX(this.leftEndThickness, this.width);
+
+    if (this.cabinetType === 'base') {
+      if (this.isDrawerBase) {
+        // For Drawer Base cabinets - HORIZONTAL positioning
         this.group.position.set(
-          this.leftEndThickness + this.width / 2,                    // X: left end thickness + center of width
-          this.height - this.thickness / 2,                          // Y: height - thickness/2 (at the top)
-          0                                                           // Z: 0 (front edge of end panels)
+          xPosition,
+          this.height - this.thickness / 2,
+          0 // Front edge of end panels
         );
       } else {
-        // For Standard Base cabinets - VERTICAL positioning:
-        // Move in Z-axis by Carcass Depth (full depth)
-        // Move in Y-axis by half rail height (30mm from top)
-        // Width: Carcass Width - 2×CarcassThickness (X axis positive)
-        // Depth: CarcassThickness (Z axis)
-        
+        // For Standard Base cabinets - VERTICAL positioning
         this.group.position.set(
-          this.leftEndThickness + this.width / 2,                    // X: left end thickness + center of width
-          this.height - this.baseRailDepth / 2,                      // Y: height - baseRailDepth/2 (30mm from top)
-          this.depth                                                   // Z: full carcass depth
+          xPosition,
+          this.height - this.baseRailDepth / 2,
+          this.depth // Full carcass depth
         );
       }
     } else {
       // For other cabinet types, use standard horizontal positioning
-      const zPosition = this.backThickness + this.depth / 2;
-      
+      const effectiveDepth = calculateEffectiveDepth(this.depth, this.backThickness);
       this.group.position.set(
-        this.leftEndThickness + this.width / 2,                    // X: left end thickness + center of width
-        this.height - this.thickness / 2,                          // Y: height - thickness/2 (at the top)
-        zPosition                                                   // Z: calculated based on cabinet type
+        xPosition,
+        this.height - this.thickness / 2,
+        this.backThickness + effectiveDepth / 2
       );
     }
   }
@@ -133,35 +105,9 @@ export class CarcassTop {
     this.leftEndThickness = leftEndThickness;
     this.backThickness = backThickness;
 
-    // Update geometry based on cabinet type
-    let newGeometry: THREE.BoxGeometry;
-    
-    if (this.cabinetType === 'base') {
-      if (this.isDrawerBase) {
-        // For Drawer Base cabinets - HORIZONTAL positioning
-        const effectiveDepth = this.depth - this.backThickness;
-        newGeometry = new THREE.BoxGeometry(this.width, this.thickness, effectiveDepth);
-      } else {
-        // For Standard Base cabinets - VERTICAL positioning
-        newGeometry = new THREE.BoxGeometry(this.width, this.baseRailDepth, this.thickness);
-      }
-    } else {
-      // For other cabinet types - HORIZONTAL positioning
-      const effectiveDepth = this.depth - this.backThickness;
-      newGeometry = new THREE.BoxGeometry(this.width, this.thickness, effectiveDepth);
-    }
-    
-    this.mesh.geometry.dispose();
-    this.mesh.geometry = newGeometry;
-
-    // Update wireframe
-    this.group.children.forEach((child, index) => {
-      if (index === 1 && child instanceof THREE.LineSegments) { // Wireframe is second child
-        child.geometry.dispose();
-        const newEdges = new THREE.EdgesGeometry(newGeometry);
-        child.geometry = newEdges;
-      }
-    });
+    // Update geometry using utility function
+    const newGeometry = this.createGeometry();
+    updateMeshGeometry(this.mesh, this.group, newGeometry);
 
     // Update position
     this.updatePosition();
@@ -178,38 +124,11 @@ export class CarcassTop {
     if (baseRailDepth !== undefined) {
       this.baseRailDepth = baseRailDepth;
     }
-    
+
     // Recreate geometry with new Base Rail settings
-    let newGeometry: THREE.BoxGeometry;
-    
-    if (this.cabinetType === 'base') {
-      if (this.isDrawerBase) {
-        // For Drawer Base cabinets - HORIZONTAL positioning
-        const effectiveDepth = this.depth - this.backThickness;
-        newGeometry = new THREE.BoxGeometry(this.width, this.thickness, effectiveDepth);
-      } else {
-        // For Standard Base cabinets - VERTICAL positioning
-        newGeometry = new THREE.BoxGeometry(this.width, this.baseRailDepth, this.thickness);
-      }
-    } else {
-      // For other cabinet types - HORIZONTAL positioning
-      const effectiveDepth = this.depth - this.backThickness;
-      newGeometry = new THREE.BoxGeometry(this.width, this.thickness, effectiveDepth);
-    }
-    
-    // Update mesh geometry
-    this.mesh.geometry.dispose();
-    this.mesh.geometry = newGeometry;
-    
-    // Update wireframe
-    this.group.children.forEach((child, index) => {
-      if (index === 1 && child instanceof THREE.LineSegments) { // Wireframe is second child
-        child.geometry.dispose();
-        const newEdges = new THREE.EdgesGeometry(newGeometry);
-        child.geometry = newEdges;
-      }
-    });
-    
+    const newGeometry = this.createGeometry();
+    updateMeshGeometry(this.mesh, this.group, newGeometry);
+
     // Update position
     this.updatePosition();
   }
@@ -220,38 +139,11 @@ export class CarcassTop {
    */
   public updateDrawerBaseSetting(isDrawerBase: boolean): void {
     this.isDrawerBase = isDrawerBase;
-    
+
     // Recreate geometry based on new setting
-    let newGeometry: THREE.BoxGeometry;
-    
-    if (this.cabinetType === 'base') {
-      if (this.isDrawerBase) {
-        // For Drawer Base cabinets - HORIZONTAL positioning
-        const effectiveDepth = this.depth - this.backThickness;
-        newGeometry = new THREE.BoxGeometry(this.width, this.thickness, effectiveDepth);
-      } else {
-        // For Standard Base cabinets - VERTICAL positioning
-        newGeometry = new THREE.BoxGeometry(this.width, this.baseRailDepth, this.thickness);
-      }
-    } else {
-      // For other cabinet types - HORIZONTAL positioning
-      const effectiveDepth = this.depth - this.backThickness;
-      newGeometry = new THREE.BoxGeometry(this.width, this.thickness, effectiveDepth);
-    }
-    
-    // Update mesh geometry
-    this.mesh.geometry.dispose();
-    this.mesh.geometry = newGeometry;
-    
-    // Update wireframe
-    this.group.children.forEach((child, index) => {
-      if (index === 1 && child instanceof THREE.LineSegments) { // Wireframe is second child
-        child.geometry.dispose();
-        const newEdges = new THREE.EdgesGeometry(newGeometry);
-        child.geometry = newEdges;
-      }
-    });
-    
+    const newGeometry = this.createGeometry();
+    updateMeshGeometry(this.mesh, this.group, newGeometry);
+
     // Update position
     this.updatePosition();
   }
@@ -273,28 +165,6 @@ export class CarcassTop {
   }
 
   public dispose(): void {
-    this.mesh.geometry.dispose();
-    if (this.mesh.material) {
-      if (Array.isArray(this.mesh.material)) {
-        this.mesh.material.forEach(mat => mat.dispose());
-      } else {
-        this.mesh.material.dispose();
-      }
-    }
-
-    this.group.children.forEach(child => {
-      if (child instanceof THREE.Mesh || child instanceof THREE.LineSegments) {
-        if (child.geometry) {
-          child.geometry.dispose();
-        }
-        if (child.material) {
-          if (Array.isArray(child.material)) {
-            child.material.forEach((mat: THREE.Material) => mat.dispose());
-          } else {
-            child.material.dispose();
-          }
-        }
-      }
-    });
+    disposeCarcassPart(this.mesh, this.group);
   }
 }

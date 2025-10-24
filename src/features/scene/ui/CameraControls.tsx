@@ -1,8 +1,10 @@
 import React from 'react'
-import { Move } from 'lucide-react'
+import { Move, Focus } from 'lucide-react'
 
 type Props = {
   isDragging: boolean
+  cameraMode: 'constrained' | 'free'
+  onToggleMode: () => void
   onReset: () => void
   onClear: () => void
   onX: () => void
@@ -10,9 +12,17 @@ type Props = {
   onZ: () => void
 }
 
-export const CameraControls: React.FC<Props> = ({ isDragging, onReset, onClear, onX, onY, onZ }) => {
+export const CameraControls: React.FC<Props> = ({ isDragging, cameraMode, onToggleMode, onReset, onClear, onX, onY, onZ }) => {
   return (
     <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2 z-10">
+      <button
+        onClick={onToggleMode}
+        className={`${cameraMode === 'free' ? 'bg-purple-600 hover:bg-purple-700' : 'bg-teal-600 hover:bg-teal-700'} text-white p-3 rounded-full shadow-lg transition-colors duration-200`}
+        title={cameraMode === 'free' ? 'Free Camera Mode (Click to switch to Constrained)' : 'Constrained Camera Mode (Click to switch to Free Orbit)'}
+      >
+        <Focus size={24} />
+      </button>
+
       <button
         onClick={onReset}
         className={`${isDragging ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-600 hover:bg-gray-700'} text-white p-3 rounded-full shadow-lg transition-colors duration-200`}

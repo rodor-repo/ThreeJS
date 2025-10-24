@@ -1,13 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
-import type { CarcassDimensions, CarcassMaterial, CarcassMaterialData, DoorMaterial, DoorMaterialData } from '@/features/carcass'
-import { useProductPanelState } from '../../cabinets/hooks/useProductPanelState'
-import ProductPanelView from './ProductPanelView'
-import type { ProductPanelProps } from './productPanel.types'
-import _ from 'lodash'
-import { useQuery } from '@tanstack/react-query'
-import { getProductData, type MaterialOptionsResponse, type DefaultMaterialSelections } from '@/server/getProductData'
 import { calculateWsProductPrice, type CalculatePriceRequest } from '@/server/calculateWsProductPrice'
+import { getProductData, type DefaultMaterialSelections, type MaterialOptionsResponse } from '@/server/getProductData'
 import { GDThreeJsType } from '@/types/erpTypes'
+import { useQuery } from '@tanstack/react-query'
+import _ from 'lodash'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
+import type { ProductPanelProps } from './productPanel.types'
 
 interface LocalProductPanelProps extends ProductPanelProps { }
 

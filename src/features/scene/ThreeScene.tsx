@@ -29,6 +29,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
   const [showModal, setShowModal] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [zoomLevel, setZoomLevel] = useState(1.5)
+  const [cameraMode, setCameraMode] = useState<'constrained' | 'free'>('constrained')
 
   const {
     sceneRef,
@@ -57,12 +58,22 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     isDragging: false,
     dragStart: { x: 0, y: 0 },
     cameraStart: { x: 0, y: 0 },
-    zoomLevel
+    zoomLevel,
+    // Spherical coordinates for orbit camera
+    orbitRadius: wallDimensions.length * 1.5,
+    orbitTheta: 0, // horizontal angle
+    orbitPhi: Math.PI / 3, // vertical angle from top
+    orbitTarget: { // Point camera is looking at
+      x: wallDimensions.length / 2,
+      y: wallDimensions.height / 2,
+      z: 0
+    }
   })
   const cameraDrag = useCameraDrag(
     cameraRef,
     wallDimensions,
     isMenuOpen || false,
+    cameraMode,
     dragState,
     next => {
       setDragState(prev => ({ ...prev, ...next }))
@@ -74,6 +85,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     cameraRef,
     wallDimensions,
     isMenuOpen || false,
+    cameraMode,
     cabinets,
     selectedCabinet,
     setSelectedCabinet,
@@ -203,11 +215,13 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
       {/* Camera Movement Control */}
       <CameraControls
         isDragging={isDragging}
+        cameraMode={cameraMode}
+        onToggleMode={() => setCameraMode(prev => prev === 'constrained' ? 'free' : 'constrained')}
         onReset={resetCameraPosition}
         onClear={clearCabinets}
-        onX={setCameraXView}
-        onY={setCameraYView}
-        onZ={setCameraZView}
+        onX={() => { setCameraMode('constrained'); setCameraXView(); }}
+        onY={() => { setCameraMode('constrained'); setCameraYView(); }}
+        onZ={() => { setCameraMode('constrained'); setCameraZView(); }}
       />
 
       {/* Camera Movement Instructions */}
@@ -216,9 +230,14 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
           Menu Open • Camera controls disabled
         </div>
       )}
-      {isDragging && !isMenuOpen && (
-        <div className="absolute top-16 left-1/2 transform -translate-x-1/2 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg text-sm z-10">
-          3D View: Dragging • Use wheel to zoom • X/Y/Z for orthographic views
+      {!isMenuOpen && cameraMode === 'constrained' && (
+        <div className="absolute top-16 left-1/2 transform -translate-x-1/2 bg-gray-600 text-white px-4 py-2 rounded-lg shadow-lg text-sm z-10">
+          Constrained Mode • Drag to pan • Wheel to zoom • Right-click cabinet to select
+        </div>
+      )}
+      {!isMenuOpen && cameraMode === 'free' && (
+        <div className="absolute top-16 left-1/2 transform -translate-x-1/2 bg-purple-600 text-white px-4 py-2 rounded-lg shadow-lg text-sm z-10">
+          Free Mode • Drag to rotate • Right-drag to pan • Shift+click cabinets
         </div>
       )}
 

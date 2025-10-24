@@ -8,12 +8,15 @@ type CameraDragAPI = {
   end: () => void
   wheel: (deltaY: number) => void
   middleClick: () => void
+  startPan: (x: number, y: number) => void
+  movePan: (x: number, y: number) => void
 }
 
 export const useSceneInteractions = (
   cameraRef: React.MutableRefObject<THREE.PerspectiveCamera | null>,
   wallDimensions: WallDimensions,
   isMenuOpen: boolean,
+  cameraMode: 'constrained' | 'free',
   cabinets: CabinetData[],
   selectedCabinet: CabinetData | null,
   setSelectedCabinet: (c: CabinetData | null) => void,
@@ -23,6 +26,7 @@ export const useSceneInteractions = (
 ) => {
   const [isDraggingCabinet, setIsDraggingCabinet] = useState(false)
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
+  const [isPanningCamera, setIsPanningCamera] = useState(false)
 
   const isEventOnProductPanel = useCallback((target: EventTarget | null) => {
     if (!target) return false
@@ -106,6 +110,8 @@ export const useSceneInteractions = (
     const handleMouseMove = (event: MouseEvent) => {
       if (isDraggingCabinet) {
         moveCabinetWithMouse(event)
+      } else if (isPanningCamera) {
+        cameraDrag.movePan(event.clientX, event.clientY)
       } else if (cameraRef.current) {
         cameraDrag.move(event.clientX, event.clientY)
       }
@@ -114,10 +120,22 @@ export const useSceneInteractions = (
     const handleMouseDown = (event: MouseEvent) => {
       if (isMenuOpen) {
         setIsDraggingCabinet(false)
+        setIsPanningCamera(false)
         return
       }
       if (isEventOnProductPanel(event.target)) return
+
+      const hasModifier = event.shiftKey || event.ctrlKey
+
       if (event.button === 0 && cameraRef.current) {
+        // Left click
+        if (cameraMode === 'free' && !hasModifier) {
+          // Free mode without modifier: start orbit rotation
+          cameraDrag.startDrag(event.clientX, event.clientY)
+          return
+        }
+
+        // Constrained mode OR free mode with modifier: handle cabinet interaction
         if (
           selectedCabinet &&
           isMouseOverSelectedCabinet(event.clientX, event.clientY)
@@ -126,7 +144,8 @@ export const useSceneInteractions = (
           setDragStart({ x: event.clientX, y: event.clientY })
           return
         }
-        // close panel if clicking empty
+
+        // Check for cabinet selection/deselection
         const mouse = new THREE.Vector2()
         mouse.x = (event.clientX / window.innerWidth) * 2 - 1
         mouse.y = -(event.clientY / window.innerHeight) * 2 + 1
@@ -139,14 +158,50 @@ export const useSceneInteractions = (
           })
         })
         const intersects = raycaster.intersectObjects(cabinetMeshes)
+
+        if (cameraMode === 'free' && hasModifier && intersects.length > 0) {
+          // Free mode with modifier: select cabinet
+          const intersectedMesh = intersects[0].object
+          let selected: CabinetData | null = null
+          for (const cab of cabinets) {
+            let found = false
+            cab.group.traverse((child) => {
+              if (child === intersectedMesh) found = true
+            })
+            if (found) {
+              selected = cab
+              break
+            }
+          }
+          if (selected) {
+            setSelectedCabinet(selected)
+            setShowProductPanel(true)
+          }
+          return
+        }
+
         if (intersects.length === 0) {
           setShowProductPanel(false)
           setSelectedCabinet(null)
         }
+
         setIsDraggingCabinet(false)
-        cameraDrag.startDrag(event.clientX, event.clientY)
+
+        if (cameraMode === 'constrained') {
+          cameraDrag.startDrag(event.clientX, event.clientY)
+        }
       } else if (event.button === 2 && cameraRef.current) {
+        // Right click
         event.preventDefault()
+
+        if (cameraMode === 'free' && !hasModifier) {
+          // Free mode without modifier: start camera pan
+          setIsPanningCamera(true)
+          cameraDrag.startPan(event.clientX, event.clientY)
+          return
+        }
+
+        // Constrained mode OR free mode with modifier: select cabinet
         const mouse = new THREE.Vector2()
         mouse.x = (event.clientX / window.innerWidth) * 2 - 1
         mouse.y = -(event.clientY / window.innerHeight) * 2 + 1
@@ -187,6 +242,9 @@ export const useSceneInteractions = (
       if (event.button === 0) {
         cameraDrag.end()
         setIsDraggingCabinet(false)
+      } else if (event.button === 2) {
+        cameraDrag.end()
+        setIsPanningCamera(false)
       }
     }
 
@@ -228,8 +286,10 @@ export const useSceneInteractions = (
   }, [
     cameraRef,
     cameraDrag,
+    cameraMode,
     cabinets,
     isMenuOpen,
+    isPanningCamera,
     isMouseOverSelectedCabinet,
     isEventOnProductPanel,
     moveCabinetWithMouse,

@@ -204,7 +204,8 @@ export class CarcassAssembly {
       this.cabinetType === "base" && this.config.drawerEnabled
 
     this.top = new CarcassTop({
-      depth: effectiveDepth,
+      // depth: effectiveDepth,
+      depth: this.dimensions.depth,
       width: panelWidth,
       thickness: this.getThickness(),
       height: this.dimensions.height,
@@ -482,7 +483,8 @@ export class CarcassAssembly {
 
     // Update top panel
     this.top.updateDimensions(
-      effectiveDepth,
+      // effectiveDepth,
+      this.dimensions.depth,
       panelWidth,
       thickness,
       thickness,

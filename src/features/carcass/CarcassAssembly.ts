@@ -25,6 +25,7 @@ import {
   distributeHeightEqually,
   validateTotalHeight,
   scaleHeightsProportionally,
+  redistributeRemainingHeight,
   clamp,
   approximatelyEqual,
   calculateRatio,
@@ -119,30 +120,17 @@ export class CarcassAssembly {
     this.createDoors()
 
     // Add all parts to the main group
-    this.group.add(this.leftEnd.group)
-    this.group.add(this.rightEnd.group)
-    this.group.add(this.back.group)
-    this.group.add(this.bottom.group)
-    this.group.add(this.top.group)
-
-    this.shelves.forEach((shelf) => {
-      this.group.add(shelf.group)
-    })
-
-    // Add legs for base and tall cabinets
-    this.legs.forEach((leg) => {
-      this.group.add(leg.group)
-    })
-
-    // Add drawers if enabled
-    this.drawers.forEach((drawer) => {
-      this.group.add(drawer.group)
-    })
-
-    // Add doors if enabled
-    this.doors.forEach((door) => {
-      this.group.add(door.group)
-    })
+    this.addPartsToGroup([
+      this.leftEnd,
+      this.rightEnd,
+      this.back,
+      this.bottom,
+      this.top,
+    ])
+    this.addPartsToGroup(this.shelves)
+    this.addPartsToGroup(this.legs)
+    this.addPartsToGroup(this.drawers)
+    this.addPartsToGroup(this.doors)
 
     // Position the entire carcass based on type
     this.positionCarcass()
@@ -154,7 +142,7 @@ export class CarcassAssembly {
     this.leftEnd = new CarcassEnd({
       height: this.dimensions.height,
       depth: this.dimensions.depth,
-      thickness: this.config.material.getThickness(),
+      thickness: this.getThickness(),
       position: "left",
       material: this.config.material.getMaterial(),
     })
@@ -164,7 +152,7 @@ export class CarcassAssembly {
     this.rightEnd = new CarcassEnd({
       height: this.dimensions.height,
       depth: this.dimensions.depth,
-      thickness: this.config.material.getThickness(),
+      thickness: this.getThickness(),
       position: "right",
       material: this.config.material.getMaterial(),
     })
@@ -172,58 +160,41 @@ export class CarcassAssembly {
     // Position the right end panel correctly using utility function
     const rightEndX = calculateRightEndXPosition(
       this.dimensions.width,
-      this.config.material.getThickness()
+      this.getThickness()
     )
     this.rightEnd.setXPosition(rightEndX)
   }
 
   private createBackPanel(): void {
     // Back: BackHeight= Height (Y Axes), BackWidth =Width - 2x Thickness (X Axes), BackThickness= Thickness (Z Axes)
-    const panelWidth = calculatePanelWidth(
-      this.dimensions.width,
-      this.config.material.getThickness()
-    )
+    const { panelWidth } = this.calculateCommonPanelDimensions()
 
     this.back = new CarcassBack({
       height: this.dimensions.height,
       width: panelWidth,
-      thickness: this.config.material.getThickness(),
-      leftEndThickness: this.config.material.getThickness(),
+      thickness: this.getThickness(),
+      leftEndThickness: this.getThickness(),
       material: this.config.material.getMaterial(),
     })
   }
 
   private createBottomPanel(): void {
     // Bottom: BottomHeight= Depth (Z Axes), BottomWidth =Width - 2x Thickness (X Axes), BottomThickness= Thickness (Y Axes)
-    const panelWidth = calculatePanelWidth(
-      this.dimensions.width,
-      this.config.material.getThickness()
-    )
-    const effectiveDepth = calculateEffectiveDepth(
-      this.dimensions.depth,
-      this.config.material.getThickness()
-    )
+    const { panelWidth, effectiveDepth } = this.calculateCommonPanelDimensions()
 
     this.bottom = new CarcassBottom({
       depth: effectiveDepth,
       width: panelWidth,
-      thickness: this.config.material.getThickness(),
-      leftEndThickness: this.config.material.getThickness(),
-      backThickness: this.config.material.getThickness(),
+      thickness: this.getThickness(),
+      leftEndThickness: this.getThickness(),
+      backThickness: this.getThickness(),
       material: this.config.material.getMaterial(),
     })
   }
 
   private createTopPanel(): void {
     // Top: TopHeight= Depth (Z Axes), TopWidth =Width - 2x Thickness (X Axes), TopThickness= Thickness (Y Axes)
-    const panelWidth = calculatePanelWidth(
-      this.dimensions.width,
-      this.config.material.getThickness()
-    )
-    const effectiveDepth = calculateEffectiveDepth(
-      this.dimensions.depth,
-      this.config.material.getThickness()
-    )
+    const { panelWidth, effectiveDepth } = this.calculateCommonPanelDimensions()
 
     // Get Base Rail depth from data using MaterialLoader
     const baseRailDepth = MaterialLoader.getBaseRailDepth(this.cabinetType)
@@ -235,10 +206,10 @@ export class CarcassAssembly {
     this.top = new CarcassTop({
       depth: effectiveDepth,
       width: panelWidth,
-      thickness: this.config.material.getThickness(),
+      thickness: this.getThickness(),
       height: this.dimensions.height,
-      leftEndThickness: this.config.material.getThickness(),
-      backThickness: this.config.material.getThickness(),
+      leftEndThickness: this.getThickness(),
+      backThickness: this.getThickness(),
       material: this.config.material.getMaterial(),
       cabinetType: this.cabinetType,
       baseRailDepth: baseRailDepth,
@@ -250,9 +221,9 @@ export class CarcassAssembly {
     this.shelves = []
 
     if (this.config.shelfCount > 0) {
-      const startHeight = this.config.material.getThickness() + 100 // Start above bottom panel
-      const endHeight =
-        this.dimensions.height - this.config.material.getThickness() - 100 // End below top panel
+      const thickness = this.getThickness()
+      const startHeight = thickness + 100 // Start above bottom panel
+      const endHeight = this.dimensions.height - thickness - 100 // End below top panel
 
       // Calculate shelf positions using utility function
       const shelfPositions = calculateShelfPositions(
@@ -263,24 +234,17 @@ export class CarcassAssembly {
       )
 
       // Calculate panel dimensions
-      const panelWidth = calculatePanelWidth(
-        this.dimensions.width,
-        this.config.material.getThickness()
-      )
-      const effectiveDepth = calculateEffectiveDepth(
-        this.dimensions.depth,
-        this.config.material.getThickness()
-      )
+      const { panelWidth, effectiveDepth } = this.calculateCommonPanelDimensions()
 
       // Create shelves at calculated positions
       shelfPositions.forEach((height) => {
         const shelf = new CarcassShelf({
           depth: effectiveDepth,
           width: panelWidth,
-          thickness: this.config.material.getThickness(),
+          thickness: thickness,
           height: height,
-          leftEndThickness: this.config.material.getThickness(),
-          backThickness: this.config.material.getThickness(),
+          leftEndThickness: thickness,
+          backThickness: thickness,
           material: this.config.material.getMaterial(),
         })
 
@@ -296,8 +260,6 @@ export class CarcassAssembly {
     if (this.cabinetType === "base" || this.cabinetType === "tall") {
       // Get leg height from data.js via MaterialLoader
       const legHeight = MaterialLoader.getLegHeight()
-      const panelWidth =
-        this.dimensions.width - this.config.material.getThickness() * 2
 
       // Create 4 legs at the corners
       const legPositions: Array<
@@ -311,7 +273,7 @@ export class CarcassAssembly {
           position: position,
           width: this.dimensions.width,
           depth: this.dimensions.depth,
-          thickness: this.config.material.getThickness(),
+          thickness: this.getThickness(),
           material: this.config.material.getMaterial(),
         })
 
@@ -416,7 +378,7 @@ export class CarcassAssembly {
           width: doorDimensions.width,
           height: doorDimensions.height,
           depth: doorDepth,
-          thickness: this.config.material.getThickness(),
+          thickness: this.getThickness(),
           material: this.config.doorMaterial!,
           position: "left",
           offset: 2, // 2mm clearance from carcass
@@ -432,7 +394,7 @@ export class CarcassAssembly {
           width: doorDimensions.width,
           height: doorDimensions.height,
           depth: doorDepth,
-          thickness: this.config.material.getThickness(),
+          thickness: this.getThickness(),
           material: this.config.doorMaterial!,
           position: "right",
           offset: 2, // 2mm clearance from carcass
@@ -450,7 +412,7 @@ export class CarcassAssembly {
           width: doorDimensions.width,
           height: doorDimensions.height,
           depth: doorDepth,
-          thickness: this.config.material.getThickness(),
+          thickness: this.getThickness(),
           material: this.config.doorMaterial!,
           position: "center",
           offset: 2, // 2mm clearance from carcass
@@ -476,62 +438,53 @@ export class CarcassAssembly {
   public updateDimensions(newDimensions: CarcassDimensions): void {
     this.dimensions = newDimensions
 
+    const thickness = this.getThickness()
+    const { panelWidth, effectiveDepth } = this.calculateCommonPanelDimensions()
+
     // Update all parts
     this.leftEnd.updateDimensions(
       this.dimensions.height,
       this.dimensions.depth,
-      this.config.material.getThickness()
+      thickness
     )
 
     this.rightEnd.updateDimensions(
       this.dimensions.height,
       this.dimensions.depth,
-      this.config.material.getThickness()
+      thickness
     )
 
     // Update right end position using utility function
     const rightEndX = calculateRightEndXPosition(
       this.dimensions.width,
-      this.config.material.getThickness()
+      thickness
     )
     this.rightEnd.setXPosition(rightEndX)
-
-    // Calculate panel width using utility function
-    const panelWidth = calculatePanelWidth(
-      this.dimensions.width,
-      this.config.material.getThickness()
-    )
 
     // Update back panel with corrected width: Width - (EndLThickness + EndRThickness)
     this.back.updateDimensions(
       this.dimensions.height,
       panelWidth, // Account for both end panels
-      this.config.material.getThickness(),
-      this.config.material.getThickness()
-    )
-
-    // Calculate effective depth using utility function
-    const effectiveDepth = calculateEffectiveDepth(
-      this.dimensions.depth,
-      this.config.material.getThickness()
+      thickness,
+      thickness
     )
 
     // Update bottom panel
     this.bottom.updateDimensions(
       effectiveDepth,
       panelWidth,
-      this.config.material.getThickness(),
-      this.config.material.getThickness(),
-      this.config.material.getThickness()
+      thickness,
+      thickness,
+      thickness
     )
 
     // Update top panel
     this.top.updateDimensions(
       effectiveDepth,
       panelWidth,
-      this.config.material.getThickness(),
-      this.config.material.getThickness(),
-      this.config.material.getThickness()
+      thickness,
+      thickness,
+      thickness
     )
     this.top.updateHeight(this.dimensions.height)
 
@@ -557,33 +510,21 @@ export class CarcassAssembly {
   public updateConfig(newConfig: Partial<CarcassConfig>): void {
     this.config = { ...this.config, ...newConfig }
 
-    // Store the current position before rebuilding
-    const currentX = this.group.position.x
-    const currentY = this.group.position.y
-    const currentZ = this.group.position.z
-
-    // Rebuild carcass with new configuration
-    this.dispose()
-    this.buildCarcass()
-
-    // Restore the position that was set when the cabinet was created
-    this.group.position.set(currentX, currentY, currentZ)
+    // Rebuild carcass with new configuration while preserving position
+    this.withPreservedPosition(() => {
+      this.dispose()
+      this.buildCarcass()
+    })
   }
 
   public updateMaterial(newMaterial: CarcassMaterial): void {
     this.config.material = newMaterial
 
-    // Store the current position before rebuilding
-    const currentX = this.group.position.x
-    const currentY = this.group.position.y
-    const currentZ = this.group.position.z
-
-    // Rebuild carcass with new material
-    this.dispose()
-    this.buildCarcass()
-
-    // Restore the position that was set when the cabinet was created
-    this.group.position.set(currentX, currentY, currentZ)
+    // Rebuild carcass with new material while preserving position
+    this.withPreservedPosition(() => {
+      this.dispose()
+      this.buildCarcass()
+    })
   }
 
   public updateMaterialProperties(
@@ -592,17 +533,11 @@ export class CarcassAssembly {
     // Update the material properties
     this.config.material.updateMaterial(materialChanges)
 
-    // Store the current position before rebuilding
-    const currentX = this.group.position.x
-    const currentY = this.group.position.y
-    const currentZ = this.group.position.z
-
-    // Rebuild carcass with updated material properties
-    this.dispose()
-    this.buildCarcass()
-
-    // Restore the position that was set when the cabinet was created
-    this.group.position.set(currentX, currentY, currentZ)
+    // Rebuild carcass with updated material properties while preserving position
+    this.withPreservedPosition(() => {
+      this.dispose()
+      this.buildCarcass()
+    })
   }
 
   public updateKickerHeight(kickerHeight: number): void {
@@ -618,7 +553,7 @@ export class CarcassAssembly {
           kickerHeight,
           this.dimensions.width,
           this.dimensions.depth,
-          this.config.material.getThickness()
+          this.getThickness()
         )
       })
 
@@ -641,27 +576,24 @@ export class CarcassAssembly {
 
   private updateShelves(): void {
     // Remove existing shelves
-    this.shelves.forEach((shelf) => {
-      this.group.remove(shelf.group)
-      shelf.dispose()
-    })
+    this.removePartsFromGroup(this.shelves)
+    this.shelves.forEach((shelf) => shelf.dispose())
 
     // Create new shelves with updated thickness
     this.createShelves()
 
     // Add new shelves to group
-    this.shelves.forEach((shelf) => {
-      this.group.add(shelf.group)
-    })
+    this.addPartsToGroup(this.shelves)
   }
 
   private updateLegs(): void {
     // Only update legs for base and tall cabinets
     if (this.legs.length > 0) {
+      const thickness = this.getThickness()
       console.log(`Updating ${this.legs.length} legs with new dimensions:`, {
         width: this.dimensions.width,
         depth: this.dimensions.depth,
-        thickness: this.config.material.getThickness(),
+        thickness: thickness,
       })
 
       this.legs.forEach((leg, index) => {
@@ -675,7 +607,7 @@ export class CarcassAssembly {
           leg.height, // Keep current leg height
           this.dimensions.width,
           this.dimensions.depth,
-          this.config.material.getThickness()
+          thickness
         )
 
         console.log(`Leg ${index + 1} updated to:`, {
@@ -693,6 +625,7 @@ export class CarcassAssembly {
     if (this.config.doorEnabled && this.doors.length > 0) {
       const doorDepth = this.dimensions.depth
       const doorGap = categoriesData.doorSettings?.gap || 2
+      const thickness = this.getThickness()
 
       // Calculate door dimensions using utility function
       const doorDimensions = calculateDoorDimensions(
@@ -702,34 +635,16 @@ export class CarcassAssembly {
         this.config.doorCount || 1
       )
 
-      if (this.config.doorCount === 2 && this.doors.length === 2) {
-        // Update left door
-        this.doors[0].updateDimensions(
+      // Update all doors with common dimensions
+      this.doors.forEach((door) => {
+        door.updateDimensions(
           doorDimensions.width,
           doorDimensions.height,
           doorDepth,
-          this.config.material.getThickness()
+          thickness
         )
-        this.doors[0].updateCarcassWidth(this.dimensions.width)
-
-        // Update right door
-        this.doors[1].updateDimensions(
-          doorDimensions.width,
-          doorDimensions.height,
-          doorDepth,
-          this.config.material.getThickness()
-        )
-        this.doors[1].updateCarcassWidth(this.dimensions.width)
-      } else if (this.doors.length === 1) {
-        // Update single door
-        this.doors[0].updateDimensions(
-          doorDimensions.width,
-          doorDimensions.height,
-          doorDepth,
-          this.config.material.getThickness()
-        )
-        this.doors[0].updateCarcassWidth(this.dimensions.width)
-      }
+        door.updateCarcassWidth(this.dimensions.width)
+      })
     }
   }
 
@@ -758,16 +673,12 @@ export class CarcassAssembly {
       // Create doors if they don't exist
       if (this.doors.length === 0) {
         this.createDoors()
-        this.doors.forEach((door) => {
-          this.group.add(door.group)
-        })
+        this.addPartsToGroup(this.doors)
       }
     } else {
       // Remove doors from group and dispose them
-      this.doors.forEach((door) => {
-        this.group.remove(door.group)
-        door.dispose()
-      })
+      this.removePartsFromGroup(this.doors)
+      this.doors.forEach((door) => door.dispose())
       this.doors = []
     }
   }
@@ -784,17 +695,13 @@ export class CarcassAssembly {
     // Rebuild doors if they are enabled
     if (this.config.doorEnabled) {
       // Remove existing doors
-      this.doors.forEach((door) => {
-        this.group.remove(door.group)
-        door.dispose()
-      })
+      this.removePartsFromGroup(this.doors)
+      this.doors.forEach((door) => door.dispose())
       this.doors = []
 
       // Create new doors with current dimensions
       this.createDoors()
-      this.doors.forEach((door) => {
-        this.group.add(door.group)
-      })
+      this.addPartsToGroup(this.doors)
     }
   }
 
@@ -844,16 +751,12 @@ export class CarcassAssembly {
       if (this.drawers.length === 0) {
         this.createDrawers()
         // Add drawers to the main group
-        this.drawers.forEach((drawer) => {
-          this.group.add(drawer.group)
-        })
+        this.addPartsToGroup(this.drawers)
       }
     } else {
       // Remove drawers from the main group and dispose them
-      this.drawers.forEach((drawer) => {
-        this.group.remove(drawer.group)
-        drawer.dispose()
-      })
+      this.removePartsFromGroup(this.drawers)
+      this.drawers.forEach((drawer) => drawer.dispose())
       this.drawers = []
     }
   }
@@ -928,19 +831,15 @@ export class CarcassAssembly {
     }
 
     // Remove existing drawers
-    this.drawers.forEach((drawer) => {
-      this.group.remove(drawer.group)
-      drawer.dispose()
-    })
+    this.removePartsFromGroup(this.drawers)
+    this.drawers.forEach((drawer) => drawer.dispose())
     this.drawers = []
 
     // Create new drawers with the new quantity
     if (this.config.drawerEnabled) {
       this.createDrawers()
       // Add drawers to the main group
-      this.drawers.forEach((drawer) => {
-        this.group.add(drawer.group)
-      })
+      this.addPartsToGroup(this.drawers)
 
       // Ensure all drawer heights are properly set and distributed
       this.updateDrawerPositions()
@@ -1053,17 +952,22 @@ export class CarcassAssembly {
     const remainingHeight = totalCarcassHeight - totalExplicitHeight
 
     if (remainingHeight > 0 && unchangedDrawerCount > 0) {
-      // Distribute remaining height equally among unchanged drawers using utility function
-      const heightPerDrawer = roundToDecimal(
-        remainingHeight / unchangedDrawerCount
-      )
-
+      // Find indices of unchanged drawers (not changedIndex and not explicitly set)
+      const unchangedIndices: number[] = []
       for (let i = 0; i < totalDrawerQuantity; i++) {
         if (i !== changedIndex && !this.config.drawerHeights[i]) {
-          this.config.drawerHeights[i] = heightPerDrawer
+          unchangedIndices.push(i)
         }
       }
 
+      // Use utility function to redistribute remaining height among unchanged drawers
+      this.config.drawerHeights = redistributeRemainingHeight(
+        this.config.drawerHeights,
+        unchangedIndices,
+        remainingHeight
+      )
+
+      const heightPerDrawer = this.config.drawerHeights[unchangedIndices[0]]
       console.log(
         `Redistributed ${roundToDecimal(
           remainingHeight
@@ -1274,7 +1178,72 @@ export class CarcassAssembly {
     }
   }
 
-  // Static factory methods for different cabinet types
+  // ========== Private Helper Methods ==========
+
+  /**
+   * Get material thickness - centralized getter
+   */
+  private getThickness(): number {
+    return this.config.material.getThickness()
+  }
+
+  /**
+   * Calculate common panel dimensions used throughout the class
+   * @returns Object containing panelWidth and effectiveDepth
+   */
+  private calculateCommonPanelDimensions(): {
+    panelWidth: number
+    effectiveDepth: number
+  } {
+    const panelWidth = calculatePanelWidth(
+      this.dimensions.width,
+      this.getThickness()
+    )
+    const effectiveDepth = calculateEffectiveDepth(
+      this.dimensions.depth,
+      this.getThickness()
+    )
+    return { panelWidth, effectiveDepth }
+  }
+
+  /**
+   * Execute a callback while preserving the group's position
+   * Useful for rebuild operations that need to maintain position
+   */
+  private withPreservedPosition(callback: () => void): void {
+    const { x, y, z } = this.group.position
+    callback()
+    this.group.position.set(x, y, z)
+  }
+
+  /**
+   * Add part(s) to the main group
+   * @param parts Single part or array of parts with 'group' property
+   */
+  private addPartsToGroup(
+    parts: Array<{ group: THREE.Group }> | { group: THREE.Group }
+  ): void {
+    const partsArray = Array.isArray(parts) ? parts : [parts]
+    partsArray.forEach((part) => {
+      this.group.add(part.group)
+    })
+  }
+
+  /**
+   * Remove part(s) from the main group
+   * @param parts Single part or array of parts with 'group' property
+   */
+  private removePartsFromGroup(
+    parts: Array<{ group: THREE.Group }> | { group: THREE.Group }
+  ): void {
+    const partsArray = Array.isArray(parts) ? parts : [parts]
+    partsArray.forEach((part) => {
+      this.group.remove(part.group)
+    })
+  }
+
+  // ========== Static Factory Methods ==========
+
   static createTopCabinet(
     dimensions: CarcassDimensions,
     config?: Partial<CarcassConfig>

@@ -70,6 +70,7 @@ export class CarcassTop {
 
   private updatePosition(): void {
     const xPosition = calculatePanelCenterX(this.leftEndThickness, this.width);
+      const effectiveDepth = calculateEffectiveDepth(this.depth, this.backThickness);
 
     if (this.cabinetType === 'base') {
       if (this.isDrawerBase) {
@@ -77,7 +78,8 @@ export class CarcassTop {
         this.group.position.set(
           xPosition,
           this.height - this.thickness / 2,
-          0 // Front edge of end panels
+          // 0 // Front edge of end panels
+        this.backThickness + effectiveDepth / 2
         );
       } else {
         // For Standard Base cabinets - VERTICAL positioning
@@ -89,7 +91,6 @@ export class CarcassTop {
       }
     } else {
       // For other cabinet types, use standard horizontal positioning
-      const effectiveDepth = calculateEffectiveDepth(this.depth, this.backThickness);
       this.group.position.set(
         xPosition,
         this.height - this.thickness / 2,

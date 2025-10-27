@@ -182,6 +182,15 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySele
       name: 'Standard',
       dimensions: defaultDims
     }
+
+    const designId = wsProducts?.products[productId]?.designId
+    const designFeatures = wsProducts?.designs[designId ?? ""]?.features3D
+
+    if (designFeatures?.includes("drawer")) {
+      demoSub.id = 'drawer'
+      demoSub.name = 'Drawer'
+    }
+
     onSubcategorySelect?.(demoCategory, demoSub, productId)
     // Close menus for responsiveness, like the previous behavior
     setShowSubmenu(false)
@@ -295,15 +304,13 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySele
                           key={category.id}
                           onClick={() => isEnabled && handleCategorySelect(category)}
                           disabled={!isEnabled}
-                          className={`w-full p-4 rounded-lg border-2 transition-all duration-150 ${
-                            isEnabled
-                              ? `hover:shadow-md ${
-                                  selectedCategory?.id === category.id
-                                    ? 'border-blue-500 bg-blue-50 shadow-md'
-                                    : 'border-gray-200 hover:border-gray-300'
-                                }`
+                          className={`w-full p-4 rounded-lg border-2 transition-all duration-150 ${isEnabled
+                              ? `hover:shadow-md ${selectedCategory?.id === category.id
+                                ? 'border-blue-500 bg-blue-50 shadow-md'
+                                : 'border-gray-200 hover:border-gray-300'
+                              }`
                               : 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
-                          }`}
+                            }`}
                           whileHover={isEnabled ? { scale: 1.01 } : {}}
                           whileTap={isEnabled ? { scale: 0.99 } : {}}
                         >
@@ -376,11 +383,10 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySele
                             key={subcategory.id}
                             onClick={() => isEnabled && openDesignsForSubcategory(subcategory)}
                             disabled={!isEnabled}
-                            className={`w-full p-4 rounded-lg border-2 transition-all duration-150 ${
-                              isEnabled
+                            className={`w-full p-4 rounded-lg border-2 transition-all duration-150 ${isEnabled
                                 ? 'border-gray-200 hover:border-gray-300 hover:shadow-md hover:bg-gray-50'
                                 : 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
-                            }`}
+                              }`}
                             whileHover={isEnabled ? { scale: 1.01 } : {}}
                             whileTap={isEnabled ? { scale: 0.99 } : {}}
                           >

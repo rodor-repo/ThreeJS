@@ -1103,7 +1103,11 @@ export class CarcassAssembly {
 
       // Always update drawer dimensions to ensure consistency
       const endPanelThickness = this.config.material.getPanelThickness()
-      const drawerWidth = this.dimensions.width - endPanelThickness * 2
+      // const drawerWidth = this.dimensions.width - endPanelThickness * 2
+      const drawerWidth = calculateDrawerWidth(
+        this.dimensions.width,
+        endPanelThickness
+      )
 
       drawer.updateDimensions(drawerWidth, drawerHeight, this.dimensions.depth)
 

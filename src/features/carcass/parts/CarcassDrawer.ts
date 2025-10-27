@@ -1,5 +1,6 @@
 import * as THREE from "three"
 import { CarcassMaterial } from "../Material"
+import { DRAWER_GAP } from "../utils/carcass-dimension-utils"
 
 export interface DrawerFrontProps {
   width: number // Width of the drawer front (X-axis) - matches carcass width
@@ -87,7 +88,7 @@ export class CarcassDrawer {
     // So drawer should be centered in the remaining space
     // Position = endPanelThickness + (drawerWidth / 2)
     const endPanelThickness = this.material.getPanelThickness()
-    const xPosition = endPanelThickness + this.width / 2
+    const xPosition = DRAWER_GAP + this.width / 2
 
     // Y position: adjust for carcass position in scene
     // Add carcassHeight/2 to move up to correct position
@@ -97,7 +98,7 @@ export class CarcassDrawer {
     // The carcass extends from z=0 to z=depth
     // We want the drawer front to be at the front edge (z=0)
     // But we need to account for the carcass depth position in the scene
-    const zPosition = this.depth
+    const zPosition = this.depth + this.material.getPanelThickness() / 2
 
     this.group.position.set(xPosition, adjustedYPosition, zPosition)
   }
@@ -123,7 +124,7 @@ export class CarcassDrawer {
     // So drawer should be centered in the remaining space
     // Position = endPanelThickness + (drawerWidth / 2)
     const endPanelThickness = this.material.getPanelThickness()
-    const xPosition = endPanelThickness + this.width / 2
+    const xPosition = DRAWER_GAP + this.width / 2
 
     // Y position: adjust for carcass position in scene
     // Add carcassHeight/2 to move up to correct position
@@ -133,7 +134,7 @@ export class CarcassDrawer {
     // The carcass extends from z=0 to z=depth
     // We want the drawer front to be at the front edge (z=0)
     // But we need to account for the carcass depth position in the scene
-    const zPosition = this.depth
+    const zPosition = this.depth + this.material.getPanelThickness() / 2
 
     this.group.position.set(xPosition, adjustedYPosition, zPosition)
   }

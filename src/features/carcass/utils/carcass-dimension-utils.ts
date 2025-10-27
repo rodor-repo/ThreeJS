@@ -1,5 +1,7 @@
 import type { CabinetType } from "../CarcassAssembly"
 
+export const DRAWER_GAP = 2
+
 /**
  * Calculates the panel width that fits between two end panels
  * Formula: totalWidth - (2 × thickness)
@@ -111,7 +113,7 @@ export function calculateDrawerWidth(
   carcassWidth: number,
   endPanelThickness: number
 ): number {
-  return carcassWidth - endPanelThickness * 2
+  return carcassWidth - DRAWER_GAP * 2
 }
 
 /**

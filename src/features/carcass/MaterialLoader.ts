@@ -1,5 +1,5 @@
 import { CarcassMaterial, CarcassMaterialData } from "./Material"
-import { categoriesData } from "../../components/categoriesData"
+// import { categoriesData } from "../../components/categoriesData"
 
 export class MaterialLoader {
   /**
@@ -10,7 +10,8 @@ export class MaterialLoader {
   static loadMaterialById(materialId: string): CarcassMaterial | null {
     try {
       // Access the carcassMaterials array from the imported data
-      const materials = categoriesData.carcassMaterials || []
+      // const materials = categoriesData.carcassMaterials || []
+      const materials: any[] = []
 
       const materialData = materials.find((mat: any) => mat.id === materialId)
 
@@ -34,7 +35,8 @@ export class MaterialLoader {
    */
   static getAvailableMaterialIds(): string[] {
     try {
-      const materials = categoriesData.carcassMaterials || []
+      // const materials = categoriesData.carcassMaterials || []
+      const materials: any[] = []
       return materials.map((mat: any) => mat.id)
     } catch (error) {
       console.error("Error getting material IDs:", error)
@@ -48,7 +50,8 @@ export class MaterialLoader {
    */
   static getAllMaterials(): CarcassMaterial[] {
     try {
-      const materials = categoriesData.carcassMaterials || []
+      // const materials = categoriesData.carcassMaterials || []
+      const materials: any[] = []
       return materials.map((mat: any) =>
         CarcassMaterial.fromData(mat as CarcassMaterialData)
       )
@@ -65,7 +68,8 @@ export class MaterialLoader {
    */
   static materialExists(materialId: string): boolean {
     try {
-      const materials = categoriesData.carcassMaterials || []
+      // const materials = categoriesData.carcassMaterials || []
+      const materials: any[] = []
       return materials.some((mat: any) => mat.id === materialId)
     } catch (error) {
       console.error("Error checking material existence:", error)
@@ -82,7 +86,8 @@ export class MaterialLoader {
     try {
       if (cabinetType === "base") {
         // Get Base Rail depth from data, fallback to default
-        const baseRailSetting = categoriesData.baseRailSetting?.default || 60
+        // const baseRailSetting = categoriesData.baseRailSetting?.default || 60
+        const baseRailSetting = 60
         return baseRailSetting
       }
       // For non-base cabinets, return 0 (no Base Rail)
@@ -100,8 +105,8 @@ export class MaterialLoader {
   static getLegHeight(): number {
     try {
       // Get leg height from mutable data (runtime changes) or fallback to static data
-      const legHeight =
-        this.mutableData.legHeight || categoriesData.legSettings?.default || 100
+      const legHeight = 100
+      // this.mutableData.legHeight || categoriesData.legSettings?.default || 100
       console.log("Getting leg height:", legHeight)
       return legHeight
     } catch (error) {

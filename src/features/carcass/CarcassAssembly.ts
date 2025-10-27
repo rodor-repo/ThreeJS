@@ -10,7 +10,7 @@ import { CarcassDrawer } from "./parts/CarcassDrawer"
 import { CarcassMaterial, CarcassMaterialData } from "./Material"
 import { DoorMaterial } from "./DoorMaterial"
 import { MaterialLoader } from "./MaterialLoader"
-import { categoriesData } from "../../components/categoriesData"
+// import { categoriesData } from "../../components/categoriesData"
 import {
   calculatePanelWidth,
   calculateEffectiveDepth,
@@ -234,7 +234,8 @@ export class CarcassAssembly {
       )
 
       // Calculate panel dimensions
-      const { panelWidth, effectiveDepth } = this.calculateCommonPanelDimensions()
+      const { panelWidth, effectiveDepth } =
+        this.calculateCommonPanelDimensions()
 
       // Create shelves at calculated positions
       shelfPositions.forEach((height) => {
@@ -360,7 +361,8 @@ export class CarcassAssembly {
       const doorDepth = this.dimensions.depth
 
       // Get door gap from data.js
-      const doorGap = categoriesData.doorSettings?.gap || 2
+      // const doorGap = categoriesData.doorSettings?.gap || 2
+      const doorGap = 2
 
       // Calculate door dimensions using utility function
       const doorDimensions = calculateDoorDimensions(
@@ -624,7 +626,7 @@ export class CarcassAssembly {
     // Only update doors if they are enabled
     if (this.config.doorEnabled && this.doors.length > 0) {
       const doorDepth = this.dimensions.depth
-      const doorGap = categoriesData.doorSettings?.gap || 2
+      const doorGap = 2
       const thickness = this.getThickness()
 
       // Calculate door dimensions using utility function

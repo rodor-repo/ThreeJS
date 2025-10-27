@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { categoriesData } from "@/components/categoriesData"
+// import { categoriesData } from "@/components/categoriesData"
 import type { Group } from "three"
 import type { CarcassDimensions, CarcassMaterialData } from "@/features/carcass"
 import type {
@@ -180,10 +180,10 @@ export const useProductPanelState = ({
         width: { min: 200, max: 1200, default: 600 },
         depth: { min: 200, max: 800, default: 600 },
       }
-    for (const category of categoriesData.categories) {
-      const sub = category.subcategories.find((s) => s.id === subcategoryId)
-      if (sub) return sub.dimensions
-    }
+    // for (const category of categoriesData.categories) {
+    //   const sub = category.subcategories.find((s) => s.id === subcategoryId)
+    //   if (sub) return sub.dimensions
+    // }
     return {
       height: { min: 300, max: 3000, default: 720 },
       width: { min: 200, max: 1200, default: 600 },
@@ -236,7 +236,8 @@ export const useProductPanelState = ({
           selectedCabinet.cabinetType === "base" ||
           selectedCabinet.cabinetType === "tall"
         ) {
-          const currentKickerHeight = categoriesData.legSettings?.default || 100
+          // const currentKickerHeight = categoriesData.legSettings?.default || 100
+          const currentKickerHeight = 100
           setKickerHeight(currentKickerHeight)
         }
         setDoorEnabled(selectedCabinet.doorEnabled || false)

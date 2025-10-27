@@ -13,7 +13,7 @@ const DEFAULT_WOOD_MATERIAL_CONFIG = {
  * Creates a mesh with shadow casting enabled
  */
 export function createMesh(
-  geometry: THREE.BoxGeometry,
+  geometry: THREE.BufferGeometry,
   material?: THREE.Material
 ): THREE.Mesh {
   const meshMaterial =
@@ -29,7 +29,7 @@ export function createMesh(
 /**
  * Creates a wireframe for a given geometry
  */
-export function createWireframe(geometry: THREE.BoxGeometry): THREE.LineSegments {
+export function createWireframe(geometry: THREE.BufferGeometry): THREE.LineSegments {
   const edges = new THREE.EdgesGeometry(geometry)
   const lineMaterial = new THREE.LineBasicMaterial({ color: 0x333333 })
   return new THREE.LineSegments(edges, lineMaterial)
@@ -39,7 +39,7 @@ export function createWireframe(geometry: THREE.BoxGeometry): THREE.LineSegments
  * Creates a group containing a mesh and its wireframe
  */
 export function createMeshGroup(
-  geometry: THREE.BoxGeometry,
+  geometry: THREE.BufferGeometry,
   material?: THREE.Material
 ): { group: THREE.Group; mesh: THREE.Mesh; wireframe: THREE.LineSegments } {
   const mesh = createMesh(geometry, material)
@@ -59,7 +59,7 @@ export function createMeshGroup(
 export function updateMeshGeometry(
   mesh: THREE.Mesh,
   group: THREE.Group,
-  newGeometry: THREE.BoxGeometry
+  newGeometry: THREE.BufferGeometry
 ): void {
   // Dispose old mesh geometry
   mesh.geometry.dispose()

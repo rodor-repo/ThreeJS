@@ -3,6 +3,8 @@
  * Handles all calculations, validation, and redistribution of drawer heights
  */
 
+import { roundToDecimal, distributeHeightEqually, clamp } from '../utils/carcass-math-utils';
+
 export interface DrawerHeightConfig {
     carcassHeight: number;
     drawerQuantity: number;
@@ -31,9 +33,7 @@ export interface DrawerHeightConfig {
      */
     static calculateOptimalHeights(carcassHeight: number, drawerQuantity: number): number[] {
       if (drawerQuantity <= 0) return [];
-      
-      const height = Math.round((carcassHeight / drawerQuantity) * Math.pow(10, this.DECIMAL_PRECISION)) / Math.pow(10, this.DECIMAL_PRECISION);
-      return Array(drawerQuantity).fill(height);
+      return distributeHeightEqually(carcassHeight, drawerQuantity);
     }
   
     /**
@@ -64,8 +64,8 @@ export interface DrawerHeightConfig {
       
       if (remainingDrawers > 0 && remainingHeight > 0) {
         // Distribute remaining height equally among other drawers
-        const heightPerDrawer = Math.round((remainingHeight / remainingDrawers) * Math.pow(10, this.DECIMAL_PRECISION)) / Math.pow(10, this.DECIMAL_PRECISION);
-        
+        const heightPerDrawer = roundToDecimal(remainingHeight / remainingDrawers, this.DECIMAL_PRECISION);
+
         // Ensure minimum height for each drawer
         const finalHeightPerDrawer = Math.max(heightPerDrawer, this.MIN_DRAWER_HEIGHT);
         
@@ -150,8 +150,8 @@ export interface DrawerHeightConfig {
       }
       
       const scaleRatio = newCarcassHeight / oldCarcassHeight;
-      const scaledHeights = currentHeights.map(height => 
-        Math.round((height * scaleRatio) * Math.pow(10, this.DECIMAL_PRECISION)) / Math.pow(10, this.DECIMAL_PRECISION)
+      const scaledHeights = currentHeights.map(height =>
+        roundToDecimal(height * scaleRatio, this.DECIMAL_PRECISION)
       );
       
       // Validate total doesn't exceed new carcass height
@@ -204,13 +204,10 @@ export interface DrawerHeightConfig {
      */
     private static validateHeight(height: number, maxHeight: number): number {
       // Round to specified decimal precision
-      let validatedHeight = Math.round(height * Math.pow(10, this.DECIMAL_PRECISION)) / Math.pow(10, this.DECIMAL_PRECISION);
-      
+      const roundedHeight = roundToDecimal(height, this.DECIMAL_PRECISION);
+
       // Ensure within valid range
-      validatedHeight = Math.max(this.MIN_DRAWER_HEIGHT, validatedHeight);
-      validatedHeight = Math.min(maxHeight, validatedHeight);
-      
-      return validatedHeight;
+      return clamp(roundedHeight, this.MIN_DRAWER_HEIGHT, maxHeight);
     }
   
     /**
@@ -218,7 +215,7 @@ export interface DrawerHeightConfig {
      */
     static getProportionalHeight(carcassHeight: number, drawerQuantity: number): number {
       if (drawerQuantity <= 0) return 0;
-      return Math.round((carcassHeight / drawerQuantity) * Math.pow(10, this.DECIMAL_PRECISION)) / Math.pow(10, this.DECIMAL_PRECISION);
+      return roundToDecimal(carcassHeight / drawerQuantity, this.DECIMAL_PRECISION);
     }
   
     /**

@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { createMeshGroup, updateMeshGeometry, disposeCarcassPart } from '../utils/carcass-geometry-utils';
+import { calculatePanelCenterX, calculatePanelCenterZ } from '../utils/carcass-dimension-utils';
 
 export interface CarcassShelfProps {
   depth: number;       // Depth of the cabinet (Z Axes)
@@ -34,27 +36,10 @@ export class CarcassShelf {
     // Z-axis: depth
     const geometry = new THREE.BoxGeometry(this.width, this.thickness, this.depth);
 
-    // Use provided material or create default
-    const material = props.material || new THREE.MeshLambertMaterial({
-      color: 0xCD853F, // Lighter brown for shelves
-      transparent: true,
-      opacity: 0.8
-    });
-
-    // Create mesh
-    this.mesh = new THREE.Mesh(geometry, material);
-    this.mesh.castShadow = true;
-    this.mesh.receiveShadow = true;
-
-    // Create group to contain mesh and wireframe
-    this.group = new THREE.Group();
-    this.group.add(this.mesh);
-
-    // Add wireframe outline
-    const edges = new THREE.EdgesGeometry(geometry);
-    const lineMaterial = new THREE.LineBasicMaterial({ color: 0x333333 });
-    const wireframe = new THREE.LineSegments(edges, lineMaterial);
-    this.group.add(wireframe);
+    // Create mesh and wireframe group
+    const { group, mesh } = createMeshGroup(geometry, props.material);
+    this.group = group;
+    this.mesh = mesh;
 
     // Position the shelf according to new logic
     this.updatePosition();
@@ -66,9 +51,9 @@ export class CarcassShelf {
     // The shelf sits between the two ends at the specified height
     // Since End Left starts at (0,0,0), the shelf starts at (thickness,height,backThickness)
     this.group.position.set(
-      this.leftEndThickness + this.width / 2,              // X: left end thickness + center of width
+      calculatePanelCenterX(this.leftEndThickness, this.width),
       this.height,                                          // Y: at the specified height
-      this.backThickness + this.depth / 2                   // Z: back thickness + center of depth
+      calculatePanelCenterZ(this.backThickness, this.depth)
     );
   }
 
@@ -79,19 +64,9 @@ export class CarcassShelf {
     this.leftEndThickness = leftEndThickness;
     this.backThickness = backThickness;
 
-    // Update geometry
+    // Update geometry and wireframe
     const newGeometry = new THREE.BoxGeometry(this.width, this.thickness, this.depth);
-    this.mesh.geometry.dispose();
-    this.mesh.geometry = newGeometry;
-
-    // Update wireframe
-    this.group.children.forEach((child, index) => {
-      if (index === 1 && child instanceof THREE.LineSegments) { // Wireframe is second child
-        child.geometry.dispose();
-        const newEdges = new THREE.EdgesGeometry(newGeometry);
-        child.geometry = newEdges;
-      }
-    });
+    updateMeshGeometry(this.mesh, this.group, newGeometry);
 
     // Update position
     this.updatePosition();
@@ -104,28 +79,6 @@ export class CarcassShelf {
   }
 
   public dispose(): void {
-    this.mesh.geometry.dispose();
-    if (this.mesh.material) {
-      if (Array.isArray(this.mesh.material)) {
-        this.mesh.material.forEach(mat => mat.dispose());
-      } else {
-        this.mesh.material.dispose();
-      }
-    }
-
-    this.group.children.forEach(child => {
-      if (child instanceof THREE.Mesh || child instanceof THREE.LineSegments) {
-        if (child.geometry) {
-          child.geometry.dispose();
-        }
-        if (child.material) {
-          if (Array.isArray(child.material)) {
-            child.material.forEach((mat: THREE.Material) => mat.dispose());
-          } else {
-            child.material.dispose();
-          }
-        }
-      }
-    });
+    disposeCarcassPart(this.mesh, this.group);
   }
 }

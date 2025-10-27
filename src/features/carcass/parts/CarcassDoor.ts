@@ -1,5 +1,6 @@
 import * as THREE from "three"
 import { DoorMaterial } from "../DoorMaterial"
+import { createMeshGroup, updateMeshGeometry, disposeCarcassPart } from '../utils/carcass-geometry-utils'
 
 export interface CarcassDoorProps {
   width: number // Width of the door (X Axes) - matches carcass width
@@ -46,20 +47,10 @@ export class CarcassDoor {
       this.material.getThickness() // depth (door thickness)
     )
 
-    // Create mesh with door material
-    this.mesh = new THREE.Mesh(geometry, this.material.getMaterial())
-    this.mesh.castShadow = true
-    this.mesh.receiveShadow = true
-
-    // Create group to contain mesh and wireframe
-    this.group = new THREE.Group()
-    this.group.add(this.mesh)
-
-    // Add wireframe outline
-    const edges = new THREE.EdgesGeometry(geometry)
-    const lineMaterial = new THREE.LineBasicMaterial({ color: 0x333333 })
-    const wireframe = new THREE.LineSegments(edges, lineMaterial)
-    this.group.add(wireframe)
+    // Create mesh and wireframe group
+    const { group, mesh } = createMeshGroup(geometry, this.material.getMaterial())
+    this.group = group
+    this.mesh = mesh
 
     // Position the door at the front edge of the carcass
     this.updatePosition()
@@ -116,24 +107,14 @@ export class CarcassDoor {
     this.depth = depth
     this.thickness = thickness
 
-    // Create new geometry with updated dimensions
+    // Update geometry and wireframe
     const doorHeight = this.overhang ? this.height + 20 : this.height
     const newGeometry = new THREE.BoxGeometry(
       this.width,
       doorHeight,
       this.material.getThickness()
     )
-
-    // Dispose of old geometry and assign new one
-    this.mesh.geometry.dispose()
-    this.mesh.geometry = newGeometry
-
-    // Update wireframe
-    this.group.remove(this.group.children[1]) // Remove old wireframe
-    const edges = new THREE.EdgesGeometry(newGeometry)
-    const lineMaterial = new THREE.LineBasicMaterial({ color: 0x333333 })
-    const wireframe = new THREE.LineSegments(edges, lineMaterial)
-    this.group.add(wireframe)
+    updateMeshGeometry(this.mesh, this.group, newGeometry)
 
     // Update position
     this.updatePosition()
@@ -143,23 +124,13 @@ export class CarcassDoor {
     this.material = material
     this.mesh.material = material.getMaterial()
 
-    // Create new geometry with updated thickness
+    // Update geometry and wireframe with new thickness
     const newGeometry = new THREE.BoxGeometry(
       this.width,
       this.height,
       this.material.getThickness()
     )
-
-    // Dispose of old geometry and assign new one
-    this.mesh.geometry.dispose()
-    this.mesh.geometry = newGeometry
-
-    // Update wireframe
-    this.group.remove(this.group.children[1]) // Remove old wireframe
-    const edges = new THREE.EdgesGeometry(newGeometry)
-    const lineMaterial = new THREE.LineBasicMaterial({ color: 0x333333 })
-    const wireframe = new THREE.LineSegments(edges, lineMaterial)
-    this.group.add(wireframe)
+    updateMeshGeometry(this.mesh, this.group, newGeometry)
 
     // Update position
     this.updatePosition()
@@ -183,37 +154,21 @@ export class CarcassDoor {
   public updateOverhang(overhang: boolean): void {
     this.overhang = overhang
 
-    // Update geometry with new height
+    // Update geometry and wireframe with new height
     const doorHeight = this.overhang ? this.height + 20 : this.height
     const newGeometry = new THREE.BoxGeometry(
       this.width,
       doorHeight,
       this.material.getThickness()
     )
-
-    // Dispose of old geometry and assign new one
-    this.mesh.geometry.dispose()
-    this.mesh.geometry = newGeometry
-
-    // Update wireframe
-    this.group.remove(this.group.children[1]) // Remove old wireframe
-    const edges = new THREE.EdgesGeometry(newGeometry)
-    const lineMaterial = new THREE.LineBasicMaterial({ color: 0x333333 })
-    const wireframe = new THREE.LineSegments(edges, lineMaterial)
-    this.group.add(wireframe)
+    updateMeshGeometry(this.mesh, this.group, newGeometry)
 
     // Update position
     this.updatePosition()
   }
 
   public dispose(): void {
-    this.mesh.geometry.dispose()
+    disposeCarcassPart(this.mesh, this.group)
     this.material.dispose()
-    this.group.children.forEach((child) => {
-      if (child instanceof THREE.LineSegments) {
-        ;(child.geometry as THREE.EdgesGeometry).dispose()
-        ;(child.material as THREE.LineBasicMaterial).dispose()
-      }
-    })
   }
 }

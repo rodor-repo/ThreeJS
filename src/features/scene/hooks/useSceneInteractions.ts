@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useState } from "react"
 import * as THREE from "three"
 import type { CabinetData, WallDimensions } from "../types"
+import {
+  calculateSnapPosition,
+  getSnapGuides,
+  DEFAULT_SNAP_CONFIG,
+} from "../lib/snapUtils"
 
 type CameraDragAPI = {
   startDrag: (x: number, y: number) => void
@@ -22,7 +27,9 @@ export const useSceneInteractions = (
   setSelectedCabinet: (c: CabinetData | null) => void,
   showProductPanel: boolean,
   setShowProductPanel: (v: boolean) => void,
-  cameraDrag: CameraDragAPI
+  cameraDrag: CameraDragAPI,
+  updateSnapGuides: (guides: any[]) => void,
+  clearSnapGuides: () => void
 ) => {
   const [isDraggingCabinet, setIsDraggingCabinet] = useState(false)
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
@@ -63,6 +70,8 @@ export const useSceneInteractions = (
       const currentY = selectedCabinet.group.position.y
       let newX = currentX + worldDeltaX
       let newY = currentY + worldDeltaY
+
+      // Apply boundary clamping FIRST to get valid target position
       if (selectedCabinet.cabinetType === "top") {
         newX = Math.max(
           0,
@@ -86,8 +95,33 @@ export const useSceneInteractions = (
             newX
           )
         )
-        newY = currentY
+        newY = currentY // Base/tall cabinets stay on ground
       }
+
+      // Apply snap logic AFTER boundary clamping
+      const snapResult = calculateSnapPosition(
+        selectedCabinet,
+        newX,
+        newY,
+        cabinets,
+        DEFAULT_SNAP_CONFIG
+      )
+
+      // Use snapped position if snapping occurred
+      if (snapResult.snapped) {
+        console.log('Snap detected:', snapResult.activeSnapPoints.map(s => s.type))
+        newX = snapResult.position.x
+        newY = snapResult.position.y
+
+        // Update visual snap guides
+        const guides = getSnapGuides(snapResult)
+        console.log('Guides:', guides.map(g => `${g.type} at ${g.position.x ?? g.position.y}`))
+        updateSnapGuides(guides)
+      } else {
+        // Clear snap guides if not snapping
+        clearSnapGuides()
+      }
+
       selectedCabinet.group.position.set(
         newX,
         newY,
@@ -103,6 +137,9 @@ export const useSceneInteractions = (
       selectedCabinet,
       wallDimensions.height,
       wallDimensions.length,
+      cabinets,
+      updateSnapGuides,
+      clearSnapGuides,
     ]
   )
 
@@ -242,6 +279,8 @@ export const useSceneInteractions = (
       if (event.button === 0) {
         cameraDrag.end()
         setIsDraggingCabinet(false)
+        // Clear snap guides when drag ends
+        clearSnapGuides()
       } else if (event.button === 2) {
         cameraDrag.end()
         setIsPanningCamera(false)
@@ -297,6 +336,7 @@ export const useSceneInteractions = (
     setSelectedCabinet,
     setShowProductPanel,
     showProductPanel,
+    clearSnapGuides,
   ])
 
   return { isDraggingCabinet }

@@ -7,6 +7,7 @@ import { CabinetsInfoPanel } from '../cabinets/ui/CabinetsInfoPanel'
 import ProductPanel from '../cabinets/ui/ProductPanel'
 import { useCameraDrag } from './hooks/useCameraDrag'
 import { useSceneInteractions } from './hooks/useSceneInteractions'
+import { useSnapGuides } from './hooks/useSnapGuides'
 import { useThreeRenderer } from './hooks/useThreeRenderer'
 import type { Category, WallDimensions as WallDims } from './types'
 import { CameraControls } from './ui/CameraControls'
@@ -53,6 +54,9 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     clearCabinets
   } = useCabinets(sceneRef)
 
+  // Snap guides for visual feedback during cabinet dragging
+  const { updateSnapGuides, clearSnapGuides } = useSnapGuides(sceneRef, wallDimensions)
+
   // interactions hook wires global events and cabinet drag/select
   const [dragState, setDragState] = useState({
     isDragging: false,
@@ -91,7 +95,9 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     setSelectedCabinet,
     showProductPanel,
     setShowProductPanel,
-    cameraDrag
+    cameraDrag,
+    updateSnapGuides,
+    clearSnapGuides
   )
 
   // Handle category changes

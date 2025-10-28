@@ -25,7 +25,7 @@ const ProductPanel: React.FC<LocalProductPanelProps> = props => {
 export default ProductPanel
 
 // -------- Fetcher wrapper + Dynamic Dims-only variant driven by WsProduct --------
-const DynamicPanelWithQuery: React.FC<LocalProductPanelProps> = ({ isVisible, onClose, selectedCabinet, onDimensionsChange, onMaterialChange }) => {
+const DynamicPanelWithQuery: React.FC<LocalProductPanelProps> = ({ isVisible, onClose, selectedCabinet, onDimensionsChange, onMaterialChange, onOverhangDoorToggle }) => {
   const productId = selectedCabinet?.productId
   const { data, isLoading, isError } = useQuery({
     queryKey: ['productData', productId],
@@ -69,6 +69,7 @@ const DynamicPanelWithQuery: React.FC<LocalProductPanelProps> = ({ isVisible, on
       defaultMaterialSelections={defaultMaterialSelections}
       selectedCabinet={selectedCabinet}
       onDimensionsChange={onDimensionsChange}
+      onOverhangDoorToggle={onOverhangDoorToggle}
       onMaterialChange={onMaterialChange}
       loading={isLoading}
       error={isError}
@@ -78,7 +79,7 @@ const DynamicPanelWithQuery: React.FC<LocalProductPanelProps> = ({ isVisible, on
 
 type DynamicPanelProps = LocalProductPanelProps & { loading?: boolean, error?: boolean, materialOptions?: MaterialOptionsResponse, defaultMaterialSelections?: DefaultMaterialSelections, threeJsGDs: Record<GDThreeJsType, string[]> | undefined }
 
-const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProduct, materialOptions, defaultMaterialSelections, selectedCabinet, onDimensionsChange, onMaterialChange, loading, error, threeJsGDs }) => {
+const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProduct, materialOptions, defaultMaterialSelections, selectedCabinet, onDimensionsChange, onMaterialChange, loading, error, threeJsGDs, onOverhangDoorToggle }) => {
 
 
   const [isExpanded, setIsExpanded] = useState(true)
@@ -109,6 +110,7 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
   const widthGDIds = threeJsGDs?.["width"] || []
   const heightGDIds = threeJsGDs?.["height"] || []
   const depthGDIds = threeJsGDs?.["depth"] || []
+  const overhangDoorGDIds = threeJsGDs?.["doorOverhang"] || []
 
   const dimsList = useMemo(() => {
     const entries = Object.entries(wsProduct?.dims || {})
@@ -247,14 +249,17 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
     let width = selectedCabinet.dimensions.width
     let height = selectedCabinet.dimensions.height
     let depth = selectedCabinet.dimensions.depth
+    let overhangDoor = selectedCabinet.overhangDoor
     dimsList.forEach(([id, dimObj]) => {
       if (!dimObj.GDId) return
       const v = vals[id]
       if (widthGDIds.includes(dimObj.GDId)) width = toNum(v) || width
       if (heightGDIds.includes(dimObj.GDId)) height = toNum(v) || height
       if (depthGDIds.includes(dimObj.GDId)) depth = toNum(v) || depth
+      if (overhangDoorGDIds.includes(dimObj.GDId)) overhangDoor = v.toString().toLowerCase() === 'yes' || v === 1 || v === '1'
     })
     onDimensionsChange({ width, height, depth })
+    onOverhangDoorToggle?.(overhangDoor || false)
     console.log('[ProductPanel] Applied primary dims to 3D', { width, height, depth })
   }
 

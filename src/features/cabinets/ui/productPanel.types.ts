@@ -23,9 +23,11 @@ export interface SelectedCabinetSnapshot {
   drawerQuantity?: number
   drawerHeights?: number[]
   carcass?: any
+  cabinetId: string
 }
 
 export interface ProductPanelCallbacks {
+  onShelfCountChange?: (newCount: number) => void
   onDimensionsChange?: (dimensions: CarcassDimensions) => void
   onMaterialChange?: (material: Partial<CarcassMaterialData>) => void
   onKickerHeightChange?: (kickerHeight: number) => void

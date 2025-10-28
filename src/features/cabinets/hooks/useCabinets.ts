@@ -34,6 +34,7 @@ export const useCabinets = (
       sceneRef.current.add(data.group)
       setCabinets((prev) => [...prev, data])
       setCabinetCounter((prev) => prev + 1)
+      return data
     },
     [sceneRef, cabinetCounter]
   )

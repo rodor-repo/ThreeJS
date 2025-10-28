@@ -142,7 +142,8 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
       const cabinetType = legacyCategoryMap[type3D] || "base"
 
       // Create cabinet based on mapped cabinet type and subcategory
-      createCabinet(cabinetType, selectedSubcategory.subcategory.id, selectedProductId)
+      const cabinetData = createCabinet(cabinetType, selectedSubcategory.subcategory.id, selectedProductId)
+      if (cabinetData) setSelectedCabinet(cabinetData)
     }
   }, [selectedSubcategory, selectedProductId])
 
@@ -279,8 +280,12 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
           overhangDoor: selectedCabinet.carcass.config.overhangDoor,
           drawerEnabled: selectedCabinet.carcass.config.drawerEnabled,
           drawerQuantity: selectedCabinet.carcass.config.drawerQuantity,
-          drawerHeights: selectedCabinet.carcass.config.drawerHeights
+          drawerHeights: selectedCabinet.carcass.config.drawerHeights,
+          cabinetId: selectedCabinet.cabinetId
         } : null}
+
+        onShelfCountChange={(newCount: number) => { if (selectedCabinet) selectedCabinet.carcass.updateConfig({ shelfCount: newCount }); }}
+
         onDimensionsChange={(newDimensions) => {
           if (selectedCabinet) {
             // Update the carcass dimensions

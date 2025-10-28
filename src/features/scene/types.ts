@@ -21,4 +21,5 @@ export type CabinetData = {
   subcategoryId: string
   /** Optional webshop productId associated with this 3D object */
   productId?: string
+  cabinetId: string
 }

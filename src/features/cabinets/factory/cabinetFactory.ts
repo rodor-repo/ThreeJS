@@ -5,14 +5,7 @@ import {
   CarcassDimensions,
   CabinetType,
 } from "@/features/carcass"
-
-export type CabinetData = {
-  group: THREE.Group
-  carcass: CarcassAssembly
-  cabinetType: CabinetType
-  subcategoryId: string
-  productId?: string
-}
+import { CabinetData } from "@/features/scene/types"
 
 type Defaults = Record<CabinetType, CarcassDimensions>
 
@@ -90,12 +83,17 @@ export const createCabinet = (
   const spacing = opts?.spacing ?? 100
   carcass.group.position.x = index * (dimensions.width + spacing)
 
+  const cabinetId = `cabinet-${type}-${subcategoryId}-${
+    opts?.productId || "default"
+  }-${index}`
+
   return {
     group: carcass.group,
     carcass,
     cabinetType: type,
     subcategoryId,
     productId: opts?.productId,
+    cabinetId,
   }
 }
 

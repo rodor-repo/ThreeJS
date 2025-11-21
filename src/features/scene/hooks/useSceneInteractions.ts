@@ -6,6 +6,7 @@ import {
   getSnapGuides,
   DEFAULT_SNAP_CONFIG,
 } from "../lib/snapUtils"
+import type { ViewManager, ViewId } from '../../cabinets/ViewManager'
 
 type CameraDragAPI = {
   startDrag: (x: number, y: number) => void
@@ -29,16 +30,27 @@ export const useSceneInteractions = (
   setShowProductPanel: (v: boolean) => void,
   cameraDrag: CameraDragAPI,
   updateSnapGuides: (guides: any[]) => void,
-  clearSnapGuides: () => void
+  clearSnapGuides: () => void,
+  viewManager?: ViewManager
 ) => {
   const [isDraggingCabinet, setIsDraggingCabinet] = useState(false)
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
   const [isPanningCamera, setIsPanningCamera] = useState(false)
+  const [cabinetWithLockIcons, setCabinetWithLockIcons] = useState<CabinetData | null>(null)
 
   const isEventOnProductPanel = useCallback((target: EventTarget | null) => {
     if (!target) return false
     const el = target as HTMLElement
-    return !!(el.closest(".productPanel") || el.closest("[data-product-panel]"))
+    return !!(
+      el.closest(".productPanel") || 
+      el.closest("[data-product-panel]") ||
+      el.closest("[data-settings-drawer]") ||
+      el.closest("[data-wall-drawer]") ||
+      el.closest("[data-views-drawer]") ||
+      el.closest("[data-view-drawer]") ||
+      el.closest("[data-camera-controls]") ||
+      el.closest("button") // Also ignore all button clicks
+    )
   }, [])
 
   const isMouseOverSelectedCabinet = useCallback(
@@ -53,6 +65,56 @@ export const useSceneInteractions = (
       return intersects.length > 0
     },
     [cameraRef, selectedCabinet]
+  )
+
+  /**
+   * Check if a cabinet at the given position would overlap in Y-axis with any other cabinet
+   * Returns true if there's Y-axis overlap, false otherwise
+   */
+  const hasYAxisOverlap = useCallback(
+    (
+      cabinet: CabinetData,
+      newX: number,
+      newY: number,
+      allCabinets: CabinetData[]
+    ): boolean => {
+      const cabinetWidth = cabinet.carcass.dimensions.width
+      const cabinetHeight = cabinet.carcass.dimensions.height
+      
+      const cabinetLeft = newX
+      const cabinetRight = newX + cabinetWidth
+      const cabinetBottom = newY
+      const cabinetTop = newY + cabinetHeight
+
+      // Check against all other cabinets
+      for (const otherCabinet of allCabinets) {
+        if (otherCabinet === cabinet) continue
+
+        const otherX = otherCabinet.group.position.x
+        const otherWidth = otherCabinet.carcass.dimensions.width
+        const otherY = otherCabinet.group.position.y
+        const otherHeight = otherCabinet.carcass.dimensions.height
+
+        const otherLeft = otherX
+        const otherRight = otherX + otherWidth
+        const otherBottom = otherY
+        const otherTop = otherY + otherHeight
+
+        // Check for X-axis overlap (cabinets must overlap in X to check Y overlap)
+        const xOverlap = !(cabinetRight <= otherLeft || cabinetLeft >= otherRight)
+        
+        if (xOverlap) {
+          // Check for Y-axis overlap
+          const yOverlap = !(cabinetTop <= otherBottom || cabinetBottom >= otherTop)
+          if (yOverlap) {
+            return true // Y-axis overlap detected
+          }
+        }
+      }
+
+      return false // No Y-axis overlap
+    },
+    []
   )
 
   const moveCabinetWithMouse = useCallback(
@@ -104,7 +166,8 @@ export const useSceneInteractions = (
         newX,
         newY,
         cabinets,
-        DEFAULT_SNAP_CONFIG
+        DEFAULT_SNAP_CONFIG,
+        wallDimensions.additionalWalls // Pass additional walls for snap detection
       )
 
       // Use snapped position if snapping occurred
@@ -122,11 +185,83 @@ export const useSceneInteractions = (
         clearSnapGuides()
       }
 
+      // Check for Y-axis overlap before moving
+      // If there's Y-axis overlap, prevent Y movement (keep current Y)
+      if (hasYAxisOverlap(selectedCabinet, newX, newY, cabinets)) {
+        // Keep the current Y position to prevent overlap
+        newY = currentY
+      }
+
+      // Calculate the actual movement delta
+      const actualDeltaX = newX - currentX
+      const actualDeltaY = newY - currentY
+
+      // Move the dragged cabinet
       selectedCabinet.group.position.set(
         newX,
         newY,
         selectedCabinet.group.position.z
       )
+
+      // If cabinet belongs to a view (not "none"), move ALL cabinets in that view together
+      // This maintains relative positions because they all move by the same delta
+      if (selectedCabinet.viewId && selectedCabinet.viewId !== "none" && viewManager) {
+        const cabinetsInSameView = viewManager.getCabinetsInView(selectedCabinet.viewId as ViewId)
+        
+        cabinetsInSameView.forEach((cabinetId) => {
+          const cabinetInView = cabinets.find(c => c.cabinetId === cabinetId)
+          if (cabinetInView && cabinetInView !== selectedCabinet) {
+            const cabinetCurrentX = cabinetInView.group.position.x
+            const cabinetCurrentY = cabinetInView.group.position.y
+            const cabinetNewX = cabinetCurrentX + actualDeltaX
+            const cabinetNewY = cabinetCurrentY + actualDeltaY
+
+            // Apply boundary clamping for each cabinet in the view
+            let clampedX = cabinetNewX
+            let clampedY = cabinetNewY
+
+            if (cabinetInView.cabinetType === "top") {
+              clampedX = Math.max(
+                0,
+                Math.min(
+                  wallDimensions.length - cabinetInView.carcass.dimensions.width,
+                  cabinetNewX
+                )
+              )
+              clampedY = Math.max(
+                0,
+                Math.min(
+                  wallDimensions.height - cabinetInView.carcass.dimensions.height,
+                  cabinetNewY
+                )
+              )
+            } else {
+              clampedX = Math.max(
+                0,
+                Math.min(
+                  wallDimensions.length - cabinetInView.carcass.dimensions.width,
+                  cabinetNewX
+                )
+              )
+              clampedY = cabinetCurrentY // Base/tall cabinets stay on ground
+            }
+
+            // Check for Y-axis overlap before moving cabinets in the view
+            // If there's Y-axis overlap, prevent Y movement (keep current Y)
+            if (hasYAxisOverlap(cabinetInView, clampedX, clampedY, cabinets)) {
+              // Keep the current Y position to prevent overlap
+              clampedY = cabinetCurrentY
+            }
+
+            cabinetInView.group.position.set(
+              clampedX,
+              clampedY,
+              cabinetInView.group.position.z
+            )
+          }
+        })
+      }
+
       setDragStart({ x: event.clientX, y: event.clientY })
     },
     [
@@ -140,6 +275,8 @@ export const useSceneInteractions = (
       cabinets,
       updateSnapGuides,
       clearSnapGuides,
+      viewManager,
+      hasYAxisOverlap,
     ]
   )
 
@@ -287,6 +424,55 @@ export const useSceneInteractions = (
       }
     }
 
+    const handleDoubleClick = (event: MouseEvent) => {
+      if (isMenuOpen) return
+      if (isEventOnProductPanel(event.target)) return
+      if (!cameraRef.current) return
+
+      // Detect double-click on cabinet
+      const mouse = new THREE.Vector2()
+      mouse.x = (event.clientX / window.innerWidth) * 2 - 1
+      mouse.y = -(event.clientY / window.innerHeight) * 2 + 1
+      const raycaster = new THREE.Raycaster()
+      raycaster.setFromCamera(mouse, cameraRef.current)
+      const cabinetMeshes: THREE.Object3D[] = []
+      cabinets.forEach((cabinet) => {
+        cabinet.group.traverse((child) => {
+          if (child instanceof THREE.Mesh) cabinetMeshes.push(child)
+        })
+      })
+      const intersects = raycaster.intersectObjects(cabinetMeshes)
+
+      if (intersects.length > 0) {
+        const intersectedMesh = intersects[0].object
+        let clickedCabinet: CabinetData | null = null
+        for (const cab of cabinets) {
+          let found = false
+          cab.group.traverse((child) => {
+            if (child === intersectedMesh) found = true
+          })
+          if (found) {
+            clickedCabinet = cab
+            break
+          }
+        }
+        if (clickedCabinet) {
+          // Set the cabinet as selected to apply the same highlight as right-click
+          setSelectedCabinet(clickedCabinet)
+          
+          // Toggle lock icons - if same cabinet, hide; if different, show on new one
+          if (cabinetWithLockIcons === clickedCabinet) {
+            setCabinetWithLockIcons(null)
+          } else {
+            setCabinetWithLockIcons(clickedCabinet)
+          }
+        }
+      } else {
+        // Clicked outside - hide lock icons
+        setCabinetWithLockIcons(null)
+      }
+    }
+
     const handleWheel = (event: WheelEvent) => {
       if (isMenuOpen) {
         return
@@ -310,6 +496,7 @@ export const useSceneInteractions = (
     document.addEventListener("mousemove", handleMouseMove)
     document.addEventListener("mousedown", handleMouseDown)
     document.addEventListener("mouseup", handleMouseUp)
+    document.addEventListener("dblclick", handleDoubleClick)
     document.addEventListener("wheel", handleWheel, { passive: false })
     document.addEventListener("mousedown", handleMiddleClick)
     document.addEventListener("contextmenu", preventContext)
@@ -318,6 +505,7 @@ export const useSceneInteractions = (
       document.removeEventListener("mousemove", handleMouseMove)
       document.removeEventListener("mousedown", handleMouseDown)
       document.removeEventListener("mouseup", handleMouseUp)
+      document.removeEventListener("dblclick", handleDoubleClick)
       document.removeEventListener("wheel", handleWheel as any)
       document.removeEventListener("mousedown", handleMiddleClick)
       document.removeEventListener("contextmenu", preventContext)
@@ -337,7 +525,8 @@ export const useSceneInteractions = (
     setShowProductPanel,
     showProductPanel,
     clearSnapGuides,
+    cabinetWithLockIcons,
   ])
 
-  return { isDraggingCabinet }
+  return { isDraggingCabinet, cabinetWithLockIcons, setCabinetWithLockIcons }
 }

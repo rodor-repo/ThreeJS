@@ -1,4 +1,5 @@
 import type { CabinetData } from "../types"
+import { WALL_THICKNESS } from "./sceneUtils"
 
 /**
  * Represents a potential snap point that a cabinet can snap to
@@ -57,6 +58,7 @@ export const DEFAULT_SNAP_CONFIG: SnapConfig = {
 /**
  * Main snap calculation function
  * Takes the dragged cabinet, target position, and all other cabinets
+ * Also considers additional walls for snapping
  * Returns the snapped position and information about active snap points
  */
 export function calculateSnapPosition(
@@ -64,21 +66,13 @@ export function calculateSnapPosition(
   targetX: number,
   targetY: number,
   otherCabinets: CabinetData[],
-  config: SnapConfig = DEFAULT_SNAP_CONFIG
+  config: SnapConfig = DEFAULT_SNAP_CONFIG,
+  additionalWalls?: Array<{ id: string; length: number; distanceFromLeft: number; thickness?: number }>
 ): SnapResult {
   // Filter out the dragged cabinet from others
   const others = otherCabinets.filter((cab) => cab !== draggedCabinet)
 
-  if (others.length === 0) {
-    // No other cabinets to snap to
-    return {
-      snapped: false,
-      position: { x: targetX, y: targetY },
-      activeSnapPoints: [],
-    }
-  }
-
-  // Detect all potential snap points
+  // Detect all potential snap points from cabinets
   const snapPoints = detectSnapPoints(
     draggedCabinet,
     targetX,
@@ -86,6 +80,27 @@ export function calculateSnapPosition(
     others,
     config
   )
+
+  // Detect snap points from additional walls
+  if (additionalWalls && additionalWalls.length > 0) {
+    const wallSnapPoints = detectWallSnapPoints(
+      draggedCabinet,
+      targetX,
+      targetY,
+      additionalWalls,
+      config
+    )
+    snapPoints.push(...wallSnapPoints)
+  }
+
+  if (snapPoints.length === 0 && others.length === 0 && (!additionalWalls || additionalWalls.length === 0)) {
+    // No other cabinets or walls to snap to
+    return {
+      snapped: false,
+      position: { x: targetX, y: targetY },
+      activeSnapPoints: [],
+    }
+  }
 
   if (snapPoints.length === 0) {
     return {
@@ -218,6 +233,61 @@ function detectSnapPoints(
           position: { y: otherTop - draggedHeight },
           distance: topAlignDist,
           targetCabinet: other,
+        })
+      }
+    }
+  }
+
+  return snapPoints
+}
+
+/**
+ * Detect snap points from additional walls
+ * Walls have left and right edges that cabinets can snap to
+ */
+function detectWallSnapPoints(
+  draggedCabinet: CabinetData,
+  targetX: number,
+  targetY: number,
+  additionalWalls: Array<{ id: string; length: number; distanceFromLeft: number; thickness?: number }>,
+  config: SnapConfig
+): SnapPoint[] {
+  const snapPoints: SnapPoint[] = []
+  const draggedWidth = draggedCabinet.carcass.dimensions.width
+
+  // Calculate dragged cabinet edges at target position
+  const draggedLeft = targetX
+  const draggedRight = targetX + draggedWidth
+
+  for (const wall of additionalWalls) {
+    // Wall thickness defaults to WALL_THICKNESS if not specified
+    const wallThickness = wall.thickness ?? WALL_THICKNESS
+    const wallLeft = wall.distanceFromLeft
+    const wallRight = wall.distanceFromLeft + wallThickness
+
+    // Edge-to-edge snapping (horizontal) - snap to wall edges
+    if (config.enableEdgeSnap) {
+      // Snap dragged cabinet's LEFT edge to wall's RIGHT edge
+      // (placing dragged cabinet to the RIGHT of wall)
+      const leftToRightDist = Math.abs(draggedLeft - wallRight)
+      if (leftToRightDist <= config.threshold) {
+        snapPoints.push({
+          type: "edge-right",
+          position: { x: wallRight },
+          distance: leftToRightDist,
+          targetCabinet: draggedCabinet, // Use dragged cabinet as placeholder (walls don't have CabinetData)
+        })
+      }
+
+      // Snap dragged cabinet's RIGHT edge to wall's LEFT edge
+      // (placing dragged cabinet to the LEFT of wall)
+      const rightToLeftDist = Math.abs(draggedRight - wallLeft)
+      if (rightToLeftDist <= config.threshold) {
+        snapPoints.push({
+          type: "edge-left",
+          position: { x: wallLeft - draggedWidth },
+          distance: rightToLeftDist,
+          targetCabinet: draggedCabinet, // Use dragged cabinet as placeholder (walls don't have CabinetData)
         })
       }
     }

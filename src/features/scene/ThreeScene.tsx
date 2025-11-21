@@ -1,18 +1,30 @@
 import { CabinetType, DoorMaterial } from '@/features/carcass'
 import { Subcategory } from '@/components/categoriesData'
-import { Settings } from 'lucide-react'
-import React, { useEffect, useRef, useState } from 'react'
+import { Settings, ShoppingCart } from 'lucide-react'
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useCabinets } from '../cabinets/hooks/useCabinets'
+import { useViewManager } from '../cabinets/hooks/useViewManager'
 import { CabinetsInfoPanel } from '../cabinets/ui/CabinetsInfoPanel'
+import { CabinetLockIcons } from './ui/CabinetLockIcons'
 import ProductPanel from '../cabinets/ui/ProductPanel'
+import { cabinetPanelState, type PersistedPanelState } from '../cabinets/ui/ProductPanel'
 import { useCameraDrag } from './hooks/useCameraDrag'
 import { useSceneInteractions } from './hooks/useSceneInteractions'
 import { useSnapGuides } from './hooks/useSnapGuides'
+import { useDimensionLines } from './hooks/useDimensionLines'
+import { useCabinetNumbers } from './hooks/useCabinetNumbers'
 import { useThreeRenderer } from './hooks/useThreeRenderer'
-import type { Category, WallDimensions as WallDims } from './types'
+import type { Category, WallDimensions as WallDims, CabinetData } from './types'
 import { CameraControls } from './ui/CameraControls'
-import { WallSettingsModal } from './ui/WallSettingsModal'
+import { SettingsSidebar } from './ui/SettingsSidebar'
+import { WallSettingsDrawer } from './ui/WallSettingsDrawer'
+import { ViewsSettingsDrawer } from './ui/ViewsSettingsDrawer'
+import { ViewSettingsDrawer } from './ui/ViewSettingsDrawer'
+import { SaveModal } from './ui/SaveModal'
+import { DeleteConfirmationModal } from './ui/DeleteConfirmationModal'
 import { WsProducts } from '@/types/erpTypes'
+import type { ViewId } from '../cabinets/ViewManager'
+import { saveRoom, generateRoomId, type RoomCategory, type SavedRoom, type SavedCabinet, type SavedView } from '@/data/savedRooms'
 
 interface ThreeSceneProps {
   wallDimensions: WallDims
@@ -23,19 +35,37 @@ interface ThreeSceneProps {
   /** Optional productId selected from the menu to associate with the created 3D object */
   selectedProductId?: string
   wsProducts?: WsProducts | null
+  /** Callback to get the loadRoom function for restoring saved rooms */
+  onLoadRoomReady?: (loadRoom: (savedRoom: import('@/data/savedRooms').SavedRoom) => void) => void
 }
 
-const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChange, selectedCategory, selectedSubcategory, isMenuOpen = false, selectedProductId, wsProducts }) => {
+const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChange, selectedCategory, selectedSubcategory, isMenuOpen = false, selectedProductId, wsProducts, onLoadRoomReady }) => {
   const mountRef = useRef<HTMLDivElement>(null);
-  const [showModal, setShowModal] = useState(false)
+  const [showSettingsSidebar, setShowSettingsSidebar] = useState(false)
+  const [showWallDrawer, setShowWallDrawer] = useState(false)
+  const [showViewsDrawer, setShowViewsDrawer] = useState(false)
+  const [showViewDrawer, setShowViewDrawer] = useState(false)
+  const [selectedViewId, setSelectedViewId] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [zoomLevel, setZoomLevel] = useState(1.5)
   const [cameraMode, setCameraMode] = useState<'constrained' | 'free'>('constrained')
+  const [dimensionsVisible, setDimensionsVisible] = useState(true)
+  const [numbersVisible, setNumbersVisible] = useState(false)
+  const [selectedMode, setSelectedMode] = useState<'admin' | 'user'>('user') // Radio button selection
+  // Cabinet groups: Map of cabinetId -> array of { cabinetId, percentage }
+  const [cabinetGroups, setCabinetGroups] = useState<Map<string, Array<{ cabinetId: string; percentage: number }>>>(new Map())
+  const [showSaveModal, setShowSaveModal] = useState(false)
+  const [currentRoom, setCurrentRoom] = useState<SavedRoom | null>(null) // Track currently loaded room
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [cabinetToDelete, setCabinetToDelete] = useState<CabinetData | null>(null) // Store cabinet to delete before modal opens
 
   const {
     sceneRef,
     cameraRef,
     createWall,
+    createLeftWall,
+    createRightWall,
+    createAdditionalWalls,
     createFloor,
     updateCameraPosition,
     resetCamera,
@@ -51,11 +81,23 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     showProductPanel,
     setShowProductPanel,
     createCabinet,
-    clearCabinets
+    clearCabinets,
+    updateCabinetViewId,
+    updateCabinetLock,
+    deleteCabinet
   } = useCabinets(sceneRef)
+
+  // View manager for grouping cabinets
+  const viewManager = useViewManager(cabinets)
 
   // Snap guides for visual feedback during cabinet dragging
   const { updateSnapGuides, clearSnapGuides } = useSnapGuides(sceneRef, wallDimensions)
+
+  // Dimension lines for showing cabinet measurements
+  useDimensionLines(sceneRef, cabinets, dimensionsVisible, viewManager.viewManager, wallDimensions)
+
+  // Cabinet numbering system
+  useCabinetNumbers(sceneRef, cabinets, numbersVisible)
 
   // interactions hook wires global events and cabinet drag/select
   const [dragState, setDragState] = useState({
@@ -84,8 +126,8 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
       if (next.zoomLevel !== undefined) setZoomLevel(next.zoomLevel)
       if (next.isDragging !== undefined) setIsDragging(next.isDragging)
     }
-  )
-  useSceneInteractions(
+  ) 
+  const { cabinetWithLockIcons, setCabinetWithLockIcons } = useSceneInteractions(
     cameraRef,
     wallDimensions,
     isMenuOpen || false,
@@ -97,8 +139,24 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     setShowProductPanel,
     cameraDrag,
     updateSnapGuides,
-    clearSnapGuides
+    clearSnapGuides,
+    viewManager.viewManager
   )
+
+  // Helper function to check if two cabinets are paired
+  const areCabinetsPaired = useCallback((cabinetId1: string, cabinetId2: string): boolean => {
+    // Check if cabinetId2 is in cabinetId1's group
+    const group1 = cabinetGroups.get(cabinetId1)
+    if (group1 && group1.some(c => c.cabinetId === cabinetId2)) {
+      return true
+    }
+    // Check if cabinetId1 is in cabinetId2's group
+    const group2 = cabinetGroups.get(cabinetId2)
+    if (group2 && group2.some(c => c.cabinetId === cabinetId1)) {
+      return true
+    }
+    return false
+  }, [cabinetGroups])
 
   // Handle category changes
   useEffect(() => {
@@ -188,20 +246,365 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
   const handleDimensionChange = (newDimensions: WallDims, newColor?: string) => {
     onDimensionsChange(newDimensions);
     if (sceneRef.current) {
-      createWall(newDimensions.height, newDimensions.length, newColor)
-      createFloor(newDimensions.length)
-      if (cameraRef.current) updateCameraPosition(newDimensions.height, newDimensions.length, zoomLevel)
+      const backWallLength = newDimensions.backWallLength ?? newDimensions.length
+      createWall(newDimensions.height, backWallLength, newColor)
+      createFloor(backWallLength)
+      
+      // Create left and right walls
+      createLeftWall(
+        newDimensions.height,
+        newDimensions.leftWallLength ?? 600,
+        newDimensions.leftWallVisible ?? true,
+        newColor
+      )
+      createRightWall(
+        newDimensions.height,
+        newDimensions.rightWallLength ?? 600,
+        backWallLength,
+        newDimensions.rightWallVisible ?? true,
+        newColor
+      )
+      
+      // Create additional walls
+      createAdditionalWalls(
+        newDimensions.height,
+        newDimensions.additionalWalls ?? [],
+        newColor
+      )
+      
+      if (cameraRef.current) updateCameraPosition(newDimensions.height, backWallLength, zoomLevel)
     }
   };
 
-  // Modal form handlers
+  // Wall settings handlers
   const [wallColor, setWallColor] = useState('#dcbfa0')
-  const handleApplyModal = (dims: WallDims, color: string) => {
+  const handleApplyWallSettings = (dims: WallDims, color: string) => {
     if (color !== wallColor) setWallColor(color)
     handleDimensionChange(dims, color)
-    setShowModal(false)
+    // Don't close drawer automatically - let user close it manually
   }
-  const handleModalOpen = () => setShowModal(true)
+
+  // Save room handler
+  const handleSaveRoom = async (roomName: string, roomCategory: RoomCategory) => {
+    try {
+      // Collect all cabinet data
+      const savedCabinets: SavedCabinet[] = cabinets.map((cabinet) => {
+        const persisted = cabinetPanelState.get(cabinet.cabinetId)
+        const productName = cabinet.productId && wsProducts?.products[cabinet.productId]?.product
+        
+        // Get viewId from ViewManager as source of truth, fallback to cabinet.viewId
+        const viewIdFromManager = viewManager.getCabinetView(cabinet.cabinetId)
+        const cabinetViewId = viewIdFromManager || cabinet.viewId || undefined
+        
+        return {
+          cabinetId: cabinet.cabinetId,
+          productId: cabinet.productId,
+          productName: productName || undefined,
+          cabinetType: cabinet.cabinetType,
+          subcategoryId: cabinet.subcategoryId,
+          dimensions: {
+            width: cabinet.carcass.dimensions.width,
+            height: cabinet.carcass.dimensions.height,
+            depth: cabinet.carcass.dimensions.depth,
+          },
+          viewId: cabinetViewId,
+          position: {
+            x: cabinet.group.position.x,
+            y: cabinet.group.position.y,
+            z: cabinet.group.position.z,
+          },
+          materialSelections: persisted?.materialSelections,
+          materialColor: persisted?.materialColor,
+          dimensionValues: persisted?.values,
+          shelfCount: cabinet.carcass.config.shelfCount,
+          doorEnabled: cabinet.carcass.config.doorEnabled,
+          doorCount: cabinet.carcass.config.doorCount,
+          overhangDoor: cabinet.carcass.config.overhangDoor,
+          drawerEnabled: cabinet.carcass.config.drawerEnabled,
+          drawerQuantity: cabinet.carcass.config.drawerQuantity,
+          drawerHeights: cabinet.carcass.config.drawerHeights,
+          kickerHeight: cabinet.cabinetType === 'base' || cabinet.cabinetType === 'tall' 
+            ? cabinet.group.position.y 
+            : undefined,
+          leftLock: cabinet.leftLock,
+          rightLock: cabinet.rightLock,
+          group: cabinetGroups.get(cabinet.cabinetId) || undefined, // Save group data
+          sortNumber: cabinet.sortNumber, // Save sort number for cabinet numbering
+        }
+      })
+
+      // Collect all views
+      const savedViews: SavedView[] = viewManager.activeViews.map((view) => ({
+        id: view.id,
+        name: view.name,
+        cabinetIds: Array.from(view.cabinetIds),
+      }))
+
+      // Create saved room object
+      const savedRoom: SavedRoom = {
+        id: generateRoomId(),
+        name: roomName,
+        category: roomCategory,
+        savedAt: new Date().toISOString(),
+        wallSettings: {
+          height: wallDimensions.height,
+          length: wallDimensions.backWallLength ?? wallDimensions.length, // Backward compatibility
+          color: wallColor,
+          backWallLength: wallDimensions.backWallLength ?? wallDimensions.length,
+          leftWallLength: wallDimensions.leftWallLength ?? wallDimensions.length,
+          rightWallLength: wallDimensions.rightWallLength ?? wallDimensions.length,
+          leftWallVisible: wallDimensions.leftWallVisible ?? true,
+          rightWallVisible: wallDimensions.rightWallVisible ?? true,
+          additionalWalls: wallDimensions.additionalWalls ?? [],
+        },
+        cabinets: savedCabinets,
+        views: savedViews,
+      }
+
+      // Save the room (now async)
+      await saveRoom(savedRoom)
+      // Update current room to the newly saved room
+      setCurrentRoom(savedRoom)
+      console.log('Room saved:', savedRoom)
+      alert(`Room "${roomName}" saved successfully!`)
+    } catch (error) {
+      console.error('Failed to save room:', error)
+      alert(`Failed to save room: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
+  }
+
+  // Load room handler
+  const loadRoom = useCallback((savedRoom: SavedRoom) => {
+    // Track the currently loaded room
+    setCurrentRoom(savedRoom)
+    
+    // Reset numbers visibility when loading a room
+    setNumbersVisible(false)
+    
+    // Clear current cabinets and groups
+    clearCabinets()
+    setCabinetGroups(new Map())
+    
+    // Restore wall settings
+    const backWallLength = savedRoom.wallSettings.backWallLength ?? savedRoom.wallSettings.length
+    const newWallDims: WallDims = {
+      height: savedRoom.wallSettings.height,
+      length: backWallLength, // Backward compatibility
+      backWallLength: backWallLength,
+      leftWallLength: savedRoom.wallSettings.leftWallLength ?? 600,
+      rightWallLength: savedRoom.wallSettings.rightWallLength ?? 600,
+      leftWallVisible: savedRoom.wallSettings.leftWallVisible ?? true,
+      rightWallVisible: savedRoom.wallSettings.rightWallVisible ?? true,
+      additionalWalls: savedRoom.wallSettings.additionalWalls ?? [],
+    }
+    handleDimensionChange(newWallDims, savedRoom.wallSettings.color)
+    setWallColor(savedRoom.wallSettings.color)
+
+    // Wait a bit for wall to update, then restore cabinets
+    setTimeout(() => {
+      // First, restore views and build the viewId mapping
+      // This must happen BEFORE creating cabinets so we can set viewId immediately
+      const viewIdMap = new Map<string, ViewId>()
+      const viewIdsToRestore = new Set<string>()
+      
+      // Collect view IDs from saved views (for view names)
+      savedRoom.views.forEach((savedView) => {
+        if (savedView.id !== 'none') {
+          viewIdsToRestore.add(savedView.id)
+        }
+      })
+      
+      // Also collect view IDs from cabinets (in case some views are missing from views array)
+      savedRoom.cabinets.forEach((savedCabinet) => {
+        if (savedCabinet.viewId && savedCabinet.viewId !== 'none') {
+          viewIdsToRestore.add(savedCabinet.viewId)
+        }
+      })
+      
+      // Create or map views
+      viewIdsToRestore.forEach((savedViewId) => {
+        // Check if view already exists
+        const existingView = viewManager.viewManager.getView(savedViewId as ViewId)
+        const savedView = savedRoom.views.find(v => v.id === savedViewId)
+        
+        if (existingView) {
+          viewIdMap.set(savedViewId, savedViewId as ViewId)
+        } else {
+          // Create a new view (will get next available letter)
+          const newView = viewManager.createView()
+          // Update view name if it was saved
+          if (savedView && savedView.name) {
+            // Note: ViewManager doesn't have a setName method, so we'll need to handle this
+            // For now, the view will have the default name "View X"
+          }
+          viewIdMap.set(savedViewId, newView.id)
+        }
+      })
+
+      // Now restore cabinets with their viewId set immediately
+      const restoredCabinets: CabinetData[] = []
+      
+      savedRoom.cabinets.forEach((savedCabinet) => {
+        // Create cabinet with saved dimensions
+        const cabinetData = createCabinet(
+          savedCabinet.cabinetType,
+          savedCabinet.subcategoryId,
+          savedCabinet.productId
+        )
+
+        if (!cabinetData) {
+          console.error('Failed to create cabinet:', savedCabinet)
+          return
+        }
+
+        // Update dimensions
+        cabinetData.carcass.updateDimensions(savedCabinet.dimensions)
+
+        // Restore position
+        cabinetData.group.position.set(
+          savedCabinet.position.x,
+          savedCabinet.position.y,
+          savedCabinet.position.z
+        )
+
+        // Restore shelf count
+        if (savedCabinet.shelfCount !== undefined) {
+          cabinetData.carcass.updateConfig({ shelfCount: savedCabinet.shelfCount })
+        }
+
+        // Restore door settings
+        if (savedCabinet.doorEnabled !== undefined) {
+          cabinetData.carcass.toggleDoors(savedCabinet.doorEnabled)
+        }
+        if (savedCabinet.doorCount !== undefined) {
+          cabinetData.carcass.updateDoorConfiguration(savedCabinet.doorCount)
+        }
+        if (savedCabinet.overhangDoor !== undefined && cabinetData.cabinetType === 'top') {
+          cabinetData.carcass.updateOverhangDoor(savedCabinet.overhangDoor)
+        }
+
+        // Restore drawer settings
+        if (savedCabinet.drawerEnabled !== undefined) {
+          cabinetData.carcass.updateDrawerEnabled(savedCabinet.drawerEnabled)
+        }
+        if (savedCabinet.drawerQuantity !== undefined) {
+          cabinetData.carcass.updateDrawerQuantity(savedCabinet.drawerQuantity)
+        }
+        if (savedCabinet.drawerHeights && savedCabinet.drawerHeights.length > 0) {
+          savedCabinet.drawerHeights.forEach((height, index) => {
+            cabinetData.carcass.updateDrawerHeight(index, height)
+          })
+        }
+
+        // Restore kicker height for base/tall cabinets
+        if (savedCabinet.kickerHeight !== undefined && (cabinetData.cabinetType === 'base' || cabinetData.cabinetType === 'tall')) {
+          cabinetData.carcass.updateKickerHeight(savedCabinet.kickerHeight)
+        }
+
+        // Restore material selections to cabinetPanelState
+        if (savedCabinet.materialSelections || savedCabinet.materialColor || savedCabinet.dimensionValues) {
+          cabinetPanelState.set(cabinetData.cabinetId, {
+            values: savedCabinet.dimensionValues || {},
+            materialColor: savedCabinet.materialColor || '#ffffff',
+            materialSelections: savedCabinet.materialSelections,
+          })
+        }
+
+        // Restore viewId immediately - this is the key fix
+        // Get the mapped view ID from the viewIdMap we created earlier
+        if (savedCabinet.viewId && savedCabinet.viewId !== 'none') {
+          const mappedViewId = viewIdMap.get(savedCabinet.viewId)
+          if (mappedViewId) {
+            // Set viewId on the cabinet object immediately
+            cabinetData.viewId = mappedViewId
+            // Update React state to reflect the viewId
+            updateCabinetViewId(cabinetData.cabinetId, mappedViewId)
+            // Assign to ViewManager (updates internal state)
+            viewManager.assignCabinetToView(cabinetData.cabinetId, mappedViewId)
+          } else {
+            console.warn(`Could not find mapped view ID for cabinet ${cabinetData.cabinetId} with viewId ${savedCabinet.viewId}`)
+          }
+        } else {
+          // Cabinet is not assigned to any view
+          cabinetData.viewId = undefined
+          updateCabinetViewId(cabinetData.cabinetId, undefined)
+        }
+
+        // Restore lock states
+        if (savedCabinet.leftLock !== undefined || savedCabinet.rightLock !== undefined) {
+          updateCabinetLock(
+            cabinetData.cabinetId,
+            savedCabinet.leftLock ?? false,
+            savedCabinet.rightLock ?? false
+          )
+        }
+
+        // Restore group data
+        if (savedCabinet.group && savedCabinet.group.length > 0) {
+          setCabinetGroups(prev => {
+            const newMap = new Map(prev)
+            newMap.set(cabinetData.cabinetId, savedCabinet.group!)
+            return newMap
+          })
+        }
+
+        // Restore sortNumber for cabinet numbering
+        if (savedCabinet.sortNumber !== undefined) {
+          cabinetData.sortNumber = savedCabinet.sortNumber
+        }
+
+        restoredCabinets.push(cabinetData)
+        })
+
+        console.log('Room loaded:', savedRoom.name, 'Views restored:', viewIdsToRestore.size, 'Cabinets assigned to views')
+    }, 100)
+  }, [clearCabinets, createCabinet, handleDimensionChange, updateCabinetViewId, viewManager])
+
+  // Expose loadRoom function to parent via callback
+  useEffect(() => {
+    if (onLoadRoomReady) {
+      onLoadRoomReady(loadRoom)
+    }
+  }, [onLoadRoomReady, loadRoom])
+
+  const handleSettingsClick = () => {
+    setShowSettingsSidebar(true)
+  }
+
+  // Calculate total price of all cabinets
+  const totalPrice = useMemo(() => {
+    return cabinets.reduce((sum, cabinet) => {
+      const panelState = cabinetPanelState.get(cabinet.cabinetId)
+      const price = panelState?.price?.amount ?? 0
+      return sum + price
+    }, 0)
+  }, [cabinets])
+
+  const handleWallClick = () => {
+    setShowWallDrawer(true)
+  }
+
+  const handleViewsClick = () => {
+    setShowViewsDrawer(true)
+  }
+
+  // Close drawers when other drawers open or when product panel opens
+  useEffect(() => {
+    if (showProductPanel) {
+      setShowSettingsSidebar(false)
+      setShowWallDrawer(false)
+      setShowViewsDrawer(false)
+    }
+  }, [showProductPanel])
+
+  // Close drawers when main menu opens
+  useEffect(() => {
+    if (isMenuOpen) {
+      setShowSettingsSidebar(false)
+      setShowWallDrawer(false)
+      setShowViewsDrawer(false)
+    }
+  }, [isMenuOpen])
 
   // When the product panel opens for a selected cabinet, try loading its WsProduct config
 
@@ -210,53 +613,817 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
       {/* 3D Scene Container */}
       <div ref={mountRef} className="w-full h-full" />
 
-      {/* Settings Icon */}
+      {/* Admin and User Radio Buttons - Top Middle */}
+      <div className="absolute top-4 left-1/2 transform -translate-x-1/2 flex gap-3 z-10">
+        <label className="relative cursor-pointer">
+          <input
+            type="radio"
+            name="mode"
+            value="admin"
+            checked={selectedMode === 'admin'}
+            onChange={(e) => setSelectedMode(e.target.value as 'admin' | 'user')}
+            className="sr-only"
+          />
+          <div className={`px-6 py-2 rounded-lg shadow-lg transition-colors duration-200 font-medium ${
+            selectedMode === 'admin'
+              ? 'bg-red-600 text-white'
+              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+          }`}>
+            Admin
+          </div>
+        </label>
+        <label className="relative cursor-pointer">
+          <input
+            type="radio"
+            name="mode"
+            value="user"
+            checked={selectedMode === 'user'}
+            onChange={(e) => setSelectedMode(e.target.value as 'admin' | 'user')}
+            className="sr-only"
+          />
+          <div className={`px-6 py-2 rounded-lg shadow-lg transition-colors duration-200 font-medium ${
+            selectedMode === 'user'
+              ? 'bg-blue-600 text-white'
+              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+          }`}>
+            User
+          </div>
+        </label>
+      </div>
+
+      {/* Add to Cart Button - Top Right */}
+      <div className="absolute top-4 right-4 flex flex-col items-end gap-2 z-10">
+        {/* Add to Cart Button */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            // TODO: Implement add to cart functionality
+            console.log('Add to cart clicked', { cabinets, totalPrice })
+          }}
+          className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg shadow-lg transition-colors duration-200 flex items-center gap-2 w-full"
+          title="Add to Cart"
+        >
+          <ShoppingCart size={20} />
+          <span>Add to Cart</span>
+        </button>
+        
+        {/* Total Price Display - Same width as button */}
+        <div className="bg-white px-4 py-1 rounded-lg shadow-lg border border-gray-200 w-full text-center">
+          <div className="text-sm text-gray-600">Total Price</div>
+          <div className="text-xl font-bold text-gray-800">
+            ${totalPrice.toFixed(2)}
+          </div>
+        </div>
+      </div>
+
+      {/* Settings Icon - Bottom Right */}
       <button
-        onClick={handleModalOpen}
-        className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-full shadow-lg transition-colors duration-200 z-10"
-        title="Wall Settings"
+        onClick={(e) => {
+          e.stopPropagation()
+          handleSettingsClick()
+        }}
+        className="absolute bottom-4 right-4 bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-full shadow-lg transition-colors duration-200 z-10"
+        title="Settings"
       >
         <Settings size={24} />
       </button>
 
-      {/* Camera Movement Control */}
-      <CameraControls
-        isDragging={isDragging}
-        cameraMode={cameraMode}
-        onToggleMode={() => setCameraMode(prev => prev === 'constrained' ? 'free' : 'constrained')}
-        onReset={resetCameraPosition}
-        onClear={clearCabinets}
-        onX={() => { setCameraMode('constrained'); setCameraXView(); }}
-        onY={() => { setCameraMode('constrained'); setCameraYView(); }}
-        onZ={() => { setCameraMode('constrained'); setCameraZView(); }}
+      {/* Settings Sidebar */}
+      <SettingsSidebar
+        isOpen={showSettingsSidebar}
+        onClose={() => {
+          setShowSettingsSidebar(false)
+          setShowWallDrawer(false)
+          setShowViewsDrawer(false)
+          setShowViewDrawer(false)
+          setSelectedViewId(null)
+        }}
+        onWallClick={handleWallClick}
+        onViewClick={(viewId) => {
+          setSelectedViewId(viewId)
+          setShowViewDrawer(true)
+        }}
+        activeViews={viewManager.activeViews}
       />
 
-      {/* Camera Movement Instructions */}
-      {isMenuOpen && (
-        <div className="absolute top-16 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg text-sm z-10">
-          Menu Open • Camera controls disabled
-        </div>
-      )}
-      {!isMenuOpen && cameraMode === 'constrained' && (
-        <div className="absolute top-16 left-1/2 transform -translate-x-1/2 bg-gray-600 text-white px-4 py-2 rounded-lg shadow-lg text-sm z-10">
-          Constrained Mode • Drag to pan • Wheel to zoom • Right-click cabinet to select
-        </div>
-      )}
-      {!isMenuOpen && cameraMode === 'free' && (
-        <div className="absolute top-16 left-1/2 transform -translate-x-1/2 bg-purple-600 text-white px-4 py-2 rounded-lg shadow-lg text-sm z-10">
-          Free Mode • Drag to rotate • Right-drag to pan • Shift+click cabinets
-        </div>
-      )}
-
-      <CabinetsInfoPanel cabinets={cabinets} />
-
-      <WallSettingsModal
-        isOpen={showModal}
-        onClose={() => setShowModal(false)}
+      {/* Wall Settings Drawer */}
+      <WallSettingsDrawer
+        isOpen={showWallDrawer}
+        onClose={() => setShowWallDrawer(false)}
         wallDimensions={wallDimensions}
         wallColor={wallColor}
-        onApply={handleApplyModal}
+        onApply={handleApplyWallSettings}
       />
+
+      {/* Views Settings Drawer */}
+      <ViewsSettingsDrawer
+        isOpen={showViewsDrawer}
+        onClose={() => setShowViewsDrawer(false)}
+        activeViews={viewManager.activeViews}
+        onViewClick={(viewId) => {
+          // Could add view-specific settings here in the future
+          console.log('View clicked:', viewId)
+        }}
+      />
+
+      {/* View Settings Drawer - Shows Global Dimensions for selected view */}
+      {selectedViewId && (
+        <ViewSettingsDrawer
+          isOpen={showViewDrawer}
+          onClose={() => {
+            setShowViewDrawer(false)
+            setSelectedViewId(null)
+          }}
+          viewName={viewManager.activeViews.find(v => v.id === selectedViewId)?.name || `View ${selectedViewId}`}
+          viewId={selectedViewId}
+          cabinets={cabinets}
+          wsProducts={wsProducts || null}
+          onDimensionChange={(gdId, newValue, productDataMap) => {
+            // Find all cabinets that have this GDId in their product dimensions
+            const cabinetsToUpdate: Array<{ cabinet: CabinetData; dimId: string; productData: any }> = []
+            
+            // Use the provided product data map instead of fetching
+            productDataMap.forEach((productData, productId) => {
+              if (!productData?.product?.dims) return
+              
+              // Find dimensions with this GDId
+              const dims = productData.product.dims
+              Object.entries(dims).forEach(([dimId, dimObj]: [string, any]) => {
+                if (dimObj.GDId === gdId && dimObj.visible !== false) {
+                  // Find all cabinets with this productId
+                  const cabinetsWithProduct = cabinets.filter(c => c.productId === productId)
+                  cabinetsWithProduct.forEach(cabinet => {
+                    cabinetsToUpdate.push({ cabinet, dimId, productData })
+                  })
+                }
+              })
+            })
+            
+            // Get threeJsGDs mapping from first product (they should all have the same mapping)
+            const firstProductData = cabinetsToUpdate[0]?.productData
+            if (!firstProductData?.threeJsGDs) return
+            
+            const widthGDIds = firstProductData.threeJsGDs["width"] || []
+            const heightGDIds = firstProductData.threeJsGDs["height"] || []
+            const depthGDIds = firstProductData.threeJsGDs["depth"] || []
+            const shelfQtyGDIds = firstProductData.threeJsGDs["shelfQty"] || []
+            const doorOverhangGDIds = firstProductData.threeJsGDs["doorOverhang"] || []
+            
+            // Update each cabinet
+            cabinetsToUpdate.forEach(({ cabinet, dimId, productData }) => {
+              // Update cabinetPanelState
+              const persisted = cabinetPanelState.get(cabinet.cabinetId)
+              const updatedValues = { ...(persisted?.values || {}), [dimId]: newValue }
+              cabinetPanelState.set(cabinet.cabinetId, {
+                ...(persisted || { values: {}, materialColor: '#ffffff' }),
+                values: updatedValues,
+              })
+              
+              // Determine which dimension (width/height/depth/shelfQty) this GDId maps to
+              const dimObj = productData.product.dims[dimId]
+              if (!dimObj?.GDId) return
+              
+              let width = cabinet.carcass.dimensions.width
+              let height = cabinet.carcass.dimensions.height
+              let depth = cabinet.carcass.dimensions.depth
+              let shelfCount: number | undefined = cabinet.carcass?.config?.shelfCount
+              
+              if (widthGDIds.includes(dimObj.GDId)) {
+                width = newValue
+              } else if (heightGDIds.includes(dimObj.GDId)) {
+                height = newValue
+              } else if (depthGDIds.includes(dimObj.GDId)) {
+                depth = newValue
+              } else if (shelfQtyGDIds.includes(dimObj.GDId)) {
+                shelfCount = newValue
+                // Update shelf count directly on the carcass
+                cabinet.carcass.updateConfig({ shelfCount: newValue })
+                return // Shelf count doesn't affect dimensions, so we can return early
+              } else if (doorOverhangGDIds.includes(dimObj.GDId)) {
+                // Handle door overhang - convert numeric value to boolean
+                // If it's a selection type, the value might be 1/0 or "yes"/"no"
+                let overhangDoor: boolean
+                if (typeof newValue === 'number') {
+                  overhangDoor = newValue === 1 || newValue > 0
+                } else {
+                  const valStr = String(newValue).toLowerCase()
+                  overhangDoor = valStr === 'yes' || valStr === 'true' || valStr === '1'
+                }
+                
+                // Apply door overhang to ALL top/overhead cabinets, not just those with this dimension
+                // This ensures all overhead cabinets get updated
+                cabinets.forEach((cab) => {
+                  if (cab.cabinetType === 'top') {
+                    cab.carcass.updateOverhangDoor(overhangDoor)
+                    // Also update cabinetPanelState if this cabinet has the dimension
+                    const cabPersisted = cabinetPanelState.get(cab.cabinetId)
+                    if (cabPersisted) {
+                      const cabUpdatedValues = { ...cabPersisted.values, [dimId]: newValue }
+                      cabinetPanelState.set(cab.cabinetId, {
+                        ...cabPersisted,
+                        values: cabUpdatedValues,
+                      })
+                    }
+                  }
+                })
+                return // Door overhang doesn't affect dimensions, so we can return early
+              } else {
+                // Not a primary dimension, skip
+                return
+              }
+              
+              // Store old width and position before updating
+              const oldWidth = cabinet.carcass.dimensions.width
+              const oldX = cabinet.group.position.x
+              const leftLock = cabinet.leftLock ?? false
+              const rightLock = cabinet.rightLock ?? false
+              
+              // Calculate width delta (how much the width changed)
+              const widthDelta = width - oldWidth
+              
+              // Handle lock states for width changes
+              if (widthDelta !== 0) {
+                if (leftLock && rightLock) {
+                  // Both locks are active - cannot resize width
+                  // Skip this cabinet update
+                  return
+                } else if (leftLock) {
+                  // Left edge is locked - can ONLY extend from right side (positive X direction)
+                  // Position stays the same (left edge is frozen)
+                  cabinet.carcass.updateDimensions({ width, height, depth })
+                  
+                  // Handle grouped cabinets - apply proportional width changes
+                  const groupData = cabinetGroups.get(cabinet.cabinetId)
+                  if (groupData && groupData.length > 0) {
+                    groupData.forEach((groupCabinet) => {
+                      const groupedCabinet = cabinets.find(c => c.cabinetId === groupCabinet.cabinetId)
+                      if (!groupedCabinet) return
+                      
+                      // Calculate proportional width change
+                      const proportionalDelta = (widthDelta * groupCabinet.percentage) / 100
+                      const newGroupedWidth = groupedCabinet.carcass.dimensions.width + proportionalDelta
+                      
+                      // Respect lock properties of grouped cabinet
+                      const groupedLeftLock = groupedCabinet.leftLock ?? false
+                      const groupedRightLock = groupedCabinet.rightLock ?? false
+                      
+                      if (groupedLeftLock && groupedRightLock) {
+                        // Both locks active - cannot resize
+                        return
+                      } else if (groupedLeftLock) {
+                        // Left locked - extend to right
+                        groupedCabinet.carcass.updateDimensions({
+                          width: newGroupedWidth,
+                          height: groupedCabinet.carcass.dimensions.height,
+                          depth: groupedCabinet.carcass.dimensions.depth
+                        })
+                      } else if (groupedRightLock) {
+                        // Right locked - extend to left
+                        const groupedOldX = groupedCabinet.group.position.x
+                        const groupedOldWidth = groupedCabinet.carcass.dimensions.width
+                        const groupedRightEdge = groupedOldX + groupedOldWidth
+                        const groupedNewX = groupedRightEdge - newGroupedWidth
+                        
+                        groupedCabinet.carcass.updateDimensions({
+                          width: newGroupedWidth,
+                          height: groupedCabinet.carcass.dimensions.height,
+                          depth: groupedCabinet.carcass.dimensions.depth
+                        })
+                        
+                        const clampedX = Math.max(
+                          0,
+                          Math.min(
+                            wallDimensions.length - newGroupedWidth,
+                            groupedNewX
+                          )
+                        )
+                        groupedCabinet.group.position.set(
+                          clampedX,
+                          groupedCabinet.group.position.y,
+                          groupedCabinet.group.position.z
+                        )
+                      } else {
+                        // Neither lock - extend equally from center
+                        const groupedOldX = groupedCabinet.group.position.x
+                        const groupedOldWidth = groupedCabinet.carcass.dimensions.width
+                        const groupedCenterX = groupedOldX + groupedOldWidth / 2
+                        const groupedNewX = groupedCenterX - newGroupedWidth / 2
+                        
+                        groupedCabinet.carcass.updateDimensions({
+                          width: newGroupedWidth,
+                          height: groupedCabinet.carcass.dimensions.height,
+                          depth: groupedCabinet.carcass.dimensions.depth
+                        })
+                        
+                        const clampedX = Math.max(
+                          0,
+                          Math.min(
+                            wallDimensions.length - newGroupedWidth,
+                            groupedNewX
+                          )
+                        )
+                        groupedCabinet.group.position.set(
+                          clampedX,
+                          groupedCabinet.group.position.y,
+                          groupedCabinet.group.position.z
+                        )
+                      }
+                    })
+                  }
+                  
+                  // If cabinet belongs to a view, handle other cabinets in the view
+                  if (cabinet.viewId && cabinet.viewId !== "none" && viewManager) {
+                const cabinetsInSameView = viewManager.getCabinetsInView(cabinet.viewId as ViewId)
+                    const changingLeftEdge = oldX
+                
+                    // Move all cabinets on the RIGHT side by widthDelta (positive X direction)
+                cabinetsInSameView.forEach((cabinetId) => {
+                      if (cabinetId === cabinet.cabinetId) return
+                  
+                  const otherCabinet = cabinets.find(c => c.cabinetId === cabinetId)
+                  if (!otherCabinet) return
+                  
+                      // Skip if cabinets are paired
+                      if (areCabinetsPaired(cabinet.cabinetId, otherCabinet.cabinetId)) {
+                        return
+                      }
+                  
+                      // Cabinet is on the RIGHT if it extends even 1mm toward positive X
+                      // Check if other cabinet's left edge is to the right of changing cabinet's left edge
+                      if (otherCabinet.group.position.x > changingLeftEdge) {
+                        const newX = otherCabinet.group.position.x + widthDelta
+                        const clampedX = Math.max(
+                          0,
+                          Math.min(
+                            wallDimensions.length - otherCabinet.carcass.dimensions.width,
+                            newX
+                          )
+                        )
+                        otherCabinet.group.position.set(
+                          clampedX,
+                          otherCabinet.group.position.y,
+                          otherCabinet.group.position.z
+                        )
+                      }
+                    })
+                  }
+                } else if (rightLock) {
+                  // Right edge is locked - can ONLY extend from left side (negative X direction)
+                  const rightEdge = oldX + oldWidth
+                  const leftEdge = oldX
+                  const newX = rightEdge - width
+                  
+                  // Update dimensions first
+                  cabinet.carcass.updateDimensions({ width, height, depth })
+                  
+                  // Clamp new X position to wall bounds
+                  const clampedX = Math.max(
+                    0,
+                    Math.min(
+                      wallDimensions.length - width,
+                      newX
+                    )
+                  )
+                  
+                  // Update cabinet position (move left edge)
+                  cabinet.group.position.set(
+                    clampedX,
+                    cabinet.group.position.y,
+                    cabinet.group.position.z
+                  )
+                  
+                  // Handle grouped cabinets - apply proportional width changes
+                  const groupData = cabinetGroups.get(cabinet.cabinetId)
+                  if (groupData && groupData.length > 0) {
+                    groupData.forEach((groupCabinet) => {
+                      const groupedCabinet = cabinets.find(c => c.cabinetId === groupCabinet.cabinetId)
+                      if (!groupedCabinet) return
+                      
+                      // Calculate proportional width change
+                      const proportionalDelta = (widthDelta * groupCabinet.percentage) / 100
+                      const newGroupedWidth = groupedCabinet.carcass.dimensions.width + proportionalDelta
+                      
+                      // Respect lock properties of grouped cabinet
+                      const groupedLeftLock = groupedCabinet.leftLock ?? false
+                      const groupedRightLock = groupedCabinet.rightLock ?? false
+                      
+                      if (groupedLeftLock && groupedRightLock) {
+                        // Both locks active - cannot resize
+                        return
+                      } else if (groupedLeftLock) {
+                        // Left locked - extend to right
+                        groupedCabinet.carcass.updateDimensions({
+                          width: newGroupedWidth,
+                          height: groupedCabinet.carcass.dimensions.height,
+                          depth: groupedCabinet.carcass.dimensions.depth
+                        })
+                      } else if (groupedRightLock) {
+                        // Right locked - extend to left
+                        const groupedOldX = groupedCabinet.group.position.x
+                        const groupedOldWidth = groupedCabinet.carcass.dimensions.width
+                        const groupedRightEdge = groupedOldX + groupedOldWidth
+                        const groupedNewX = groupedRightEdge - newGroupedWidth
+                        
+                        groupedCabinet.carcass.updateDimensions({
+                          width: newGroupedWidth,
+                          height: groupedCabinet.carcass.dimensions.height,
+                          depth: groupedCabinet.carcass.dimensions.depth
+                        })
+                        
+                        const clampedX = Math.max(
+                          0,
+                          Math.min(
+                            wallDimensions.length - newGroupedWidth,
+                            groupedNewX
+                          )
+                        )
+                        groupedCabinet.group.position.set(
+                          clampedX,
+                          groupedCabinet.group.position.y,
+                          groupedCabinet.group.position.z
+                        )
+                      } else {
+                        // Neither lock - extend equally from center
+                        const groupedOldX = groupedCabinet.group.position.x
+                        const groupedOldWidth = groupedCabinet.carcass.dimensions.width
+                        const groupedCenterX = groupedOldX + groupedOldWidth / 2
+                        const groupedNewX = groupedCenterX - newGroupedWidth / 2
+                        
+                        groupedCabinet.carcass.updateDimensions({
+                          width: newGroupedWidth,
+                          height: groupedCabinet.carcass.dimensions.height,
+                          depth: groupedCabinet.carcass.dimensions.depth
+                        })
+                        
+                        const clampedX = Math.max(
+                          0,
+                          Math.min(
+                            wallDimensions.length - newGroupedWidth,
+                            groupedNewX
+                          )
+                        )
+                        groupedCabinet.group.position.set(
+                          clampedX,
+                          groupedCabinet.group.position.y,
+                          groupedCabinet.group.position.z
+                        )
+                      }
+                    })
+                  }
+                  
+                  // If cabinet belongs to a view, handle other cabinets in the view
+                  if (cabinet.viewId && cabinet.viewId !== "none" && viewManager) {
+                    const cabinetsInSameView = viewManager.getCabinetsInView(cabinet.viewId as ViewId)
+                    const changingRightEdge = oldX + oldWidth
+                    
+                    // Move all cabinets on the LEFT side by widthDelta (negative X direction)
+                    cabinetsInSameView.forEach((cabinetId) => {
+                      if (cabinetId === cabinet.cabinetId) return
+                      
+                      const otherCabinet = cabinets.find(c => c.cabinetId === cabinetId)
+                      if (!otherCabinet) return
+                      
+                      // Skip if cabinets are paired
+                      if (areCabinetsPaired(cabinet.cabinetId, otherCabinet.cabinetId)) {
+                        return
+                      }
+                      
+                      // Cabinet is on the LEFT if it extends even 1mm toward negative X
+                      // Check if other cabinet's right edge is to the left of changing cabinet's right edge
+                      if (otherCabinet.group.position.x + otherCabinet.carcass.dimensions.width < changingRightEdge) {
+                        const newX = otherCabinet.group.position.x - widthDelta
+                  const clampedX = Math.max(
+                    0,
+                    Math.min(
+                      wallDimensions.length - otherCabinet.carcass.dimensions.width,
+                      newX
+                    )
+                  )
+                        otherCabinet.group.position.set(
+                          clampedX,
+                          otherCabinet.group.position.y,
+                          otherCabinet.group.position.z
+                        )
+                      }
+                    })
+                  }
+                } else {
+                  // Neither lock is active - cabinet can extend/shrink by half widthDelta in both directions
+                  // Center position stays fixed, extends equally in both positive and negative X directions
+                  // Calculate center position
+                  const centerX = oldX + oldWidth / 2
+                  // Calculate new left edge position (center - half of new width)
+                  const newX = centerX - width / 2
+                  
+                  // Clamp new X position to wall bounds
+                  const clampedX = Math.max(
+                    0,
+                    Math.min(
+                      wallDimensions.length - width,
+                      newX
+                    )
+                  )
+                  
+                  // Update dimensions first
+                  cabinet.carcass.updateDimensions({ width, height, depth })
+                  
+                  // Update cabinet position (center remains fixed, extends equally both sides)
+                  cabinet.group.position.set(
+                    clampedX,
+                    cabinet.group.position.y,
+                    cabinet.group.position.z
+                  )
+                  
+                  // Handle grouped cabinets - apply proportional width changes
+                  const groupData = cabinetGroups.get(cabinet.cabinetId)
+                  if (groupData && groupData.length > 0) {
+                    groupData.forEach((groupCabinet) => {
+                      const groupedCabinet = cabinets.find(c => c.cabinetId === groupCabinet.cabinetId)
+                      if (!groupedCabinet) return
+                      
+                      // Calculate proportional width change
+                      const proportionalDelta = (widthDelta * groupCabinet.percentage) / 100
+                      const newGroupedWidth = groupedCabinet.carcass.dimensions.width + proportionalDelta
+                      
+                      // Respect lock properties of grouped cabinet
+                      const groupedLeftLock = groupedCabinet.leftLock ?? false
+                      const groupedRightLock = groupedCabinet.rightLock ?? false
+                      
+                      if (groupedLeftLock && groupedRightLock) {
+                        // Both locks active - cannot resize
+                        return
+                      } else if (groupedLeftLock) {
+                        // Left locked - extend to right
+                        groupedCabinet.carcass.updateDimensions({
+                          width: newGroupedWidth,
+                          height: groupedCabinet.carcass.dimensions.height,
+                          depth: groupedCabinet.carcass.dimensions.depth
+                        })
+                      } else if (groupedRightLock) {
+                        // Right locked - extend to left
+                        const groupedOldX = groupedCabinet.group.position.x
+                        const groupedOldWidth = groupedCabinet.carcass.dimensions.width
+                        const groupedRightEdge = groupedOldX + groupedOldWidth
+                        const groupedNewX = groupedRightEdge - newGroupedWidth
+                        
+                        groupedCabinet.carcass.updateDimensions({
+                          width: newGroupedWidth,
+                          height: groupedCabinet.carcass.dimensions.height,
+                          depth: groupedCabinet.carcass.dimensions.depth
+                        })
+                        
+                        const clampedX = Math.max(
+                          0,
+                          Math.min(
+                            wallDimensions.length - newGroupedWidth,
+                            groupedNewX
+                          )
+                        )
+                        groupedCabinet.group.position.set(
+                          clampedX,
+                          groupedCabinet.group.position.y,
+                          groupedCabinet.group.position.z
+                        )
+                      } else {
+                        // Neither lock - extend equally from center
+                        const groupedOldX = groupedCabinet.group.position.x
+                        const groupedOldWidth = groupedCabinet.carcass.dimensions.width
+                        const groupedCenterX = groupedOldX + groupedOldWidth / 2
+                        const groupedNewX = groupedCenterX - newGroupedWidth / 2
+                        
+                        groupedCabinet.carcass.updateDimensions({
+                          width: newGroupedWidth,
+                          height: groupedCabinet.carcass.dimensions.height,
+                          depth: groupedCabinet.carcass.dimensions.depth
+                        })
+                        
+                        const clampedX = Math.max(
+                          0,
+                          Math.min(
+                            wallDimensions.length - newGroupedWidth,
+                            groupedNewX
+                          )
+                        )
+                        groupedCabinet.group.position.set(
+                          clampedX,
+                          groupedCabinet.group.position.y,
+                          groupedCabinet.group.position.z
+                        )
+                      }
+                    })
+                  }
+                  
+                  // Move other cabinets in the view based on half delta
+                  // All cabinets on the RIGHT side move by halfDelta in positive X direction
+                  // All cabinets on the LEFT side move by halfDelta in negative X direction
+                  if (cabinet.viewId && cabinet.viewId !== "none" && viewManager) {
+                    const cabinetsInSameView = viewManager.getCabinetsInView(cabinet.viewId as ViewId)
+                    const halfDelta = widthDelta / 2
+                    const changingLeftEdge = oldX
+                    const changingRightEdge = oldX + oldWidth
+                    
+                    cabinetsInSameView.forEach((cabinetId) => {
+                      if (cabinetId === cabinet.cabinetId) return
+                      
+                      const otherCabinet = cabinets.find(c => c.cabinetId === cabinetId)
+                      if (!otherCabinet) return
+                      
+                      // Skip if cabinets are paired
+                      if (areCabinetsPaired(cabinet.cabinetId, otherCabinet.cabinetId)) {
+                        return
+                      }
+                      
+                      const otherX = otherCabinet.group.position.x
+                      const otherWidth = otherCabinet.carcass.dimensions.width
+                      const otherRight = otherX + otherWidth
+                      
+                      // Move cabinets on the LEFT side by halfDelta (negative X direction)
+                      // Cabinet is on the LEFT if it extends even 1mm toward negative X
+                      if (otherRight < changingRightEdge) {
+                        const newX = otherCabinet.group.position.x - halfDelta
+                        const clampedX = Math.max(
+                          0,
+                          Math.min(
+                            wallDimensions.length - otherCabinet.carcass.dimensions.width,
+                            newX
+                          )
+                        )
+                  otherCabinet.group.position.set(
+                    clampedX,
+                    otherCabinet.group.position.y,
+                    otherCabinet.group.position.z
+                  )
+                      }
+                      // Move cabinets on the RIGHT side by halfDelta (positive X direction)
+                      // Cabinet is on the RIGHT if it extends even 1mm toward positive X
+                      else if (otherX > changingLeftEdge) {
+                        const newX = otherCabinet.group.position.x + halfDelta
+                        const clampedX = Math.max(
+                          0,
+                          Math.min(
+                            wallDimensions.length - otherCabinet.carcass.dimensions.width,
+                            newX
+                          )
+                        )
+                        otherCabinet.group.position.set(
+                          clampedX,
+                          otherCabinet.group.position.y,
+                          otherCabinet.group.position.z
+                        )
+                      }
+                    })
+                  }
+                }
+              } else {
+                // Width didn't change, just update other dimensions
+                cabinet.carcass.updateDimensions({ width, height, depth })
+              }
+            })
+          }}
+          onSplashbackHeightChange={(viewId, height) => {
+            // Apply the gap to all base/tall and top cabinet pairs in this view
+            const cabinetIds = viewManager.getCabinetsInView(viewId as ViewId)
+            const viewCabinets = cabinets.filter(c => cabinetIds.includes(c.cabinetId))
+            
+            // Group cabinets by their X position ranges (cabinets that overlap horizontally)
+            const xRanges: Array<{ minX: number; maxX: number; baseCabinets: CabinetData[]; topCabinets: CabinetData[] }> = []
+            
+            viewCabinets.forEach((cabinet) => {
+              const x = cabinet.group.position.x
+              const width = cabinet.carcass.dimensions.width
+              const minX = x
+              const maxX = x + width
+              
+              // Find if this cabinet overlaps with any existing X range
+              let foundRange = false
+              for (const range of xRanges) {
+                // Check if there's horizontal overlap
+                if (!(maxX < range.minX || minX > range.maxX)) {
+                  // Overlaps - merge into this range
+                  range.minX = Math.min(range.minX, minX)
+                  range.maxX = Math.max(range.maxX, maxX)
+                  
+                  // Add cabinet to appropriate list
+                  if (cabinet.cabinetType === 'base' || cabinet.cabinetType === 'tall') {
+                    if (!range.baseCabinets.includes(cabinet)) {
+                      range.baseCabinets.push(cabinet)
+                    }
+                  } else if (cabinet.cabinetType === 'top') {
+                    if (!range.topCabinets.includes(cabinet)) {
+                      range.topCabinets.push(cabinet)
+                    }
+                  }
+                  
+                  foundRange = true
+                  break
+                }
+              }
+              
+              if (!foundRange) {
+                // Create new X range
+                const baseCabinets: CabinetData[] = []
+                const topCabinets: CabinetData[] = []
+                
+                if (cabinet.cabinetType === 'base' || cabinet.cabinetType === 'tall') {
+                  baseCabinets.push(cabinet)
+                } else if (cabinet.cabinetType === 'top') {
+                  topCabinets.push(cabinet)
+                }
+                
+                xRanges.push({ minX, maxX, baseCabinets, topCabinets })
+              }
+            })
+            
+            // For each X range, apply splashback height gap
+            xRanges.forEach((range) => {
+              // Skip if no top cabinets to position
+              if (range.topCabinets.length === 0) return
+              
+              // Skip if no base/tall cabinets to measure from
+              if (range.baseCabinets.length === 0) return
+              
+              // Find the highest base/tall cabinet in this range
+              const highestBase = range.baseCabinets.reduce((prev, curr) => {
+                const prevTop = prev.group.position.y + prev.carcass.dimensions.height
+                const currTop = curr.group.position.y + curr.carcass.dimensions.height
+                return currTop > prevTop ? curr : prev
+              }, range.baseCabinets[0])
+              
+              if (!highestBase) return
+              
+              const baseTop = highestBase.group.position.y + highestBase.carcass.dimensions.height
+              const targetTopBottom = baseTop + height
+              
+              // Position all top cabinets so their bottom is at targetTopBottom
+              range.topCabinets.forEach((topCabinet) => {
+                const newY = targetTopBottom
+                
+                // Apply boundary clamping
+                const clampedY = Math.max(
+                  0,
+                  Math.min(
+                    wallDimensions.height - topCabinet.carcass.dimensions.height,
+                    newY
+                  )
+                )
+                
+                topCabinet.group.position.set(
+                  topCabinet.group.position.x,
+                  clampedY,
+                  topCabinet.group.position.z
+                )
+              })
+            })
+          }}
+        />
+      )}
+
+            {/* Camera Movement Control */}
+            <CameraControls
+              isDragging={isDragging}
+              cameraMode={cameraMode}
+              onToggleMode={() => setCameraMode(prev => prev === 'constrained' ? 'free' : 'constrained')}
+              onReset={resetCameraPosition}
+              onClear={clearCabinets}
+              onX={() => { setCameraMode('constrained'); setCameraXView(); }}
+              onY={() => { setCameraMode('constrained'); setCameraYView(); }}
+              onZ={() => { setCameraMode('constrained'); setCameraZView(); }}
+              onToggleDimensions={() => setDimensionsVisible(prev => !prev)}
+              onToggleNumbers={() => setNumbersVisible(prev => !prev)}
+              numbersVisible={numbersVisible}
+              onDelete={() => {
+                if (selectedCabinet) {
+                  setCabinetToDelete(selectedCabinet)
+                  setShowDeleteModal(true)
+                }
+              }}
+              canDelete={!!selectedCabinet}
+              isMenuOpen={isMenuOpen}
+            />
+
+      {/* Camera Movement Instructions moved to CameraControls component - appears on hover */}
+
+      {/* Cabinet Lock Icons - appear on double-click */}
+      {cabinetWithLockIcons && (
+        <CabinetLockIcons
+          cabinet={cabinetWithLockIcons}
+          camera={cameraRef.current}
+          allCabinets={cabinets}
+          onClose={() => setCabinetWithLockIcons(null)}
+          onLockChange={(cabinetId, leftLock, rightLock) => {
+            // Update the cabinet's lock state
+            updateCabinetLock(cabinetId, leftLock, rightLock)
+            // Update cabinetWithLockIcons if it's the one being changed
+            if (cabinetWithLockIcons?.cabinetId === cabinetId) {
+              setCabinetWithLockIcons(prev => prev ? { ...prev, leftLock, rightLock } : null)
+            }
+          }}
+        />
+      )}
+
+      {/* CabinetsInfoPanel hidden per user request */}
+      {/* <CabinetsInfoPanel cabinets={cabinets} /> */}
+
 
       {/* Info Panel */}
 
@@ -281,15 +1448,515 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
           drawerEnabled: selectedCabinet.carcass.config.drawerEnabled,
           drawerQuantity: selectedCabinet.carcass.config.drawerQuantity,
           drawerHeights: selectedCabinet.carcass.config.drawerHeights,
-          cabinetId: selectedCabinet.cabinetId
+          cabinetId: selectedCabinet.cabinetId,
+          viewId: selectedCabinet.viewId
         } : null}
+        viewManager={viewManager}
+        allCabinets={cabinets}
+        initialGroupData={selectedCabinet ? (cabinetGroups.get(selectedCabinet.cabinetId) || []) : []}
+        onViewChange={(cabinetId, viewId) => {
+          // Update the cabinet's viewId in the state
+          // If viewId is "none", set to undefined
+          updateCabinetViewId(cabinetId, viewId === 'none' ? undefined : viewId)
+          
+          // If cabinet is removed from view (viewId is 'none'), remove all group relations
+          if (viewId === 'none') {
+            setCabinetGroups(prev => {
+              const newMap = new Map(prev)
+              
+              // Remove this cabinet's own group
+              newMap.delete(cabinetId)
+              
+              // Remove this cabinet from any other cabinets' groups
+              newMap.forEach((group, otherCabinetId) => {
+                const updatedGroup = group.filter(g => g.cabinetId !== cabinetId)
+                if (updatedGroup.length !== group.length) {
+                  // Cabinet was removed from this group
+                  if (updatedGroup.length > 0) {
+                    // Recalculate percentages if a cabinet was removed
+                    const total = updatedGroup.reduce((sum, g) => sum + g.percentage, 0)
+                    if (total !== 100) {
+                      updatedGroup.forEach(g => {
+                        g.percentage = Math.round((g.percentage / total) * 100)
+                      })
+                      const finalTotal = updatedGroup.reduce((sum, g) => sum + g.percentage, 0)
+                      if (finalTotal !== 100) {
+                        updatedGroup[0].percentage += (100 - finalTotal)
+                      }
+                    }
+                    newMap.set(otherCabinetId, updatedGroup)
+                  } else {
+                    // No more cabinets in group, remove the group
+                    newMap.delete(otherCabinetId)
+                  }
+                }
+              })
+              
+              return newMap
+            })
+          }
+        }}
+        onGroupChange={(cabinetId, groupCabinets) => {
+          // Update cabinet groups map
+          setCabinetGroups(prev => {
+            const newMap = new Map(prev)
+            if (groupCabinets.length === 0) {
+              newMap.delete(cabinetId)
+            } else {
+              newMap.set(cabinetId, groupCabinets)
+            }
+            return newMap
+          })
+        }}
 
         onShelfCountChange={(newCount: number) => { if (selectedCabinet) selectedCabinet.carcass.updateConfig({ shelfCount: newCount }); }}
 
         onDimensionsChange={(newDimensions) => {
           if (selectedCabinet) {
-            // Update the carcass dimensions
-            selectedCabinet.carcass.updateDimensions(newDimensions);
+            // Store old width and position before updating
+            const oldWidth = selectedCabinet.carcass.dimensions.width
+            const oldX = selectedCabinet.group.position.x
+            const leftLock = selectedCabinet.leftLock ?? false
+            const rightLock = selectedCabinet.rightLock ?? false
+            
+            // Calculate width delta (how much the width changed)
+            const widthDelta = newDimensions.width - oldWidth
+            
+            // Handle lock states
+            if (widthDelta !== 0) {
+              if (leftLock && rightLock) {
+                // Both locks are active - cannot resize width
+                alert("Cannot resize width when both left and right edges are locked")
+                return
+              } else if (leftLock) {
+                // Left edge is locked - keep left edge fixed, move right edge
+                // Position stays the same (left edge is frozen)
+                // Just update dimensions
+                selectedCabinet.carcass.updateDimensions(newDimensions)
+                
+                // Handle grouped cabinets - apply proportional width changes
+                const groupData = cabinetGroups.get(selectedCabinet.cabinetId)
+                if (groupData && groupData.length > 0) {
+                  groupData.forEach((groupCabinet) => {
+                    const groupedCabinet = cabinets.find(c => c.cabinetId === groupCabinet.cabinetId)
+                    if (!groupedCabinet) return
+                    
+                    // Calculate proportional width change
+                    const proportionalDelta = (widthDelta * groupCabinet.percentage) / 100
+                    const newGroupedWidth = groupedCabinet.carcass.dimensions.width + proportionalDelta
+                    
+                    // Respect lock properties of grouped cabinet
+                    const groupedLeftLock = groupedCabinet.leftLock ?? false
+                    const groupedRightLock = groupedCabinet.rightLock ?? false
+                    
+                    if (groupedLeftLock && groupedRightLock) {
+                      // Both locks active - cannot resize
+                      return
+                    } else if (groupedLeftLock) {
+                      // Left locked - extend to right
+                      groupedCabinet.carcass.updateDimensions({
+                        width: newGroupedWidth,
+                        height: groupedCabinet.carcass.dimensions.height,
+                        depth: groupedCabinet.carcass.dimensions.depth
+                      })
+                    } else if (groupedRightLock) {
+                      // Right locked - extend to left
+                      const groupedOldX = groupedCabinet.group.position.x
+                      const groupedOldWidth = groupedCabinet.carcass.dimensions.width
+                      const groupedRightEdge = groupedOldX + groupedOldWidth
+                      const groupedNewX = groupedRightEdge - newGroupedWidth
+                      
+                      groupedCabinet.carcass.updateDimensions({
+                        width: newGroupedWidth,
+                        height: groupedCabinet.carcass.dimensions.height,
+                        depth: groupedCabinet.carcass.dimensions.depth
+                      })
+                      
+                      const clampedX = Math.max(
+                        0,
+                        Math.min(
+                          wallDimensions.length - newGroupedWidth,
+                          groupedNewX
+                        )
+                      )
+                      groupedCabinet.group.position.set(
+                        clampedX,
+                        groupedCabinet.group.position.y,
+                        groupedCabinet.group.position.z
+                      )
+                    } else {
+                      // Neither lock - extend equally from center
+                      const groupedOldX = groupedCabinet.group.position.x
+                      const groupedOldWidth = groupedCabinet.carcass.dimensions.width
+                      const groupedCenterX = groupedOldX + groupedOldWidth / 2
+                      const groupedNewX = groupedCenterX - newGroupedWidth / 2
+                      
+                      groupedCabinet.carcass.updateDimensions({
+                        width: newGroupedWidth,
+                        height: groupedCabinet.carcass.dimensions.height,
+                        depth: groupedCabinet.carcass.dimensions.depth
+                      })
+                      
+                      const clampedX = Math.max(
+                        0,
+                        Math.min(
+                          wallDimensions.length - newGroupedWidth,
+                          groupedNewX
+                        )
+                      )
+                      groupedCabinet.group.position.set(
+                        clampedX,
+                        groupedCabinet.group.position.y,
+                        groupedCabinet.group.position.z
+                      )
+                    }
+                  })
+                }
+                
+                // If cabinet belongs to a view, move all other cabinets to the right of this one
+                if (selectedCabinet.viewId && selectedCabinet.viewId !== "none" && viewManager) {
+              const cabinetsInSameView = viewManager.getCabinetsInView(selectedCabinet.viewId as ViewId)
+                  const changingLeftEdge = oldX
+              
+              cabinetsInSameView.forEach((cabinetId) => {
+                    if (cabinetId === selectedCabinet.cabinetId) return
+                
+                const otherCabinet = cabinets.find(c => c.cabinetId === cabinetId)
+                if (!otherCabinet) return
+                
+                    // Skip if cabinets are paired
+                    if (areCabinetsPaired(selectedCabinet.cabinetId, otherCabinet.cabinetId)) {
+                      return
+                    }
+                
+                    // Cabinet is on the RIGHT if it extends even 1mm toward positive X
+                    // Check if other cabinet's left edge is to the right of changing cabinet's left edge
+                    if (otherCabinet.group.position.x > changingLeftEdge) {
+                      const newX = otherCabinet.group.position.x + widthDelta
+                      const clampedX = Math.max(
+                        0,
+                        Math.min(
+                          wallDimensions.length - otherCabinet.carcass.dimensions.width,
+                          newX
+                        )
+                      )
+                      otherCabinet.group.position.set(
+                        clampedX,
+                        otherCabinet.group.position.y,
+                        otherCabinet.group.position.z
+                      )
+                    }
+                  })
+                }
+              } else if (rightLock) {
+                // Right edge is locked - keep right edge fixed, move left edge
+                const rightEdge = oldX + oldWidth
+                const newX = rightEdge - newDimensions.width
+                
+                // Update dimensions first
+                selectedCabinet.carcass.updateDimensions(newDimensions)
+                
+                // Clamp new X position to wall bounds
+                const clampedX = Math.max(
+                  0,
+                  Math.min(
+                    wallDimensions.length - newDimensions.width,
+                    newX
+                  )
+                )
+                
+                // Update cabinet position (move left edge)
+                selectedCabinet.group.position.set(
+                  clampedX,
+                  selectedCabinet.group.position.y,
+                  selectedCabinet.group.position.z
+                )
+                
+                // Handle grouped cabinets - apply proportional width changes
+                const groupData = cabinetGroups.get(selectedCabinet.cabinetId)
+                if (groupData && groupData.length > 0) {
+                  groupData.forEach((groupCabinet) => {
+                    const groupedCabinet = cabinets.find(c => c.cabinetId === groupCabinet.cabinetId)
+                    if (!groupedCabinet) return
+                    
+                    // Calculate proportional width change
+                    const proportionalDelta = (widthDelta * groupCabinet.percentage) / 100
+                    const newGroupedWidth = groupedCabinet.carcass.dimensions.width + proportionalDelta
+                    
+                    // Respect lock properties of grouped cabinet
+                    const groupedLeftLock = groupedCabinet.leftLock ?? false
+                    const groupedRightLock = groupedCabinet.rightLock ?? false
+                    
+                    if (groupedLeftLock && groupedRightLock) {
+                      // Both locks active - cannot resize
+                      return
+                    } else if (groupedLeftLock) {
+                      // Left locked - extend to right
+                      groupedCabinet.carcass.updateDimensions({
+                        width: newGroupedWidth,
+                        height: groupedCabinet.carcass.dimensions.height,
+                        depth: groupedCabinet.carcass.dimensions.depth
+                      })
+                    } else if (groupedRightLock) {
+                      // Right locked - extend to left
+                      const groupedOldX = groupedCabinet.group.position.x
+                      const groupedOldWidth = groupedCabinet.carcass.dimensions.width
+                      const groupedRightEdge = groupedOldX + groupedOldWidth
+                      const groupedNewX = groupedRightEdge - newGroupedWidth
+                      
+                      groupedCabinet.carcass.updateDimensions({
+                        width: newGroupedWidth,
+                        height: groupedCabinet.carcass.dimensions.height,
+                        depth: groupedCabinet.carcass.dimensions.depth
+                      })
+                      
+                      const clampedX = Math.max(
+                        0,
+                        Math.min(
+                          wallDimensions.length - newGroupedWidth,
+                          groupedNewX
+                        )
+                      )
+                      groupedCabinet.group.position.set(
+                        clampedX,
+                        groupedCabinet.group.position.y,
+                        groupedCabinet.group.position.z
+                      )
+                    } else {
+                      // Neither lock - extend equally from center
+                      const groupedOldX = groupedCabinet.group.position.x
+                      const groupedOldWidth = groupedCabinet.carcass.dimensions.width
+                      const groupedCenterX = groupedOldX + groupedOldWidth / 2
+                      const groupedNewX = groupedCenterX - newGroupedWidth / 2
+                      
+                      groupedCabinet.carcass.updateDimensions({
+                        width: newGroupedWidth,
+                        height: groupedCabinet.carcass.dimensions.height,
+                        depth: groupedCabinet.carcass.dimensions.depth
+                      })
+                      
+                      const clampedX = Math.max(
+                        0,
+                        Math.min(
+                          wallDimensions.length - newGroupedWidth,
+                          groupedNewX
+                        )
+                      )
+                      groupedCabinet.group.position.set(
+                        clampedX,
+                        groupedCabinet.group.position.y,
+                        groupedCabinet.group.position.z
+                      )
+                    }
+                  })
+                }
+                
+                // If cabinet belongs to a view, move all other cabinets to the left of this one
+                if (selectedCabinet.viewId && selectedCabinet.viewId !== "none" && viewManager) {
+                  const cabinetsInSameView = viewManager.getCabinetsInView(selectedCabinet.viewId as ViewId)
+                  const changingRightEdge = oldX + oldWidth
+                  
+                  cabinetsInSameView.forEach((cabinetId) => {
+                    if (cabinetId === selectedCabinet.cabinetId) return
+                    
+                    const otherCabinet = cabinets.find(c => c.cabinetId === cabinetId)
+                    if (!otherCabinet) return
+                    
+                    // Skip if cabinets are paired
+                    if (areCabinetsPaired(selectedCabinet.cabinetId, otherCabinet.cabinetId)) {
+                      return
+                    }
+                    
+                    // Cabinet is on the LEFT if it extends even 1mm toward negative X
+                    // Check if other cabinet's right edge is to the left of changing cabinet's right edge
+                    if (otherCabinet.group.position.x + otherCabinet.carcass.dimensions.width < changingRightEdge) {
+                      const newX = otherCabinet.group.position.x - widthDelta
+                      const clampedX = Math.max(
+                        0,
+                        Math.min(
+                          wallDimensions.length - otherCabinet.carcass.dimensions.width,
+                          newX
+                        )
+                      )
+                      otherCabinet.group.position.set(
+                        clampedX,
+                        otherCabinet.group.position.y,
+                        otherCabinet.group.position.z
+                      )
+                    }
+                  })
+                }
+              } else {
+                // Neither lock is active - cabinet can extend/shrink by half widthDelta in both directions
+                // Center position stays fixed, extends equally in both positive and negative X directions
+                // Calculate center position
+                const centerX = oldX + oldWidth / 2
+                // Calculate new left edge position (center - half of new width)
+                const newX = centerX - newDimensions.width / 2
+                
+                // Clamp new X position to wall bounds
+                const clampedX = Math.max(
+                  0,
+                  Math.min(
+                    wallDimensions.length - newDimensions.width,
+                    newX
+                  )
+                )
+                
+                // Update dimensions first
+                selectedCabinet.carcass.updateDimensions(newDimensions)
+                
+                // Update cabinet position (center remains fixed, extends equally both sides)
+                selectedCabinet.group.position.set(
+                  clampedX,
+                  selectedCabinet.group.position.y,
+                  selectedCabinet.group.position.z
+                )
+                
+                // Handle grouped cabinets - apply proportional width changes
+                const groupData = cabinetGroups.get(selectedCabinet.cabinetId)
+                if (groupData && groupData.length > 0) {
+                  groupData.forEach((groupCabinet) => {
+                    const groupedCabinet = cabinets.find(c => c.cabinetId === groupCabinet.cabinetId)
+                    if (!groupedCabinet) return
+                    
+                    // Calculate proportional width change
+                    const proportionalDelta = (widthDelta * groupCabinet.percentage) / 100
+                    const newGroupedWidth = groupedCabinet.carcass.dimensions.width + proportionalDelta
+                    
+                    // Respect lock properties of grouped cabinet
+                    const groupedLeftLock = groupedCabinet.leftLock ?? false
+                    const groupedRightLock = groupedCabinet.rightLock ?? false
+                    
+                    if (groupedLeftLock && groupedRightLock) {
+                      // Both locks active - cannot resize
+                      return
+                    } else if (groupedLeftLock) {
+                      // Left locked - extend to right
+                      groupedCabinet.carcass.updateDimensions({
+                        width: newGroupedWidth,
+                        height: groupedCabinet.carcass.dimensions.height,
+                        depth: groupedCabinet.carcass.dimensions.depth
+                      })
+                    } else if (groupedRightLock) {
+                      // Right locked - extend to left
+                      const groupedOldX = groupedCabinet.group.position.x
+                      const groupedOldWidth = groupedCabinet.carcass.dimensions.width
+                      const groupedRightEdge = groupedOldX + groupedOldWidth
+                      const groupedNewX = groupedRightEdge - newGroupedWidth
+                      
+                      groupedCabinet.carcass.updateDimensions({
+                        width: newGroupedWidth,
+                        height: groupedCabinet.carcass.dimensions.height,
+                        depth: groupedCabinet.carcass.dimensions.depth
+                      })
+                      
+                      const clampedX = Math.max(
+                        0,
+                        Math.min(
+                          wallDimensions.length - newGroupedWidth,
+                          groupedNewX
+                        )
+                      )
+                      groupedCabinet.group.position.set(
+                        clampedX,
+                        groupedCabinet.group.position.y,
+                        groupedCabinet.group.position.z
+                      )
+                    } else {
+                      // Neither lock - extend equally from center
+                      const groupedOldX = groupedCabinet.group.position.x
+                      const groupedOldWidth = groupedCabinet.carcass.dimensions.width
+                      const groupedCenterX = groupedOldX + groupedOldWidth / 2
+                      const groupedNewX = groupedCenterX - newGroupedWidth / 2
+                      
+                      groupedCabinet.carcass.updateDimensions({
+                        width: newGroupedWidth,
+                        height: groupedCabinet.carcass.dimensions.height,
+                        depth: groupedCabinet.carcass.dimensions.depth
+                      })
+                      
+                      const clampedX = Math.max(
+                        0,
+                        Math.min(
+                          wallDimensions.length - newGroupedWidth,
+                          groupedNewX
+                        )
+                      )
+                      groupedCabinet.group.position.set(
+                        clampedX,
+                        groupedCabinet.group.position.y,
+                        groupedCabinet.group.position.z
+                      )
+                    }
+                  })
+                }
+                
+                // Move other cabinets in the view based on half delta
+                // All cabinets on the RIGHT side move by halfDelta in positive X direction
+                // All cabinets on the LEFT side move by halfDelta in negative X direction
+                if (selectedCabinet.viewId && selectedCabinet.viewId !== "none" && viewManager) {
+                  const cabinetsInSameView = viewManager.getCabinetsInView(selectedCabinet.viewId as ViewId)
+                  const halfDelta = widthDelta / 2
+                  const changingLeftEdge = oldX
+                  const changingRightEdge = oldX + oldWidth
+                  
+                  cabinetsInSameView.forEach((cabinetId) => {
+                    if (cabinetId === selectedCabinet.cabinetId) return
+                    
+                    const otherCabinet = cabinets.find(c => c.cabinetId === cabinetId)
+                    if (!otherCabinet) return
+                    
+                    // Skip if cabinets are paired
+                    if (areCabinetsPaired(selectedCabinet.cabinetId, otherCabinet.cabinetId)) {
+                      return
+                    }
+                    
+                    const otherX = otherCabinet.group.position.x
+                    const otherWidth = otherCabinet.carcass.dimensions.width
+                    const otherRight = otherX + otherWidth
+                    
+                    // Move cabinets on the LEFT side by halfDelta (negative X direction)
+                    // Cabinet is on the LEFT if it extends even 1mm toward negative X
+                    if (otherRight < changingRightEdge) {
+                      const newX = otherCabinet.group.position.x - halfDelta
+                      const clampedX = Math.max(
+                        0,
+                        Math.min(
+                          wallDimensions.length - otherCabinet.carcass.dimensions.width,
+                          newX
+                        )
+                      )
+                otherCabinet.group.position.set(
+                  clampedX,
+                  otherCabinet.group.position.y,
+                  otherCabinet.group.position.z
+                )
+                    }
+                    // Move cabinets on the RIGHT side by halfDelta (positive X direction)
+                    // Cabinet is on the RIGHT if it extends even 1mm toward positive X
+                    else if (otherX > changingLeftEdge) {
+                      const newX = otherCabinet.group.position.x + halfDelta
+                      const clampedX = Math.max(
+                        0,
+                        Math.min(
+                          wallDimensions.length - otherCabinet.carcass.dimensions.width,
+                          newX
+                        )
+                      )
+                      otherCabinet.group.position.set(
+                        clampedX,
+                        otherCabinet.group.position.y,
+                        otherCabinet.group.position.z
+                      )
+                    }
+                  })
+                }
+              }
+            } else {
+              // Width didn't change, just update other dimensions
+              selectedCabinet.carcass.updateDimensions(newDimensions)
+            }
           }
         }}
         onMaterialChange={(materialChanges) => {
@@ -395,6 +2062,71 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
           }
         }}
       />
+
+      {/* Save Modal */}
+      <SaveModal
+        isOpen={showSaveModal}
+        onClose={() => setShowSaveModal(false)}
+        onSave={handleSaveRoom}
+        currentRoom={currentRoom}
+      />
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmationModal
+        isOpen={showDeleteModal}
+        onClose={() => {
+          setShowDeleteModal(false)
+          setCabinetToDelete(null)
+        }}
+        onConfirm={() => {
+          if (cabinetToDelete) {
+            // Remove from ViewManager if assigned to a view
+            if (cabinetToDelete.viewId && cabinetToDelete.viewId !== 'none') {
+              viewManager.viewManager.assignCabinetToView(cabinetToDelete.cabinetId, 'none')
+            }
+            // Remove group data for this cabinet
+            setCabinetGroups(prev => {
+              const newMap = new Map(prev)
+              newMap.delete(cabinetToDelete.cabinetId)
+              // Also remove this cabinet from any other cabinet's groups
+              newMap.forEach((group, cabinetId) => {
+                const updatedGroup = group.filter(g => g.cabinetId !== cabinetToDelete.cabinetId)
+                if (updatedGroup.length !== group.length) {
+                  // Recalculate percentages if a cabinet was removed
+                  if (updatedGroup.length > 0) {
+                    const total = updatedGroup.reduce((sum, g) => sum + g.percentage, 0)
+                    if (total !== 100) {
+                      updatedGroup.forEach(g => {
+                        g.percentage = Math.round((g.percentage / total) * 100)
+                      })
+                      const finalTotal = updatedGroup.reduce((sum, g) => sum + g.percentage, 0)
+                      if (finalTotal !== 100) {
+                        updatedGroup[0].percentage += (100 - finalTotal)
+                      }
+                    }
+                    newMap.set(cabinetId, updatedGroup)
+                  } else {
+                    newMap.delete(cabinetId)
+                  }
+                }
+              })
+              return newMap
+            })
+            // Delete the cabinet
+            deleteCabinet(cabinetToDelete.cabinetId)
+            setCabinetToDelete(null)
+          }
+        }}
+        itemName="the selected cabinet"
+      />
+
+      {/* SAVE Button - Left Bottom Corner */}
+      <button
+        onClick={() => setShowSaveModal(true)}
+        className="fixed bottom-4 left-4 z-50 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-lg transition-colors duration-200 font-medium"
+      >
+        SAVE
+      </button>
     </div>
   );
 };

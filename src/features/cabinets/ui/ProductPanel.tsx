@@ -4,18 +4,21 @@ import { GDThreeJsType } from '@/types/erpTypes'
 import { useQuery } from '@tanstack/react-query'
 import _ from 'lodash'
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { Plus, X } from 'lucide-react'
 import type { ProductPanelProps } from './productPanel.types'
+import { ViewSelector } from './ViewSelector'
+import type { ViewId } from '../ViewManager'
 
 interface LocalProductPanelProps extends ProductPanelProps { }
 
 // In-memory per-cabinet state store to persist last user-edited values across panel reopens
-type PersistedPanelState = {
+export type PersistedPanelState = {
   values: Record<string, number | string>
   materialColor: string
   materialSelections?: Record<string, { priceRangeId: string, colorId: string, finishId?: string }>
   price?: { amount: number }
 }
-const cabinetPanelState = new Map<string, PersistedPanelState>()
+export const cabinetPanelState = new Map<string, PersistedPanelState>()
 
 const ProductPanel: React.FC<LocalProductPanelProps> = props => {
   // Always render dynamic panel: fetch WsProduct on demand via React Query using cabinet productId
@@ -25,7 +28,7 @@ const ProductPanel: React.FC<LocalProductPanelProps> = props => {
 export default ProductPanel
 
 // -------- Fetcher wrapper + Dynamic Dims-only variant driven by WsProduct --------
-const DynamicPanelWithQuery: React.FC<LocalProductPanelProps> = ({ isVisible, onClose, selectedCabinet, onDimensionsChange, onMaterialChange, onOverhangDoorToggle, onShelfCountChange }) => {
+const DynamicPanelWithQuery: React.FC<LocalProductPanelProps> = ({ isVisible, onClose, selectedCabinet, onDimensionsChange, onMaterialChange, onOverhangDoorToggle, onShelfCountChange, viewManager, onViewChange, allCabinets, onGroupChange, initialGroupData }) => {
   const productId = selectedCabinet?.productId
   const { data, isLoading, isError } = useQuery({
     queryKey: ['productData', productId],
@@ -75,15 +78,20 @@ const DynamicPanelWithQuery: React.FC<LocalProductPanelProps> = ({ isVisible, on
       onOverhangDoorToggle={onOverhangDoorToggle}
       onShelfCountChange={onShelfCountChange}
       onMaterialChange={onMaterialChange}
+      viewManager={viewManager}
+      onViewChange={onViewChange}
+      allCabinets={allCabinets}
+      onGroupChange={onGroupChange}
+      initialGroupData={initialGroupData}
       loading={isLoading}
       error={isError}
     />
   )
 }
 
-type DynamicPanelProps = LocalProductPanelProps & { loading?: boolean, error?: boolean, materialOptions?: MaterialOptionsResponse, defaultMaterialSelections?: DefaultMaterialSelections, threeJsGDs: Record<GDThreeJsType, string[]> | undefined }
+type DynamicPanelProps = LocalProductPanelProps & { loading?: boolean, error?: boolean, materialOptions?: MaterialOptionsResponse, defaultMaterialSelections?: DefaultMaterialSelections, threeJsGDs: Record<GDThreeJsType, string[]> | undefined, onGroupChange?: (cabinetId: string, groupCabinets: Array<{ cabinetId: string; percentage: number }>) => void, initialGroupData?: Array<{ cabinetId: string; percentage: number }> }
 
-const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProduct, materialOptions, defaultMaterialSelections, selectedCabinet, onDimensionsChange, onMaterialChange, loading, error, threeJsGDs, onOverhangDoorToggle, onShelfCountChange }) => {
+const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProduct, materialOptions, defaultMaterialSelections, selectedCabinet, onDimensionsChange, onMaterialChange, loading, error, threeJsGDs, onOverhangDoorToggle, onShelfCountChange, viewManager, onViewChange, allCabinets, onGroupChange, initialGroupData }) => {
 
 
   const [isExpanded, setIsExpanded] = useState(true)
@@ -96,6 +104,21 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
   const [materialColor, setMaterialColor] = useState<string>(selectedCabinet?.material.getColour() || '#ffffff')
   const [materialSelections, setMaterialSelections] = useState<Record<string, { priceRangeId: string, colorId: string, finishId?: string }>>({})
   const [openMaterialId, setOpenMaterialId] = useState<string | null>(null)
+  const [groupCabinets, setGroupCabinets] = useState<Array<{ cabinetId: string; percentage: number }>>([])
+  const [selectedCabinetToAdd, setSelectedCabinetToAdd] = useState<string>('')
+  
+  // Load group data when selected cabinet changes
+  useEffect(() => {
+    if (selectedCabinet?.cabinetId) {
+      // Load existing group data from parent (ThreeScene)
+      if (initialGroupData && initialGroupData.length > 0) {
+        setGroupCabinets([...initialGroupData])
+      } else {
+        setGroupCabinets([])
+      }
+    }
+  }, [selectedCabinet?.cabinetId, initialGroupData])
+  
   // debounced inputs for price calculation
   type MaterialSel = { priceRangeId: string, colorId: string, finishId?: string }
   type PriceInputs = { dims: Record<string, number | string>, materialSelections: Record<string, MaterialSel> }
@@ -103,6 +126,7 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
   // const lastInitRef = useRef<string | null>(null)
   const cabinetId = selectedCabinet?.cabinetId
   const hasInitializedRef = useRef<boolean>(false)
+  const lastSyncedWidthRef = useRef<number | null>(null)
 
 
   useEffect(() => {
@@ -125,6 +149,53 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
     return _.sortBy(visibleEntries, ([, dimObj]) => Number(dimObj.sortNum))
   }, [wsProduct?.dims])
 
+  // Sync values with current cabinet dimensions when they change externally (e.g., from group rule)
+  useEffect(() => {
+    if (!selectedCabinet || !wsProduct?.dims || !cabinetId) return
+    
+    const currentWidth = selectedCabinet.dimensions.width
+    
+    // Reset ref when cabinet changes
+    if (lastSyncedWidthRef.current === null || lastSyncedWidthRef.current !== currentWidth) {
+      // Find width dimension ID and sync with current cabinet width
+      const widthGDIds = threeJsGDs?.["width"] || []
+      let widthDimId: string | null = null
+      for (const [dimId, dimObj] of Object.entries(wsProduct.dims)) {
+        if (dimObj.GDId && widthGDIds.includes(dimObj.GDId)) {
+          widthDimId = dimId
+          break
+        }
+      }
+      
+      // If we found the width dimension ID and the width has changed, update it
+      if (widthDimId && (lastSyncedWidthRef.current === null || Math.abs(lastSyncedWidthRef.current - currentWidth) > 0.1)) {
+        // Width changed externally - sync the values state
+        setValues(prevValues => {
+          const updatedValues = { ...prevValues, [widthDimId!]: currentWidth }
+          
+          // Also update cabinetPanelState
+          const persisted = cabinetPanelState.get(cabinetId)
+          if (persisted) {
+            cabinetPanelState.set(cabinetId, {
+              ...persisted,
+              values: updatedValues
+            })
+          }
+          
+          return updatedValues
+        })
+        
+        // Update ref to track the synced width
+        lastSyncedWidthRef.current = currentWidth
+      }
+    }
+  }, [selectedCabinet?.dimensions.width, selectedCabinet?.cabinetId, wsProduct?.dims, cabinetId, threeJsGDs])
+  
+  // Reset sync ref when cabinet changes
+  useEffect(() => {
+    lastSyncedWidthRef.current = null
+  }, [cabinetId])
+
   // Initialize values once data loads or when product changes; also apply primary dims to 3D once
   useEffect(() => {
     if (!wsProduct?.dims || !cabinetId) return
@@ -140,7 +211,27 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
     const defaults: Record<string, number | string> = {}
     entries.forEach(([id, dimObj]) => { defaults[id] = dimObj.defaultValue })
     const saved = cabinetPanelState.get(cabinetId)
-    const nextValues = saved?.values ? { ...defaults, ...saved.values } : defaults
+    // Sync with current cabinet dimensions if available (prioritize actual dimensions over saved)
+    let nextValues = saved?.values ? { ...defaults, ...saved.values } : defaults
+    
+    // If selectedCabinet has dimensions, sync width/height/depth from actual cabinet
+    if (selectedCabinet) {
+      const widthGDIds = threeJsGDs?.["width"] || []
+      const heightGDIds = threeJsGDs?.["height"] || []
+      const depthGDIds = threeJsGDs?.["depth"] || []
+      
+      for (const [dimId, dimObj] of Object.entries(wsProduct.dims)) {
+        if (dimObj.GDId) {
+          if (widthGDIds.includes(dimObj.GDId)) {
+            nextValues[dimId] = selectedCabinet.dimensions.width
+          } else if (heightGDIds.includes(dimObj.GDId)) {
+            nextValues[dimId] = selectedCabinet.dimensions.height
+          } else if (depthGDIds.includes(dimObj.GDId)) {
+            nextValues[dimId] = selectedCabinet.dimensions.depth
+          }
+        }
+      }
+    }
     const nextColor = saved?.materialColor ?? (selectedCabinet?.material.getColour() || '#ffffff')
 
     // Determine initial material selections: prefer saved, else derive from API defaults, else empty
@@ -331,6 +422,196 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
           </div>
         ) : (
           <div className="p-4 space-y-4">
+            {/* View Selector */}
+            {viewManager && selectedCabinet && (
+              <ViewSelector
+                selectedViewId={selectedCabinet.viewId as ViewId | undefined}
+                activeViews={viewManager.activeViews}
+                onViewChange={(viewId) => {
+                  if (selectedCabinet?.cabinetId) {
+                    if (viewId === 'none') {
+                      viewManager.assignCabinetToView(selectedCabinet.cabinetId, 'none')
+                      onViewChange?.(selectedCabinet.cabinetId, 'none')
+                    } else {
+                      viewManager.assignCabinetToView(selectedCabinet.cabinetId, viewId)
+                      onViewChange?.(selectedCabinet.cabinetId, viewId)
+                    }
+                  }
+                }}
+                onCreateView={() => {
+                  const newView = viewManager.createView()
+                  if (selectedCabinet?.cabinetId) {
+                    viewManager.assignCabinetToView(selectedCabinet.cabinetId, newView.id)
+                    onViewChange?.(selectedCabinet.cabinetId, newView.id)
+                  }
+                }}
+                cabinetId={selectedCabinet?.cabinetId}
+                allCabinets={allCabinets}
+              />
+            )}
+
+            {/* Pair Section */}
+            {viewManager && selectedCabinet && selectedCabinet.viewId && selectedCabinet.viewId !== 'none' && (
+              <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-200">
+                <div className="flex items-center space-x-2 mb-2.5 text-gray-700 font-medium">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                  </svg>
+                  <h3>Pair</h3>
+                </div>
+                <div className="space-y-3">
+                  {/* Dropdown and Add Button */}
+                  <div className="flex items-center gap-2">
+                    <select
+                      className="flex-1 text-sm px-2 py-1.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      value={selectedCabinetToAdd}
+                      onChange={(e) => setSelectedCabinetToAdd(e.target.value)}
+                    >
+                      <option value="">Select a cabinet...</option>
+                      {(() => {
+                        const cabinetsInView = viewManager.getCabinetsInView(selectedCabinet.viewId as ViewId)
+                        const availableCabinets = (allCabinets || [])
+                          .filter(c => 
+                            c.cabinetId !== selectedCabinet.cabinetId && 
+                            cabinetsInView.includes(c.cabinetId) &&
+                            !groupCabinets.find(g => g.cabinetId === c.cabinetId)
+                          )
+                        return availableCabinets.map(cabinet => (
+                          <option key={cabinet.cabinetId} value={cabinet.cabinetId}>
+                            {cabinet.sortNumber ? `#${cabinet.sortNumber}` : `Cabinet ${cabinet.cabinetId.slice(0, 8)}...`}
+                          </option>
+                        ))
+                      })()}
+                    </select>
+                    <button
+                      onClick={() => {
+                        if (selectedCabinetToAdd && !groupCabinets.find(g => g.cabinetId === selectedCabinetToAdd)) {
+                          const newGroup = [...groupCabinets, { cabinetId: selectedCabinetToAdd, percentage: 0 }]
+                          // Distribute percentages evenly
+                          const totalCabinets = newGroup.length
+                          const equalPercentage = 100 / totalCabinets
+                          const adjustedGroup = newGroup.map(g => ({ ...g, percentage: Math.round(equalPercentage * 100) / 100 }))
+                          // Ensure total is exactly 100%
+                          const total = adjustedGroup.reduce((sum, g) => sum + g.percentage, 0)
+                          if (total !== 100) {
+                            const diff = 100 - total
+                            adjustedGroup[0].percentage += diff
+                          }
+                          setGroupCabinets(adjustedGroup)
+                          setSelectedCabinetToAdd('')
+                          // Notify parent about group change
+                          if (selectedCabinet?.cabinetId && onGroupChange) {
+                            onGroupChange(selectedCabinet.cabinetId, adjustedGroup)
+                          }
+                        }
+                      }}
+                      disabled={!selectedCabinetToAdd || groupCabinets.find(g => g.cabinetId === selectedCabinetToAdd) !== undefined}
+                      className="flex items-center justify-center w-8 h-8 rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      title="Add cabinet to pair"
+                    >
+                      <Plus size={16} />
+                    </button>
+                  </div>
+
+                  {/* Pair List */}
+                  {groupCabinets.length > 0 && (
+                    <div className="space-y-2">
+                      {groupCabinets.map((groupCabinet, index) => {
+                        const cabinet = (allCabinets || []).find(c => c.cabinetId === groupCabinet.cabinetId)
+                        return (
+                          <div key={groupCabinet.cabinetId} className="flex items-center gap-2 p-2 bg-gray-50 rounded-md">
+                            <span className="flex-1 text-sm text-gray-700 truncate">
+                              {cabinet?.sortNumber ? `#${cabinet.sortNumber}` : (cabinet ? `Cabinet ${cabinet.cabinetId.slice(0, 8)}...` : `Cabinet ${groupCabinet.cabinetId.slice(0, 8)}...`)}
+                            </span>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.01"
+                              className="w-20 text-center text-sm px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              value={groupCabinet.percentage}
+                              onChange={(e) => {
+                                const newPercentage = Math.max(0, Math.min(100, parseFloat(e.target.value) || 0))
+                                const updatedGroup = groupCabinets.map((g, i) => 
+                                  i === index ? { ...g, percentage: newPercentage } : g
+                                )
+                                // Adjust other percentages to maintain 100% total
+                                const total = updatedGroup.reduce((sum, g) => sum + g.percentage, 0)
+                                if (total !== 100) {
+                                  const diff = 100 - total
+                                  const otherIndices = updatedGroup.map((_, i) => i).filter(i => i !== index)
+                                  if (otherIndices.length > 0) {
+                                    const perCabinet = diff / otherIndices.length
+                                    otherIndices.forEach(i => {
+                                      updatedGroup[i].percentage = Math.max(0, Math.min(100, updatedGroup[i].percentage + perCabinet))
+                                    })
+                                    // Final adjustment to ensure exactly 100%
+                                    const finalTotal = updatedGroup.reduce((sum, g) => sum + g.percentage, 0)
+                                    if (finalTotal !== 100) {
+                                      updatedGroup[otherIndices[0]].percentage += (100 - finalTotal)
+                                    }
+                                  }
+                                }
+                                setGroupCabinets(updatedGroup)
+                                // Notify parent about group change
+                                if (selectedCabinet?.cabinetId && onGroupChange) {
+                                  onGroupChange(selectedCabinet.cabinetId, updatedGroup)
+                                }
+                              }}
+                            />
+                            <span className="text-sm text-gray-600">%</span>
+                            <button
+                              onClick={() => {
+                                const remaining = groupCabinets.filter(g => g.cabinetId !== groupCabinet.cabinetId)
+                                if (remaining.length > 0) {
+                                  // Redistribute percentages to remaining cabinets
+                                  const totalRemaining = remaining.reduce((sum, g) => sum + g.percentage, 0)
+                                  const adjusted = remaining.map(g => ({
+                                    ...g,
+                                    percentage: totalRemaining > 0 ? (g.percentage / totalRemaining) * 100 : 100 / remaining.length
+                                  }))
+                                  // Ensure total is exactly 100%
+                                  const finalTotal = adjusted.reduce((sum, g) => sum + g.percentage, 0)
+                                  if (finalTotal !== 100) {
+                                    adjusted[0].percentage += (100 - finalTotal)
+                                  }
+                                  setGroupCabinets(adjusted)
+                                  // Notify parent about group change
+                                  if (selectedCabinet?.cabinetId && onGroupChange) {
+                                    onGroupChange(selectedCabinet.cabinetId, adjusted)
+                                  }
+                                } else {
+                                  setGroupCabinets([])
+                                  // Notify parent about group change (empty)
+                                  if (selectedCabinet?.cabinetId && onGroupChange) {
+                                    onGroupChange(selectedCabinet.cabinetId, [])
+                                  }
+                                }
+                              }}
+                              className="text-gray-400 hover:text-red-600 transition-colors"
+                              title="Remove from pair"
+                            >
+                              <X size={16} />
+                            </button>
+                          </div>
+                        )
+                      })}
+                      {/* Total Percentage Display */}
+                      <div className="flex justify-between items-center pt-2 border-t border-gray-200">
+                        <span className="text-sm font-medium text-gray-700">Total:</span>
+                        <span className={`text-sm font-semibold ${groupCabinets.reduce((sum, g) => sum + g.percentage, 0) === 100 ? 'text-green-600' : 'text-red-600'}`}>
+                          {groupCabinets.reduce((sum, g) => sum + g.percentage, 0).toFixed(2)}%
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            
             {/* Dimensions */}
             <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-200">
               <div className="flex items-center space-x-2 mb-2.5 text-gray-700 font-medium">

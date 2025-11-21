@@ -5,6 +5,9 @@ import * as THREE from "three"
 import {
   buildWall,
   buildFloor,
+  buildLeftWall,
+  buildRightWall,
+  buildAdditionalWall,
   positionCamera,
   WALL_THICKNESS,
 } from "../lib/sceneUtils"
@@ -19,6 +22,9 @@ export const useThreeRenderer = (
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null)
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null)
   const wallRef = useRef<THREE.Group | null>(null)
+  const leftWallRef = useRef<THREE.Group | null>(null)
+  const rightWallRef = useRef<THREE.Group | null>(null)
+  const additionalWallsRef = useRef<Map<string, THREE.Group>>(new Map())
   const floorRef = useRef<THREE.Mesh | null>(null)
   const floorGridRef = useRef<THREE.GridHelper | null>(null)
 
@@ -43,6 +49,95 @@ export const useThreeRenderer = (
       const wallGroup = buildWall({ height, length }, color || wallColor)
       wallRef.current = wallGroup
       scene.add(wallGroup)
+    },
+    [wallColor]
+  )
+
+  const createLeftWall = useCallback(
+    (height: number, length: number, visible: boolean, color?: string) => {
+      const scene = sceneRef.current
+      if (!scene) return
+
+      if (leftWallRef.current) {
+        scene.remove(leftWallRef.current)
+        leftWallRef.current.traverse((child) => {
+          const anyChild = child as any
+          if (anyChild.geometry) anyChild.geometry.dispose()
+          if (anyChild.material) {
+            if (Array.isArray(anyChild.material))
+              anyChild.material.forEach((m: THREE.Material) => m.dispose())
+            else (anyChild.material as THREE.Material).dispose()
+          }
+        })
+      }
+
+      if (visible) {
+        const wallGroup = buildLeftWall(height, length, color || wallColor)
+        leftWallRef.current = wallGroup
+        scene.add(wallGroup)
+      } else {
+        leftWallRef.current = null
+      }
+    },
+    [wallColor]
+  )
+
+  const createRightWall = useCallback(
+    (height: number, length: number, backWallLength: number, visible: boolean, color?: string) => {
+      const scene = sceneRef.current
+      if (!scene) return
+
+      if (rightWallRef.current) {
+        scene.remove(rightWallRef.current)
+        rightWallRef.current.traverse((child) => {
+          const anyChild = child as any
+          if (anyChild.geometry) anyChild.geometry.dispose()
+          if (anyChild.material) {
+            if (Array.isArray(anyChild.material))
+              anyChild.material.forEach((m: THREE.Material) => m.dispose())
+            else (anyChild.material as THREE.Material).dispose()
+          }
+        })
+      }
+
+      if (visible) {
+        const wallGroup = buildRightWall(height, length, backWallLength, color || wallColor)
+        rightWallRef.current = wallGroup
+        scene.add(wallGroup)
+      } else {
+        rightWallRef.current = null
+      }
+    },
+    [wallColor]
+  )
+
+  const createAdditionalWalls = useCallback(
+    (height: number, additionalWalls: Array<{ id: string; length: number; distanceFromLeft: number; thickness?: number }>, color?: string) => {
+      const scene = sceneRef.current
+      if (!scene) return
+
+      // Remove all existing additional walls
+      additionalWallsRef.current.forEach((wallGroup) => {
+        scene.remove(wallGroup)
+        wallGroup.traverse((child) => {
+          const anyChild = child as any
+          if (anyChild.geometry) anyChild.geometry.dispose()
+          if (anyChild.material) {
+            if (Array.isArray(anyChild.material))
+              anyChild.material.forEach((m: THREE.Material) => m.dispose())
+            else (anyChild.material as THREE.Material).dispose()
+          }
+        })
+      })
+      additionalWallsRef.current.clear()
+
+      // Create new additional walls
+      additionalWalls.forEach((wallData) => {
+        const thickness = wallData.thickness ?? WALL_THICKNESS
+        const wallGroup = buildAdditionalWall(height, wallData.length, wallData.distanceFromLeft, color || wallColor, thickness)
+        additionalWallsRef.current.set(wallData.id, wallGroup)
+        scene.add(wallGroup)
+      })
     },
     [wallColor]
   )
@@ -166,9 +261,34 @@ export const useThreeRenderer = (
     const axesHelper = new THREE.AxesHelper(1000)
     scene.add(axesHelper)
 
-    createWall(wallDimensions.height, wallDimensions.length, wallColor)
-    createFloor(wallDimensions.length)
-    positionCamera(camera, wallDimensions, 1.5)
+    // Create back wall (using length for backward compatibility, but should use backWallLength)
+    const backWallLength = wallDimensions.backWallLength ?? wallDimensions.length
+    createWall(wallDimensions.height, backWallLength, wallColor)
+    createFloor(backWallLength)
+    
+    // Create left and right walls
+    createLeftWall(
+      wallDimensions.height,
+      wallDimensions.leftWallLength ?? 600,
+      wallDimensions.leftWallVisible ?? true,
+      wallColor
+    )
+    createRightWall(
+      wallDimensions.height,
+      wallDimensions.rightWallLength ?? 600,
+      backWallLength,
+      wallDimensions.rightWallVisible ?? true,
+      wallColor
+    )
+    
+    // Create additional walls
+    createAdditionalWalls(
+      wallDimensions.height,
+      wallDimensions.additionalWalls ?? [],
+      wallColor
+    )
+    
+    positionCamera(camera, { height: wallDimensions.height, length: backWallLength }, 1.5)
 
     const handleResize = () => {
       if (!cameraRef.current || !rendererRef.current) return
@@ -197,6 +317,13 @@ export const useThreeRenderer = (
 
       if (sceneRef.current && wallRef.current)
         sceneRef.current.remove(wallRef.current)
+      if (sceneRef.current && leftWallRef.current)
+        sceneRef.current.remove(leftWallRef.current)
+      if (sceneRef.current && rightWallRef.current)
+        sceneRef.current.remove(rightWallRef.current)
+      additionalWallsRef.current.forEach((wallGroup) => {
+        sceneRef.current?.remove(wallGroup)
+      })
       if (sceneRef.current && floorRef.current)
         sceneRef.current.remove(floorRef.current)
       if (sceneRef.current && floorGridRef.current)
@@ -210,9 +337,15 @@ export const useThreeRenderer = (
     rendererRef,
     cameraRef,
     wallRef,
+    leftWallRef,
+    rightWallRef,
+    additionalWallsRef,
     floorRef,
     floorGridRef,
     createWall,
+    createLeftWall,
+    createRightWall,
+    createAdditionalWalls,
     createFloor,
     updateCameraPosition,
     resetCamera,

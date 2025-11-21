@@ -1,10 +1,12 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import MainMenu from '@/components/MainMenu'
 import { Category, Subcategory } from '@/components/categoriesData'
 import { WsProducts } from '@/types/erpTypes'
+import type { SavedRoom } from '@/data/savedRooms'
+import type { WallDimensions } from '@/features/scene/types'
 
 // Dynamically import the Three.js component to avoid SSR issues
 const ThreeScene = dynamic(() => import('@/features/scene/ThreeScene'), {
@@ -19,15 +21,16 @@ const ThreeScene = dynamic(() => import('@/features/scene/ThreeScene'), {
   )
 })
 
-interface WallDimensions {
-  length: number
-  height: number
-}
-
 export default function Home() {
   const [wallDimensions, setWallDimensions] = useState<WallDimensions>({
-    length: 4000,
-    height: 2700
+    length: 4000, // Backward compatibility
+    height: 2700,
+    backWallLength: 4000,
+    leftWallLength: 600, // Default: 600mm
+    rightWallLength: 600, // Default: 600mm
+    leftWallVisible: true,
+    rightWallVisible: true,
+    additionalWalls: [],
   })
 
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null)
@@ -35,6 +38,7 @@ export default function Home() {
   const [selectedProductId, setSelectedProductId] = useState<string | undefined>(undefined)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [wsProducts, setWsProducts] = useState<WsProducts | null>(null)
+  const loadRoomRef = useRef<((savedRoom: SavedRoom) => void) | null>(null)
 
 
   const handleCategorySelect = (category: Category) => {
@@ -67,6 +71,11 @@ export default function Home() {
         onMenuStateChange={handleMenuStateChange}
         wsProducts={wsProducts}
         setWsProducts={setWsProducts}
+        onLoadRoom={(savedRoom) => {
+          if (loadRoomRef.current) {
+            loadRoomRef.current(savedRoom)
+          }
+        }}
       />
 
       {/* Three.js Scene */}
@@ -78,7 +87,9 @@ export default function Home() {
         selectedProductId={selectedProductId}
         isMenuOpen={isMenuOpen}
         wsProducts={wsProducts}
-
+        onLoadRoomReady={(loadRoom) => {
+          loadRoomRef.current = loadRoom
+        }}
       />
     </main>
   )

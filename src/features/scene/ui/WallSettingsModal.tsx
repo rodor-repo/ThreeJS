@@ -62,7 +62,8 @@ export const WallSettingsModal: React.FC<Props> = ({ isOpen, onClose, wallDimens
             </div>
           </div>
 
-          <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded">
+          {/* Current dimensions display hidden per user request */}
+          {/* <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded">
             <p><strong>Current dimensions:</strong></p>
             <p>Height: {wallDimensions.height}mm</p>
             <p>Length: {wallDimensions.length}mm</p>
@@ -72,7 +73,7 @@ export const WallSettingsModal: React.FC<Props> = ({ isOpen, onClose, wallDimens
               <div className="w-6 h-6 rounded border border-gray-300" style={{ backgroundColor: wallColor }} title={`Current wall color: ${wallColor}`} />
               <span className="font-mono text-xs">{wallColor}</span>
             </div>
-          </div>
+          </div> */}
 
           <div className="flex gap-3 pt-4">
             <button onClick={onClose} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors">Cancel</button>

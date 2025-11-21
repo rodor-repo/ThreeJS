@@ -2,10 +2,11 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Menu, X, ChevronRight } from 'lucide-react'
+import { Menu, X, ChevronRight, Trash2 } from 'lucide-react'
 import type { Category, Subcategory } from './categoriesData'
 import { getWsProducts } from '@/server/getWsProducts'
 import type { WsProducts } from '@/types/erpTypes'
+import { getSavedRoomsByCategory, deleteSavedRoom, type RoomCategory, type SavedRoom } from '@/data/savedRooms'
 import _ from 'lodash'
 
 interface MainMenuProps {
@@ -15,15 +16,21 @@ interface MainMenuProps {
   onMenuStateChange?: (isOpen: boolean) => void
   wsProducts: WsProducts | null
   setWsProducts: React.Dispatch<React.SetStateAction<WsProducts | null>>
+  onLoadRoom?: (savedRoom: import('@/data/savedRooms').SavedRoom) => void
 }
 
-const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySelect, selectedCategory, onMenuStateChange, wsProducts, setWsProducts }) => {
+const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySelect, selectedCategory, onMenuStateChange, wsProducts, setWsProducts, onLoadRoom }) => {
   const [isOpen, setIsOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [selectedTopLevelMenu, setSelectedTopLevelMenu] = useState<'cabinets' | 'appliances' | 'rooms' | null>(null) // New state for top-level menu
+  const [selectedAppliance, setSelectedAppliance] = useState<string | null>(null) // State for selected appliance
+  const [selectedRoom, setSelectedRoom] = useState<RoomCategory | null>(null) // New state for selected room
   const [selectedCategoryForSubmenu, setSelectedCategoryForSubmenu] = useState<Category | null>(null)
   const [showSubmenu, setShowSubmenu] = useState(false)
   const [expandedSubcategories, setExpandedSubcategories] = useState<Record<string, boolean>>({})
+  const [savedRooms, setSavedRooms] = useState<SavedRoom[]>([]) // State for saved rooms
+  const [loadingRooms, setLoadingRooms] = useState(false) // Loading state for rooms
   const [selectedSubcategoryForDesigns, setSelectedSubcategoryForDesigns] = useState<Subcategory | null>(null)
   const [expandedDesigns, setExpandedDesigns] = useState<Record<string, boolean>>({})
 
@@ -201,15 +208,114 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySele
   const toggleMenu = () => {
     const newState = !isOpen
     setIsOpen(newState)
-    // Immediately close submenu when main menu is closed for better responsiveness
-    if (!newState) {
-      setShowSubmenu(false)
-      setSelectedCategoryForSubmenu(null)
+      // Immediately close submenu when main menu is closed for better responsiveness
+      if (!newState) {
+        setSelectedTopLevelMenu(null) // Reset top-level menu selection
+        setSelectedRoom(null)
+        setSelectedAppliance(null)
+        setShowSubmenu(false)
+        setSelectedCategoryForSubmenu(null)
       setSelectedSubcategoryForDesigns(null)
       setExpandedDesigns({})
     }
     onMenuStateChange?.(newState)
   }
+
+  const handleTopLevelMenuClick = (menu: 'cabinets' | 'appliances' | 'rooms') => {
+    setSelectedTopLevelMenu(menu)
+    if (menu === 'cabinets') {
+      // Show categories menu (existing behavior)
+      // The categories will be shown in the main panel
+    } else if (menu === 'appliances') {
+      // Appliances menu - will show appliance subcategories
+      setSelectedAppliance(null)
+    } else if (menu === 'rooms') {
+      // Rooms menu - will show room subcategories
+      setSelectedRoom(null)
+    }
+  }
+
+  const handleBackToTopLevel = () => {
+    setSelectedTopLevelMenu(null)
+    setSelectedRoom(null)
+    setSelectedAppliance(null)
+    setShowSubmenu(false)
+    setSelectedCategoryForSubmenu(null)
+    setSelectedSubcategoryForDesigns(null)
+    setExpandedDesigns({})
+  }
+
+  const handleApplianceClick = (appliance: string) => {
+    setSelectedAppliance(appliance)
+    setShowSubmenu(true)
+  }
+
+  const closeApplianceSubmenu = () => {
+    setShowSubmenu(false)
+    setSelectedAppliance(null)
+  }
+
+  const handleRoomClick = (room: RoomCategory) => {
+    setSelectedRoom(room)
+  }
+
+  // Handle room deletion
+  const handleDeleteRoom = useCallback(async (room: SavedRoom, e: React.MouseEvent) => {
+    e.stopPropagation() // Prevent triggering the load room action
+    
+    // Show confirmation alert
+    const confirmed = window.confirm(`Are you sure you want to delete "${room.name}"? This action cannot be undone.`)
+    
+    if (!confirmed) {
+      return
+    }
+
+    try {
+      // Delete from local folder
+      const deleted = await deleteSavedRoom(room.id)
+      
+      if (deleted) {
+        // TODO: Delete from Firebase database in future stage
+        // await deleteRoomFromFirebase(room.id)
+        
+        // Refresh the saved rooms list
+        if (selectedRoom) {
+          const rooms = await getSavedRoomsByCategory(selectedRoom)
+          setSavedRooms(rooms)
+        }
+        
+        alert(`Room "${room.name}" has been deleted successfully.`)
+      } else {
+        alert(`Failed to delete room "${room.name}". Please try again.`)
+      }
+    } catch (error) {
+      console.error('Failed to delete room:', error)
+      alert(`Failed to delete room "${room.name}": ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
+  }, [selectedRoom])
+
+  // Load saved rooms for the selected room category (async)
+  useEffect(() => {
+    const loadRooms = async () => {
+      if (!selectedRoom) {
+        setSavedRooms([])
+        return
+      }
+      
+      setLoadingRooms(true)
+      try {
+        const rooms = await getSavedRoomsByCategory(selectedRoom)
+        setSavedRooms(rooms)
+      } catch (error) {
+        console.error('Failed to load saved rooms:', error)
+        setSavedRooms([])
+      } finally {
+        setLoadingRooms(false)
+      }
+    }
+
+    loadRooms()
+  }, [selectedRoom])
 
   return (
     <>
@@ -256,8 +362,11 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySele
               transition={{ duration: 0.15 }}
               className="fixed inset-0 bg-black bg-opacity-50 z-40"
               onClick={() => {
-                // Immediately close both menus for better responsiveness
+                // Immediately close all menus for better responsiveness
                 setIsOpen(false)
+                setSelectedTopLevelMenu(null)
+                setSelectedRoom(null)
+                setSelectedAppliance(null)
                 setShowSubmenu(false)
                 onMenuStateChange?.(false)
               }}
@@ -273,83 +382,294 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySele
             >
               {/* Header */}
               <div className="p-3 sm:p-6 border-b border-gray-200">
-                <h2 className="text-2xl font-bold text-gray-800">3D Scene Menu</h2>
-                <p className="text-gray-600 mt-2">Select a category to get started</p>
-              </div>
-
-              {/* Removed demo FetchCategoriesComponent */}
-
-              {/* Categories */}
-              <div className="p-2 sm:p-4">
-                {loading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                  </div>
-                ) : error ? (
-                  <div className="text-center py-8">
-                    <p className="text-red-600 mb-4">{error}</p>
+                {selectedTopLevelMenu ? (
+                  <div className="flex items-center space-x-3">
                     <button
-                      onClick={loadCategories}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-150"
+                      onClick={handleBackToTopLevel}
+                      className="p-2 hover:bg-gray-200 rounded-full transition-colors duration-150"
                     >
-                      Retry
+                      <ChevronRight size={20} className="text-gray-600 rotate-180" />
                     </button>
+                    <div>
+                      <h2 className="text-2xl font-bold text-gray-800">
+                        {selectedTopLevelMenu === 'cabinets' ? 'Cabinets' : selectedTopLevelMenu === 'appliances' ? 'Appliances' : selectedRoom || 'Rooms'}
+                      </h2>
+                      <p className="text-gray-600 mt-2">
+                        {selectedTopLevelMenu === 'cabinets' ? 'Select a category to get started' : selectedTopLevelMenu === 'appliances' ? 'Select an appliance' : selectedRoom ? '' : 'Select a room type'}
+                      </p>
+                    </div>
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    {mappedCategories.map((category) => {
-                      const isEnabled = categoriesWithProducts.has(category.id)
-                      return (
-                        <motion.button
-                          key={category.id}
-                          onClick={() => isEnabled && handleCategorySelect(category)}
-                          disabled={!isEnabled}
-                          className={`w-full p-4 rounded-lg border-2 transition-all duration-150 ${isEnabled
-                              ? `hover:shadow-md ${selectedCategory?.id === category.id
-                                ? 'border-blue-500 bg-blue-50 shadow-md'
-                                : 'border-gray-200 hover:border-gray-300'
-                              }`
-                              : 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
-                            }`}
-                          whileHover={isEnabled ? { scale: 1.01 } : {}}
-                          whileTap={isEnabled ? { scale: 0.99 } : {}}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-3">
-                              <div
-                                className="text-2xl"
-                                style={{ color: isEnabled ? category.color : '#9CA3AF' }}
-                              >
-                                {category.icon}
-                              </div>
-                              <div className="text-left">
-                                <h3 className={`font-semibold ${isEnabled ? 'text-gray-800' : 'text-gray-400'}`}>
-                                  {category.name}
-                                </h3>
-                                {/* Category description removed per UI note */}
-                              </div>
-                            </div>
-                            <ChevronRight size={20} className={isEnabled ? 'text-gray-400' : 'text-gray-300'} />
-                          </div>
-                        </motion.button>
-                      )
-                    })}
-                  </div>
+                  <>
+                    <h2 className="text-2xl font-bold text-gray-800">3D Scene Menu</h2>
+                    <p className="text-gray-600 mt-2">Select an option to get started</p>
+                  </>
                 )}
               </div>
 
-              {/* Footer */}
-              <div className="p-2 sm:p-4 border-t border-gray-200 mt-auto">
-                <div className="text-center text-sm text-gray-500">
-                  <p>3D Scene Builder</p>
-                  <p className="mt-1">Select a category to begin</p>
+              {/* Top-Level Menu Items (Cabinets / Rooms) */}
+              {!selectedTopLevelMenu && (
+                <div className="p-2 sm:p-4">
+                  <div className="space-y-3">
+                    <motion.button
+                      onClick={() => handleTopLevelMenuClick('cabinets')}
+                      className="w-full p-4 rounded-lg border-2 border-gray-200 hover:border-blue-500 hover:shadow-md transition-all duration-150"
+                      whileHover={{ scale: 1.01 }}
+                      whileTap={{ scale: 0.99 }}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="text-left">
+                          <h3 className="font-semibold text-gray-800">Cabinets</h3>
+                        </div>
+                        <ChevronRight size={20} className="text-gray-400" />
+                      </div>
+                    </motion.button>
+
+                    <motion.button
+                      onClick={() => handleTopLevelMenuClick('appliances')}
+                      className="w-full p-4 rounded-lg border-2 border-gray-200 hover:border-blue-500 hover:shadow-md transition-all duration-150"
+                      whileHover={{ scale: 1.01 }}
+                      whileTap={{ scale: 0.99 }}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="text-left">
+                          <h3 className="font-semibold text-gray-800">Appliances</h3>
+                        </div>
+                        <ChevronRight size={20} className="text-gray-400" />
+                      </div>
+                    </motion.button>
+
+                    <motion.button
+                      onClick={() => handleTopLevelMenuClick('rooms')}
+                      className="w-full p-4 rounded-lg border-2 border-gray-200 hover:border-blue-500 hover:shadow-md transition-all duration-150"
+                      whileHover={{ scale: 1.01 }}
+                      whileTap={{ scale: 0.99 }}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="text-left">
+                          <h3 className="font-semibold text-gray-800">Rooms</h3>
+                        </div>
+                        <ChevronRight size={20} className="text-gray-400" />
+                      </div>
+                    </motion.button>
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {/* Categories (shown when Cabinets is selected) */}
+              {selectedTopLevelMenu === 'cabinets' && (
+                <div className="p-2 sm:p-4">
+                  {loading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    </div>
+                  ) : error ? (
+                    <div className="text-center py-8">
+                      <p className="text-red-600 mb-4">{error}</p>
+                      <button
+                        onClick={loadCategories}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-150"
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {mappedCategories.map((category) => {
+                        const isEnabled = categoriesWithProducts.has(category.id)
+                        return (
+                          <motion.button
+                            key={category.id}
+                            onClick={() => isEnabled && handleCategorySelect(category)}
+                            disabled={!isEnabled}
+                            className={`w-full p-4 rounded-lg border-2 transition-all duration-150 ${isEnabled
+                                ? `hover:shadow-md ${selectedCategory?.id === category.id
+                                  ? 'border-blue-500 bg-blue-50 shadow-md'
+                                  : 'border-gray-200 hover:border-gray-300'
+                                }`
+                                : 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
+                              }`}
+                            whileHover={isEnabled ? { scale: 1.01 } : {}}
+                            whileTap={isEnabled ? { scale: 0.99 } : {}}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-3">
+                                <div
+                                  className="text-2xl"
+                                  style={{ color: isEnabled ? category.color : '#9CA3AF' }}
+                                >
+                                  {category.icon}
+                                </div>
+                                <div className="text-left">
+                                  <h3 className={`font-semibold ${isEnabled ? 'text-gray-800' : 'text-gray-400'}`}>
+                                    {category.name}
+                                  </h3>
+                                </div>
+                              </div>
+                              <ChevronRight size={20} className={isEnabled ? 'text-gray-400' : 'text-gray-300'} />
+                            </div>
+                          </motion.button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Rooms Subcategories (shown when Rooms is selected) */}
+              {selectedTopLevelMenu === 'rooms' && !selectedRoom && (
+                <div className="p-2 sm:p-4">
+                  <div className="space-y-3">
+                    {(['Kitchen', 'Pantry', 'Laundry', 'Wardrobe', 'Vanity', 'TV Room', 'Alfresco'] as RoomCategory[]).map((room) => (
+                      <motion.button
+                        key={room}
+                        onClick={() => handleRoomClick(room)}
+                        className="w-full p-4 rounded-lg border-2 border-gray-200 hover:border-blue-500 hover:shadow-md transition-all duration-150"
+                        whileHover={{ scale: 1.01 }}
+                        whileTap={{ scale: 0.99 }}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="text-left">
+                            <h3 className="font-semibold text-gray-800">{room}</h3>
+                          </div>
+                          <ChevronRight size={20} className="text-gray-400" />
+                        </div>
+                      </motion.button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Saved Rooms List (shown when a specific room category is selected) */}
+              {selectedTopLevelMenu === 'rooms' && selectedRoom && (
+                <div className="p-2 sm:p-4">
+                  {loadingRooms ? (
+                    <div className="text-center py-8">
+                      <p className="text-gray-600 text-lg font-medium">{selectedRoom}</p>
+                      <p className="text-gray-500 text-sm mt-2">Loading rooms...</p>
+                    </div>
+                  ) : savedRooms.length === 0 ? (
+                    <div className="text-center py-8">
+                      <p className="text-gray-600 text-lg font-medium">{selectedRoom}</p>
+                      <p className="text-gray-500 text-sm mt-2">No saved rooms yet</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <h3 className="text-lg font-semibold text-gray-800 mb-3">Saved {selectedRoom} Rooms</h3>
+                      {savedRooms.map((room) => (
+                        <motion.div
+                          key={room.id}
+                          className="w-full p-4 rounded-lg border-2 border-gray-200 hover:border-blue-500 hover:shadow-md transition-all duration-150"
+                          whileHover={{ scale: 1.01 }}
+                          whileTap={{ scale: 0.99 }}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div
+                              onClick={() => {
+                                if (onLoadRoom) {
+                                  onLoadRoom(room)
+                                  // Close menu after loading
+                                  setIsOpen(false)
+                                  setSelectedTopLevelMenu(null)
+                                  setSelectedRoom(null)
+                                  onMenuStateChange?.(false)
+                                }
+                              }}
+                              className="flex-1 cursor-pointer"
+                            >
+                              <h4 className="font-semibold text-gray-800">{room.name}</h4>
+                              <p className="text-sm text-gray-500 mt-1">
+                                {room.cabinets.length} cabinet{room.cabinets.length !== 1 ? 's' : ''} • Saved {new Date(room.savedAt).toLocaleDateString()}
+                              </p>
+                            </div>
+                            <button
+                              onClick={(e) => handleDeleteRoom(room, e)}
+                              className="ml-4 p-2 rounded-lg hover:bg-red-50 transition-colors duration-150 flex items-center justify-center"
+                              title="Delete room"
+                            >
+                              <Trash2 size={20} className="text-red-500 hover:text-red-600" />
+                            </button>
+                          </div>
+                        </motion.div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Appliances Subcategories (shown when Appliances is selected) */}
+              {selectedTopLevelMenu === 'appliances' && !selectedAppliance && (
+                <div className="p-2 sm:p-4">
+                  <div className="space-y-3">
+                    {['Dishwasher', 'Washing machine', 'Dryer', 'Fridge'].map((appliance) => (
+                      <motion.button
+                        key={appliance}
+                        onClick={() => handleApplianceClick(appliance)}
+                        className="w-full p-4 rounded-lg border-2 border-gray-200 hover:border-blue-500 hover:shadow-md transition-all duration-150"
+                        whileHover={{ scale: 1.01 }}
+                        whileTap={{ scale: 0.99 }}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="text-left">
+                            <h3 className="font-semibold text-gray-800">{appliance}</h3>
+                          </div>
+                          <ChevronRight size={20} className="text-gray-400" />
+                        </div>
+                      </motion.button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Footer */}
+              {!selectedTopLevelMenu && (
+                <div className="p-2 sm:p-4 border-t border-gray-200 mt-auto">
+                  <div className="text-center text-sm text-gray-500">
+                    <p>3D Scene Builder</p>
+                    <p className="mt-1">Select an option to begin</p>
+                  </div>
+                </div>
+              )}
             </motion.div>
+
+            {/* Appliances Submenu Panel */}
+            <AnimatePresence>
+              {showSubmenu && selectedAppliance && (
+                <motion.div
+                  initial={{ x: '-100%' }}
+                  animate={{ x: '320px' }}
+                  exit={{ x: '-100%' }}
+                  transition={{ duration: 0 }}
+                  className="fixed left-0 top-0 h-full w-80 max-w-[90vw] bg-white shadow-2xl z-50 overflow-y-auto overflow-x-hidden border-l border-gray-200 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100"
+                >
+                  {/* Submenu Header */}
+                  <div className="p-3 sm:p-6 border-b border-gray-200 bg-gray-50">
+                    <div className="flex items-center space-x-3">
+                      <button
+                        onClick={closeApplianceSubmenu}
+                        className="p-2 hover:bg-gray-200 rounded-full transition-colors duration-150"
+                      >
+                        <ChevronRight size={20} className="text-gray-600 rotate-180" />
+                      </button>
+                      <div>
+                        <h2 className="text-xl font-bold text-gray-800">{selectedAppliance}</h2>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Appliance Content - Placeholder for future implementation */}
+                  <div className="p-2 sm:p-4">
+                    <div className="text-center py-8">
+                      <p className="text-gray-500 text-sm">Appliance details coming soon</p>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Submenu Panel */}
             <AnimatePresence>
-              {showSubmenu && selectedCategoryForSubmenu && (
+              {showSubmenu && selectedCategoryForSubmenu && !selectedAppliance && (
                 <motion.div
                   initial={{ x: '-100%' }}
                   animate={{ x: '320px' }}

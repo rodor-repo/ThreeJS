@@ -30,6 +30,11 @@ import {
   approximatelyEqual,
   calculateRatio,
 } from "./utils/carcass-math-utils"
+import { getClient } from "@/app/QueryProvider"
+import { WsProduct } from "@/types/erpTypes"
+import _, { entries } from "lodash"
+import { getProductData } from "@/server/getProductData"
+import { toNum } from "../cabinets/ui/ProductPanel"
 
 export interface CarcassDimensions {
   width: number // Width of the cabinet (X Axes)
@@ -48,6 +53,7 @@ export interface CarcassConfig {
   drawerEnabled?: boolean // Whether drawers are enabled for this cabinet
   drawerQuantity?: number // Number of drawers (1-6)
   drawerHeights?: number[] // Individual drawer heights
+  changedDrawerIndices?: Set<number> // Indices of drawers that have been changed by the user
 }
 
 export type CabinetType = "top" | "base" | "tall"
@@ -69,13 +75,22 @@ export class CarcassAssembly {
   private doors: CarcassDoor[] = []
   private drawers: CarcassDrawer[] = []
 
+  public productId!: string
+  public cabinetId!: string
+  public defaultDimValuesApplied: boolean = false
+
   constructor(
     cabinetType: CabinetType,
     dimensions: CarcassDimensions,
-    config?: Partial<CarcassConfig>
+    config: Partial<CarcassConfig>,
+    productId: string,
+    cabinetId: string
   ) {
     this.cabinetType = cabinetType
     this.dimensions = dimensions
+
+    this.productId = productId
+    this.cabinetId = cabinetId
 
     // Set default configuration
     this.config = {
@@ -850,18 +865,79 @@ export class CarcassAssembly {
     }
   }
 
-  public updateDrawerHeight(index: number, height: number): void {
+  public updateDrawerHeight(
+    index: number,
+    height: number,
+    changedId?: string
+  ): void {
     console.log(
       `Updating drawer ${index} height for ${this.cabinetType} cabinet:`,
       height
     )
 
+    const productData = getClient().getQueryData([
+      "productData",
+      this.productId,
+    ]) as Awaited<ReturnType<typeof getProductData>> | undefined
+    if (!productData) {
+      throw new Error("Product data not found for drawer height update.")
+    }
+
+    const { product: wsProduct, threeJsGDs } = productData
+
+    const drawerHeightGDMap: Record<number, string[]> = {
+      0: threeJsGDs?.drawerH1 || [],
+      1: threeJsGDs?.drawerH2 || [],
+      2: threeJsGDs?.drawerH3 || [],
+      3: threeJsGDs?.drawerH4 || [],
+      4: threeJsGDs?.drawerH5 || [],
+    }
+
+    const drawerHeightsConfig: Record<
+      number,
+      {
+        defaultValue: number
+        min: number
+        max: number
+        dimId: string
+      }
+    > = {}
+
+    const dimsList = _.sortBy(
+      Object.entries(wsProduct?.dims || {}),
+      ([, dimObj]) => Number(dimObj.sortNum)
+    )
+
+    dimsList.forEach(([dimId, dimObj]) => {
+      const gdId = dimObj.GDId
+      if (!gdId) return
+
+      const { defaultValue: v, min, max } = dimObj
+      if (!min || !max) return
+
+      Object.entries(drawerHeightGDMap).forEach(([drawerIndexStr, gdList]) => {
+        const drawerIndex = Number(drawerIndexStr)
+        if (gdList.includes(gdId)) {
+          const numVal = toNum(v)
+
+          if (!isNaN(numVal))
+            drawerHeightsConfig[drawerIndex] = {
+              defaultValue: numVal,
+              min,
+              max,
+              dimId,
+            }
+        }
+      })
+    })
+
     // Ensure proper decimal handling using utility function
     height = roundToDecimal(height)
 
     // Validate the height value using utility function
-    const minHeight = 50 // Minimum drawer height
-    const maxHeight = this.dimensions.height // Maximum drawer height
+    // const minHeight = 50 // Minimum drawer height
+    const minHeight = drawerHeightsConfig[index]?.min || 50 // Minimum drawer height
+    const maxHeight = drawerHeightsConfig[index]?.max || this.dimensions.height // Maximum drawer height
     height = clamp(height, minHeight, maxHeight)
 
     if (height === minHeight) {
@@ -877,7 +953,7 @@ export class CarcassAssembly {
     this.config.drawerHeights[index] = height
 
     // Calculate height balance and redistribute among unchanged drawers
-    this.redistributeDrawerHeights(index)
+    this.redistributeDrawerHeights(index, drawerHeightsConfig, changedId)
 
     // Validate final result and auto-balance if needed
     const validation = this.validateDrawerHeights()
@@ -930,12 +1006,138 @@ export class CarcassAssembly {
    * Redistribute remaining height among unchanged drawers
    * @param changedIndex - Index of the drawer that was just changed
    */
-  private redistributeDrawerHeights(changedIndex: number): void {
+  private redistributeDrawerHeights(
+    changedIndex: number,
+    drawerHeightsConfig?: Record<
+      number,
+      {
+        defaultValue: number
+        min: number
+        max: number
+        dimId: string
+      }
+    >,
+    changedId?: string
+  ): void {
     if (!this.config.drawerHeights || this.config.drawerHeights.length === 0)
       return
 
     const totalCarcassHeight = this.dimensions.height
-    const totalDrawerQuantity = this.config.drawerQuantity || 1
+    // const totalDrawerQuantity = this.config.drawerQuantity || 1
+    const totalDrawerQuantity = this.config.drawerQuantity
+    if (!totalDrawerQuantity) throw new Error("Drawer quantity is not defined.")
+
+    if (drawerHeightsConfig) {
+      console.log(
+        `[DEBUG] redistributeDrawerHeights: Using drawerHeightsConfig for changedIndex ${changedIndex}`,
+        {
+          drawerHeightsConfig,
+          thisConfigDrawerHeights: this.config.drawerHeights,
+          thisConfigChangedDrawerIndices: this.config.changedDrawerIndices,
+        }
+      )
+
+      this.config.changedDrawerIndices =
+        this.config.changedDrawerIndices || new Set<number>()
+      const thisWasManualChange =
+        changedId && drawerHeightsConfig[changedIndex]?.dimId === changedId
+      console.log(
+        `[DEBUG] redistributeDrawerHeights: thisWasManualChange: ${thisWasManualChange} (dimId: ${drawerHeightsConfig[changedIndex]?.dimId}, changedId: ${changedId})`
+      )
+      if (thisWasManualChange)
+        this.config.changedDrawerIndices.add(changedIndex)
+
+      const unchangedDrawerIndices: number[] = []
+      entries(drawerHeightsConfig).forEach(([drawerIndexStr, config]) => {
+        const drawerIndex = Number(drawerIndexStr)
+        if (
+          !this.config.changedDrawerIndices!.has(drawerIndex) &&
+          drawerIndexStr !== String(changedIndex)
+        ) {
+          unchangedDrawerIndices.push(drawerIndex)
+        }
+        // if (
+        //   drawerIndex !== changedIndex &&
+        //   this.config.drawerHeights![drawerIndex] === config.defaultValue
+        // ) {
+        //   unchangedDrawerIndices.push(drawerIndex)
+        // }
+      })
+      console.log(
+        `[DEBUG] redistributeDrawerHeights: unchangedDrawerIndices: ${unchangedDrawerIndices}`
+      )
+
+      const heightUsedByChangedAndExplicit = this.config.drawerHeights.reduce(
+        (sum, height, idx) =>
+          sum +
+          (idx === changedIndex || !unchangedDrawerIndices.includes(idx)
+            ? height
+            : 0),
+        0
+      )
+      console.log(
+        `[DEBUG] redistributeDrawerHeights: heightUsedByChangedAndExplicit: ${heightUsedByChangedAndExplicit}mm`
+      )
+
+      const heightToRedistribute =
+        totalCarcassHeight - heightUsedByChangedAndExplicit
+      console.log(
+        `[DEBUG] redistributeDrawerHeights: heightToRedistribute: ${heightToRedistribute}mm`
+      )
+
+      const newValuesForEachUnchanedIndex: Record<number, number> = {}
+      let totalDefaultHeightOfUnchanged = 0
+      unchangedDrawerIndices.forEach((idx) => {
+        // const defaultIndexHeight = this.config.drawerHeights![idx]
+        const defaultIndexHeight = drawerHeightsConfig[idx].defaultValue
+        totalDefaultHeightOfUnchanged += defaultIndexHeight
+      })
+      console.log(
+        `[DEBUG] redistributeDrawerHeights: totalDefaultHeightOfUnchanged: ${totalDefaultHeightOfUnchanged}mm`
+      )
+      unchangedDrawerIndices.forEach((idx) => {
+        // const currentIndexHeight = this.config.drawerHeights![idx]
+        const defaultIndexHeight = drawerHeightsConfig[idx].defaultValue
+
+        const proportion = defaultIndexHeight / totalDefaultHeightOfUnchanged
+        let newHeight = roundToDecimal(heightToRedistribute * proportion)
+
+        const minHeight = drawerHeightsConfig[idx].min || 50
+        const maxHeight = drawerHeightsConfig[idx].max || totalCarcassHeight
+        newHeight = clamp(newHeight, minHeight, maxHeight)
+        newValuesForEachUnchanedIndex[idx] = newHeight
+        console.log(
+          `[DEBUG] redistributeDrawerHeights: drawer ${idx} newHeight: ${newHeight}mm (proportion: ${proportion})`
+        )
+      })
+      console.log(
+        `[DEBUG] redistributeDrawerHeights: newValuesForEachUnchanedIndex:`,
+        newValuesForEachUnchanedIndex
+      )
+
+      // Apply new heights
+      Object.entries(newValuesForEachUnchanedIndex).forEach(
+        ([idxStr, newHeight]) => {
+          const idx = Number(idxStr)
+          const dimId = drawerHeightsConfig[idx]?.dimId
+
+          this.config.drawerHeights![idx] = newHeight
+          window.dispatchEvent(
+            new CustomEvent("productPanel:updateDim", {
+              detail: {
+                id: dimId,
+                value: newHeight,
+              },
+            })
+          )
+        }
+      )
+
+      return
+    }
+    console.warn(
+      `[DEBUG] NOT USE drawerHeightsConfig in redistributeDrawerHeights for changedIndex ${changedIndex}!`
+    )
 
     // Calculate total height of all explicitly set drawer heights
     let totalExplicitHeight = 0
@@ -1254,22 +1456,28 @@ export class CarcassAssembly {
 
   static createTopCabinet(
     dimensions: CarcassDimensions,
-    config?: Partial<CarcassConfig>
+    config: Partial<CarcassConfig>,
+    productId: string,
+    cabinetId: string
   ): CarcassAssembly {
-    return new CarcassAssembly("top", dimensions, config)
+    return new CarcassAssembly("top", dimensions, config, productId, cabinetId)
   }
 
   static createBaseCabinet(
     dimensions: CarcassDimensions,
-    config?: Partial<CarcassConfig>
+    config: Partial<CarcassConfig>,
+    productId: string,
+    cabinetId: string
   ): CarcassAssembly {
-    return new CarcassAssembly("base", dimensions, config)
+    return new CarcassAssembly("base", dimensions, config, productId, cabinetId)
   }
 
   static createTallCabinet(
     dimensions: CarcassDimensions,
-    config?: Partial<CarcassConfig>
+    config: Partial<CarcassConfig>,
+    productId: string,
+    cabinetId: string
   ): CarcassAssembly {
-    return new CarcassAssembly("tall", dimensions, config)
+    return new CarcassAssembly("tall", dimensions, config, productId, cabinetId)
   }
 }

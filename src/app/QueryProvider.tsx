@@ -5,7 +5,7 @@ import React from 'react'
 
 let client: QueryClient | null = null
 
-const getClient = () => {
+export const getClient = () => {
   if (!client) {
     client = new QueryClient({
       defaultOptions: {

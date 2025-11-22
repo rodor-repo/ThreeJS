@@ -262,6 +262,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
 
       {/* Product Panel */}
       <ProductPanel
+        cabinets={cabinets}
         isVisible={showProductPanel}
         onClose={() => {
           setShowProductPanel(false);
@@ -281,7 +282,8 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
           drawerEnabled: selectedCabinet.carcass.config.drawerEnabled,
           drawerQuantity: selectedCabinet.carcass.config.drawerQuantity,
           drawerHeights: selectedCabinet.carcass.config.drawerHeights,
-          cabinetId: selectedCabinet.cabinetId
+          cabinetId: selectedCabinet.cabinetId,
+          carcass: selectedCabinet.carcass
         } : null}
 
         onShelfCountChange={(newCount: number) => { if (selectedCabinet) selectedCabinet.carcass.updateConfig({ shelfCount: newCount }); }}
@@ -356,12 +358,12 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
             setSelectedCabinet({ ...selectedCabinet })
           }
         }}
-        onDrawerHeightChange={(index, height) => {
+        onDrawerHeightChange={(index, height, changedId) => {
           if (selectedCabinet) {
             console.log('Updating drawer height:', index, height);
 
             // Update individual drawer height directly on the carcass
-            selectedCabinet.carcass.updateDrawerHeight(index, height);
+            selectedCabinet.carcass.updateDrawerHeight(index, height, changedId);
 
             // Trigger re-render
             setSelectedCabinet({ ...selectedCabinet })

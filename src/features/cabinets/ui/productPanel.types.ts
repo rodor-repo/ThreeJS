@@ -45,6 +45,7 @@ export interface ProductPanelCallbacks {
   onDebugBalanceTest?: () => number[] | void
   onViewChange?: (cabinetId: string, viewId: string) => void
   onGroupChange?: (cabinetId: string, groupCabinets: Array<{ cabinetId: string; percentage: number }>) => void
+  onSyncChange?: (cabinetId: string, syncCabinets: string[]) => void
 }
 
 export interface ProductPanelProps extends ProductPanelCallbacks {
@@ -59,6 +60,8 @@ export interface ProductPanelProps extends ProductPanelCallbacks {
   allCabinets?: import('@/features/scene/types').CabinetData[]
   /** Initial group data for the selected cabinet */
   initialGroupData?: Array<{ cabinetId: string; percentage: number }>
+  /** Initial sync data for the selected cabinet */
+  initialSyncData?: string[]
 }
 
 export interface DimensionRange {

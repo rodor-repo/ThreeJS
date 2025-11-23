@@ -92,7 +92,7 @@ export const CabinetLockIcons: React.FC<Props> = ({ cabinet, camera, allCabinets
       />
 
       {/* Left Lock Icon - Always shown */}
-      <div
+        <div
           className={`fixed z-50 bg-white rounded-full p-2 shadow-lg border-2 transition-colors cursor-pointer flex items-center justify-center ${
             isLeftLocked 
               ? 'border-blue-600 hover:border-blue-700' 
@@ -152,7 +152,7 @@ export const CabinetLockIcons: React.FC<Props> = ({ cabinet, camera, allCabinets
       </div>
 
       {/* Right Lock Icon - Always shown */}
-      <div
+        <div
           className={`fixed z-50 bg-white rounded-full p-2 shadow-lg border-2 transition-colors cursor-pointer flex items-center justify-center ${
             isRightLocked 
               ? 'border-blue-600 hover:border-blue-700' 

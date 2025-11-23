@@ -24,7 +24,6 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySele
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedTopLevelMenu, setSelectedTopLevelMenu] = useState<'cabinets' | 'appliances' | 'rooms' | null>(null) // New state for top-level menu
-  const [selectedAppliance, setSelectedAppliance] = useState<string | null>(null) // State for selected appliance
   const [selectedRoom, setSelectedRoom] = useState<RoomCategory | null>(null) // New state for selected room
   const [selectedCategoryForSubmenu, setSelectedCategoryForSubmenu] = useState<Category | null>(null)
   const [showSubmenu, setShowSubmenu] = useState(false)
@@ -212,12 +211,11 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySele
       if (!newState) {
         setSelectedTopLevelMenu(null) // Reset top-level menu selection
         setSelectedRoom(null)
-        setSelectedAppliance(null)
         setShowSubmenu(false)
         setSelectedCategoryForSubmenu(null)
-      setSelectedSubcategoryForDesigns(null)
-      setExpandedDesigns({})
-    }
+        setSelectedSubcategoryForDesigns(null)
+        setExpandedDesigns({})
+      }
     onMenuStateChange?.(newState)
   }
 
@@ -227,8 +225,7 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySele
       // Show categories menu (existing behavior)
       // The categories will be shown in the main panel
     } else if (menu === 'appliances') {
-      // Appliances menu - will show appliance subcategories
-      setSelectedAppliance(null)
+      // Appliances menu - placeholder for future implementation
     } else if (menu === 'rooms') {
       // Rooms menu - will show room subcategories
       setSelectedRoom(null)
@@ -238,21 +235,10 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySele
   const handleBackToTopLevel = () => {
     setSelectedTopLevelMenu(null)
     setSelectedRoom(null)
-    setSelectedAppliance(null)
     setShowSubmenu(false)
     setSelectedCategoryForSubmenu(null)
     setSelectedSubcategoryForDesigns(null)
     setExpandedDesigns({})
-  }
-
-  const handleApplianceClick = (appliance: string) => {
-    setSelectedAppliance(appliance)
-    setShowSubmenu(true)
-  }
-
-  const closeApplianceSubmenu = () => {
-    setShowSubmenu(false)
-    setSelectedAppliance(null)
   }
 
   const handleRoomClick = (room: RoomCategory) => {
@@ -366,7 +352,6 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySele
                 setIsOpen(false)
                 setSelectedTopLevelMenu(null)
                 setSelectedRoom(null)
-                setSelectedAppliance(null)
                 setShowSubmenu(false)
                 onMenuStateChange?.(false)
               }}
@@ -597,26 +582,11 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySele
                 </div>
               )}
 
-              {/* Appliances Subcategories (shown when Appliances is selected) */}
-              {selectedTopLevelMenu === 'appliances' && !selectedAppliance && (
+              {/* Appliances Subcategories (placeholder for future implementation) */}
+              {selectedTopLevelMenu === 'appliances' && (
                 <div className="p-2 sm:p-4">
-                  <div className="space-y-3">
-                    {['Dishwasher', 'Washing machine', 'Dryer', 'Fridge'].map((appliance) => (
-                      <motion.button
-                        key={appliance}
-                        onClick={() => handleApplianceClick(appliance)}
-                        className="w-full p-4 rounded-lg border-2 border-gray-200 hover:border-blue-500 hover:shadow-md transition-all duration-150"
-                        whileHover={{ scale: 1.01 }}
-                        whileTap={{ scale: 0.99 }}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="text-left">
-                            <h3 className="font-semibold text-gray-800">{appliance}</h3>
-                          </div>
-                          <ChevronRight size={20} className="text-gray-400" />
-                        </div>
-                      </motion.button>
-                    ))}
+                  <div className="text-center py-8">
+                    <p className="text-gray-500 text-sm">Appliances coming soon</p>
                   </div>
                 </div>
               )}
@@ -632,44 +602,9 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySele
               )}
             </motion.div>
 
-            {/* Appliances Submenu Panel */}
-            <AnimatePresence>
-              {showSubmenu && selectedAppliance && (
-                <motion.div
-                  initial={{ x: '-100%' }}
-                  animate={{ x: '320px' }}
-                  exit={{ x: '-100%' }}
-                  transition={{ duration: 0 }}
-                  className="fixed left-0 top-0 h-full w-80 max-w-[90vw] bg-white shadow-2xl z-50 overflow-y-auto overflow-x-hidden border-l border-gray-200 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100"
-                >
-                  {/* Submenu Header */}
-                  <div className="p-3 sm:p-6 border-b border-gray-200 bg-gray-50">
-                    <div className="flex items-center space-x-3">
-                      <button
-                        onClick={closeApplianceSubmenu}
-                        className="p-2 hover:bg-gray-200 rounded-full transition-colors duration-150"
-                      >
-                        <ChevronRight size={20} className="text-gray-600 rotate-180" />
-                      </button>
-                      <div>
-                        <h2 className="text-xl font-bold text-gray-800">{selectedAppliance}</h2>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Appliance Content - Placeholder for future implementation */}
-                  <div className="p-2 sm:p-4">
-                    <div className="text-center py-8">
-                      <p className="text-gray-500 text-sm">Appliance details coming soon</p>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
             {/* Submenu Panel */}
             <AnimatePresence>
-              {showSubmenu && selectedCategoryForSubmenu && !selectedAppliance && (
+              {showSubmenu && selectedCategoryForSubmenu && (
                 <motion.div
                   initial={{ x: '-100%' }}
                   animate={{ x: '320px' }}

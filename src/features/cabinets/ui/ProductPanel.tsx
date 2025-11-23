@@ -4,7 +4,7 @@ import { GDThreeJsType } from '@/types/erpTypes'
 import { useQuery } from '@tanstack/react-query'
 import _ from 'lodash'
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { Plus, X } from 'lucide-react'
+import { Plus, X, RefreshCw } from 'lucide-react'
 import type { ProductPanelProps } from './productPanel.types'
 import { ViewSelector } from './ViewSelector'
 import type { ViewId } from '../ViewManager'
@@ -28,7 +28,7 @@ const ProductPanel: React.FC<LocalProductPanelProps> = props => {
 export default ProductPanel
 
 // -------- Fetcher wrapper + Dynamic Dims-only variant driven by WsProduct --------
-const DynamicPanelWithQuery: React.FC<LocalProductPanelProps> = ({ isVisible, onClose, selectedCabinet, onDimensionsChange, onMaterialChange, onOverhangDoorToggle, onShelfCountChange, viewManager, onViewChange, allCabinets, onGroupChange, initialGroupData }) => {
+const DynamicPanelWithQuery: React.FC<LocalProductPanelProps> = ({ isVisible, onClose, selectedCabinet, onDimensionsChange, onMaterialChange, onOverhangDoorToggle, onShelfCountChange, viewManager, onViewChange, allCabinets, onGroupChange, initialGroupData, onSyncChange, initialSyncData }) => {
   const productId = selectedCabinet?.productId
   const { data, isLoading, isError } = useQuery({
     queryKey: ['productData', productId],
@@ -83,15 +83,17 @@ const DynamicPanelWithQuery: React.FC<LocalProductPanelProps> = ({ isVisible, on
       allCabinets={allCabinets}
       onGroupChange={onGroupChange}
       initialGroupData={initialGroupData}
+      onSyncChange={onSyncChange}
+      initialSyncData={initialSyncData}
       loading={isLoading}
       error={isError}
     />
   )
 }
 
-type DynamicPanelProps = LocalProductPanelProps & { loading?: boolean, error?: boolean, materialOptions?: MaterialOptionsResponse, defaultMaterialSelections?: DefaultMaterialSelections, threeJsGDs: Record<GDThreeJsType, string[]> | undefined, onGroupChange?: (cabinetId: string, groupCabinets: Array<{ cabinetId: string; percentage: number }>) => void, initialGroupData?: Array<{ cabinetId: string; percentage: number }> }
+type DynamicPanelProps = LocalProductPanelProps & { loading?: boolean, error?: boolean, materialOptions?: MaterialOptionsResponse, defaultMaterialSelections?: DefaultMaterialSelections, threeJsGDs: Record<GDThreeJsType, string[]> | undefined, onGroupChange?: (cabinetId: string, groupCabinets: Array<{ cabinetId: string; percentage: number }>) => void, initialGroupData?: Array<{ cabinetId: string; percentage: number }>, onSyncChange?: (cabinetId: string, syncCabinets: string[]) => void, initialSyncData?: string[] }
 
-const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProduct, materialOptions, defaultMaterialSelections, selectedCabinet, onDimensionsChange, onMaterialChange, loading, error, threeJsGDs, onOverhangDoorToggle, onShelfCountChange, viewManager, onViewChange, allCabinets, onGroupChange, initialGroupData }) => {
+const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProduct, materialOptions, defaultMaterialSelections, selectedCabinet, onDimensionsChange, onMaterialChange, loading, error, threeJsGDs, onOverhangDoorToggle, onShelfCountChange, viewManager, onViewChange, allCabinets, onGroupChange, initialGroupData, onSyncChange, initialSyncData }) => {
 
 
   const [isExpanded, setIsExpanded] = useState(true)
@@ -106,6 +108,8 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
   const [openMaterialId, setOpenMaterialId] = useState<string | null>(null)
   const [groupCabinets, setGroupCabinets] = useState<Array<{ cabinetId: string; percentage: number }>>([])
   const [selectedCabinetToAdd, setSelectedCabinetToAdd] = useState<string>('')
+  const [syncCabinets, setSyncCabinets] = useState<string[]>([])
+  const [selectedCabinetToAddSync, setSelectedCabinetToAddSync] = useState<string>('')
   
   // Load group data when selected cabinet changes
   useEffect(() => {
@@ -116,8 +120,14 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
       } else {
         setGroupCabinets([])
       }
+      // Load existing sync data from parent (ThreeScene)
+      if (initialSyncData && initialSyncData.length > 0) {
+        setSyncCabinets([...initialSyncData])
+      } else {
+        setSyncCabinets([])
+      }
     }
-  }, [selectedCabinet?.cabinetId, initialGroupData])
+  }, [selectedCabinet?.cabinetId, initialGroupData, initialSyncData])
   
   // debounced inputs for price calculation
   type MaterialSel = { priceRangeId: string, colorId: string, finishId?: string }
@@ -606,6 +616,90 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
                           {groupCabinets.reduce((sum, g) => sum + g.percentage, 0).toFixed(2)}%
                         </span>
                       </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Sync Section */}
+            {viewManager && selectedCabinet && selectedCabinet.viewId && selectedCabinet.viewId !== 'none' && (
+              <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-200">
+                <div className="flex items-center space-x-2 mb-2.5 text-gray-700 font-medium">
+                  <RefreshCw size={20} />
+                  <h3>Sync</h3>
+                </div>
+                <div className="space-y-3">
+                  {/* Dropdown and Add Button */}
+                  <div className="flex items-center gap-2">
+                    <select
+                      className="flex-1 text-sm px-2 py-1.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      value={selectedCabinetToAddSync}
+                      onChange={(e) => setSelectedCabinetToAddSync(e.target.value)}
+                    >
+                      <option value="">Select a cabinet...</option>
+                      {(() => {
+                        const cabinetsInView = viewManager.getCabinetsInView(selectedCabinet.viewId as ViewId)
+                        const availableCabinets = (allCabinets || [])
+                          .filter(c => 
+                            c.cabinetId !== selectedCabinet.cabinetId && 
+                            cabinetsInView.includes(c.cabinetId) &&
+                            !syncCabinets.includes(c.cabinetId)
+                          )
+                        return availableCabinets.map(cabinet => (
+                          <option key={cabinet.cabinetId} value={cabinet.cabinetId}>
+                            {cabinet.sortNumber ? `#${cabinet.sortNumber}` : `Cabinet ${cabinet.cabinetId.slice(0, 8)}...`}
+                          </option>
+                        ))
+                      })()}
+                    </select>
+                    <button
+                      onClick={() => {
+                        if (selectedCabinetToAddSync && !syncCabinets.includes(selectedCabinetToAddSync)) {
+                          const newSyncList = [...syncCabinets, selectedCabinetToAddSync]
+                          setSyncCabinets(newSyncList)
+                          setSelectedCabinetToAddSync('')
+                          // Notify parent about sync change
+                          if (selectedCabinet?.cabinetId && onSyncChange) {
+                            onSyncChange(selectedCabinet.cabinetId, newSyncList)
+                          }
+                        }
+                      }}
+                      disabled={!selectedCabinetToAddSync || syncCabinets.includes(selectedCabinetToAddSync)}
+                      className="flex items-center justify-center w-8 h-8 rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      title="Add cabinet to sync"
+                    >
+                      <Plus size={16} />
+                    </button>
+                  </div>
+
+                  {/* Sync List */}
+                  {syncCabinets.length > 0 && (
+                    <div className="space-y-2">
+                      {syncCabinets.map((syncCabinetId) => {
+                        const cabinet = (allCabinets || []).find(c => c.cabinetId === syncCabinetId)
+                        return (
+                          <div key={syncCabinetId} className="flex items-center gap-2 p-2 bg-gray-50 rounded-md">
+                            <span className="flex-1 text-sm text-gray-700 truncate">
+                              {cabinet?.sortNumber ? `#${cabinet.sortNumber}` : (cabinet ? `Cabinet ${cabinet.cabinetId.slice(0, 8)}...` : `Cabinet ${syncCabinetId.slice(0, 8)}...`)}
+                            </span>
+                            <button
+                              onClick={() => {
+                                const newSyncList = syncCabinets.filter(id => id !== syncCabinetId)
+                                setSyncCabinets(newSyncList)
+                                // Notify parent about sync change
+                                if (selectedCabinet?.cabinetId && onSyncChange) {
+                                  onSyncChange(selectedCabinet.cabinetId, newSyncList)
+                                }
+                              }}
+                              className="text-gray-400 hover:text-red-600 transition-colors"
+                              title="Remove from sync"
+                            >
+                              <X size={16} />
+                            </button>
+                          </div>
+                        )
+                      })}
                     </div>
                   )}
                 </div>

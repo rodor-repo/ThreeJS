@@ -1,14 +1,18 @@
 import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, ChevronLeft, Plus, Trash2 } from 'lucide-react'
-import type { WallDimensions } from '../types'
+import type { WallDimensions, CabinetData } from '../types'
 import { WALL_THICKNESS } from '../lib/sceneUtils'
+import type { View, ViewManager, ViewId } from '@/features/cabinets/ViewManager'
 
 type Props = {
   isOpen: boolean
   onClose: () => void
   wallDimensions: WallDimensions
   wallColor: string
+  activeViews: View[]
+  cabinets: CabinetData[]
+  viewManager: ViewManager
   onApply: (dims: WallDimensions, color: string) => void
 }
 
@@ -17,6 +21,9 @@ export const WallSettingsDrawer: React.FC<Props> = ({
   onClose,
   wallDimensions,
   wallColor,
+  activeViews,
+  cabinets,
+  viewManager,
   onApply,
 }) => {
   const [tempHeight, setTempHeight] = useState(wallDimensions.height)
@@ -25,10 +32,11 @@ export const WallSettingsDrawer: React.FC<Props> = ({
   const [tempRightWallLength, setTempRightWallLength] = useState(wallDimensions.rightWallLength ?? 600)
   const [tempLeftWallVisible, setTempLeftWallVisible] = useState(wallDimensions.leftWallVisible ?? true)
   const [tempRightWallVisible, setTempRightWallVisible] = useState(wallDimensions.rightWallVisible ?? true)
-  const [tempAdditionalWalls, setTempAdditionalWalls] = useState<Array<{ id: string; length: number; distanceFromLeft: number; thickness?: number }>>(
-    wallDimensions.additionalWalls ?? []
+  const [tempAdditionalWalls, setTempAdditionalWalls] = useState<Array<{ id: string; length: number; distanceFromLeft: number; thickness?: number; viewId?: ViewId }>>(
+    wallDimensions.additionalWalls?.map(wall => ({ ...wall, viewId: (wall as any).viewId })) ?? []
   )
   const [tempWallColor, setTempWallColor] = useState(wallColor)
+  const [rightWallViewId, setRightWallViewId] = useState<ViewId | ''>((wallDimensions as any).rightWallViewId || '')
 
   useEffect(() => {
     if (isOpen) {
@@ -38,8 +46,9 @@ export const WallSettingsDrawer: React.FC<Props> = ({
       setTempRightWallLength(wallDimensions.rightWallLength ?? 600)
       setTempLeftWallVisible(wallDimensions.leftWallVisible ?? true)
       setTempRightWallVisible(wallDimensions.rightWallVisible ?? true)
-      setTempAdditionalWalls(wallDimensions.additionalWalls ?? [])
+      setTempAdditionalWalls(wallDimensions.additionalWalls?.map(wall => ({ ...wall, viewId: (wall as any).viewId })) ?? [])
       setTempWallColor(wallColor)
+      setRightWallViewId((wallDimensions as any).rightWallViewId || '')
     }
   }, [isOpen, wallColor, wallDimensions])
 
@@ -64,17 +73,122 @@ export const WallSettingsDrawer: React.FC<Props> = ({
     setTempAdditionalWalls(updatedWalls)
   }
 
-  // Apply changes function - called when input loses focus
-  const applyChanges = () => {
+  // Calculate the rightmost X position (right edge) of cabinets in a view
+  const calculateRightmostPositionInView = (viewId: ViewId): number => {
+    if (!viewId || viewId === 'none') return 0
+    
+    const cabinetIds = viewManager.getCabinetsInView(viewId)
+    const viewCabinets = cabinets.filter(c => cabinetIds.includes(c.cabinetId))
+    
+    if (viewCabinets.length === 0) return 0
+    
+    // Find the rightmost edge: cabinet X position + cabinet width
+    let rightmostX = 0
+    viewCabinets.forEach(cabinet => {
+      const cabinetRightEdge = cabinet.group.position.x + cabinet.carcass.dimensions.width
+      if (cabinetRightEdge > rightmostX) {
+        rightmostX = cabinetRightEdge
+      }
+    })
+    
+    return rightmostX
+  }
+
+  // Handle Right Wall view selection
+  const handleRightWallViewChange = (viewId: string) => {
+    const selectedViewId = viewId as ViewId
+    setRightWallViewId(selectedViewId)
+    
+    if (selectedViewId && selectedViewId !== 'none') {
+      // Calculate rightmost position in the selected view
+      const rightmostX = calculateRightmostPositionInView(selectedViewId)
+      
+      // Update Back Wall length to match rightmost position
+      // Right Wall's left corner will be at rightmostX
+      setTempBackWallLength(rightmostX)
+      
+      // Apply changes immediately
+      onApply(
+        {
+          height: Math.max(100, tempHeight),
+          length: Math.max(100, rightmostX),
+          backWallLength: Math.max(100, rightmostX),
+          leftWallLength: Math.max(100, tempLeftWallLength),
+          rightWallLength: Math.max(100, tempRightWallLength),
+          leftWallVisible: tempLeftWallVisible,
+          rightWallVisible: tempRightWallVisible,
+          rightWallViewId: selectedViewId,
+          additionalWalls: tempAdditionalWalls,
+        },
+        tempWallColor
+      )
+    } else {
+      // No view selected - apply without view constraint
+      onApply(
+        {
+          height: Math.max(100, tempHeight),
+          length: Math.max(100, tempBackWallLength),
+          backWallLength: Math.max(100, tempBackWallLength),
+          leftWallLength: Math.max(100, tempLeftWallLength),
+          rightWallLength: Math.max(100, tempRightWallLength),
+          leftWallVisible: tempLeftWallVisible,
+          rightWallVisible: tempRightWallVisible,
+          rightWallViewId: undefined,
+          additionalWalls: tempAdditionalWalls,
+        },
+        tempWallColor
+      )
+    }
+  }
+
+  // Handle Internal Wall view selection
+  const handleInternalWallViewChange = (wallId: string, viewId: string) => {
+    const selectedViewId = viewId as ViewId
+    
+    // Update the wall's viewId
+    const updatedWalls = tempAdditionalWalls.map(wall =>
+      wall.id === wallId ? { ...wall, viewId: selectedViewId || undefined } : wall
+    )
+    setTempAdditionalWalls(updatedWalls)
+    
+    // For internal walls, position is based on distanceFromLeft
+    // The wall's left corner will be at distanceFromLeft (no Back Wall adjustment)
+    // This is handled by the existing distanceFromLeft field, so we just need to apply changes
     onApply(
       {
         height: Math.max(100, tempHeight),
-        length: Math.max(100, tempBackWallLength), // Keep for backward compatibility
+        length: Math.max(100, tempBackWallLength),
         backWallLength: Math.max(100, tempBackWallLength),
         leftWallLength: Math.max(100, tempLeftWallLength),
         rightWallLength: Math.max(100, tempRightWallLength),
         leftWallVisible: tempLeftWallVisible,
         rightWallVisible: tempRightWallVisible,
+        rightWallViewId: rightWallViewId || undefined,
+        additionalWalls: updatedWalls,
+      },
+      tempWallColor
+    )
+  }
+
+  // Apply changes function - called when input loses focus
+  const applyChanges = () => {
+    // If Right Wall has a view selected, recalculate Back Wall length
+    let finalBackWallLength = tempBackWallLength
+    if (rightWallViewId && rightWallViewId !== 'none') {
+      const rightmostX = calculateRightmostPositionInView(rightWallViewId)
+      finalBackWallLength = Math.max(100, rightmostX)
+    }
+    
+    onApply(
+      {
+        height: Math.max(100, tempHeight),
+        length: Math.max(100, finalBackWallLength), // Keep for backward compatibility
+        backWallLength: Math.max(100, finalBackWallLength),
+        leftWallLength: Math.max(100, tempLeftWallLength),
+        rightWallLength: Math.max(100, tempRightWallLength),
+        leftWallVisible: tempLeftWallVisible,
+        rightWallVisible: tempRightWallVisible,
+        rightWallViewId: rightWallViewId || undefined,
         additionalWalls: tempAdditionalWalls,
       },
       tempWallColor
@@ -93,6 +207,7 @@ export const WallSettingsDrawer: React.FC<Props> = ({
           rightWallLength: Math.max(100, tempRightWallLength),
           leftWallVisible: tempLeftWallVisible,
           rightWallVisible: tempRightWallVisible,
+          rightWallViewId: rightWallViewId || undefined,
           additionalWalls: tempAdditionalWalls,
         },
         tempWallColor
@@ -230,23 +345,46 @@ export const WallSettingsDrawer: React.FC<Props> = ({
                   </label>
                 </div>
                 {tempRightWallVisible && (
-                  <div className="ml-8">
-                    <label
-                      htmlFor="rightWallLength"
-                      className="block text-sm font-medium text-gray-700 mb-2"
-                    >
-                      Right Wall Length (mm)
-                    </label>
-                    <input
-                      type="number"
-                      id="rightWallLength"
-                      value={tempRightWallLength}
-                      onChange={(e) => setTempRightWallLength(Number(e.target.value) || 0)}
-                      onBlur={applyChanges}
-                      min={100}
-                      max={20000}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
+                  <div className="ml-8 space-y-4">
+                    <div>
+                      <label
+                        htmlFor="rightWallLength"
+                        className="block text-sm font-medium text-gray-700 mb-2"
+                      >
+                        Right Wall Length (mm)
+                      </label>
+                      <input
+                        type="number"
+                        id="rightWallLength"
+                        value={tempRightWallLength}
+                        onChange={(e) => setTempRightWallLength(Number(e.target.value) || 0)}
+                        onBlur={applyChanges}
+                        min={100}
+                        max={20000}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        htmlFor="rightWallView"
+                        className="block text-sm font-medium text-gray-700 mb-2"
+                      >
+                        View
+                      </label>
+                      <select
+                        id="rightWallView"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                        value={rightWallViewId}
+                        onChange={(e) => handleRightWallViewChange(e.target.value)}
+                      >
+                        <option value="">Select a view...</option>
+                        {activeViews.map((view) => (
+                          <option key={view.id} value={view.id}>
+                            {view.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                 )}
               </div>
@@ -264,10 +402,10 @@ export const WallSettingsDrawer: React.FC<Props> = ({
                 </div>
                 {tempAdditionalWalls.length > 0 && (
                   <div className="space-y-4">
-                    {tempAdditionalWalls.map((wall) => (
+                    {tempAdditionalWalls.map((wall, index) => (
                       <div key={wall.id} className="bg-gray-50 p-3 rounded-md space-y-3">
                         <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium text-gray-700">Wall {wall.id.slice(-6)}</span>
+                          <span className="text-sm font-medium text-gray-700">Wall {index + 1}</span>
                           <button
                             onClick={() => handleRemoveAdditionalWall(wall.id)}
                             className="text-red-600 hover:text-red-700 transition-colors"
@@ -329,6 +467,27 @@ export const WallSettingsDrawer: React.FC<Props> = ({
                             max={500}
                             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                           />
+                        </div>
+                        <div>
+                          <label
+                            htmlFor={`wall-${wall.id}-view-thickness`}
+                            className="block text-sm font-medium text-gray-700 mb-1"
+                          >
+                            View
+                          </label>
+                          <select
+                            id={`wall-${wall.id}-view-thickness`}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                            value={wall.viewId || ''}
+                            onChange={(e) => handleInternalWallViewChange(wall.id, e.target.value)}
+                          >
+                            <option value="">Select a view...</option>
+                            {activeViews.map((view) => (
+                              <option key={view.id} value={view.id}>
+                                {view.name}
+                              </option>
+                            ))}
+                          </select>
                         </div>
                       </div>
                     ))}

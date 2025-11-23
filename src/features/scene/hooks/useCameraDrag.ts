@@ -41,9 +41,17 @@ export const useCameraDrag = (
       const targetZ = target?.z ?? -WALL_THICKNESS / 2
 
       // Convert spherical to cartesian coordinates relative to target
-      const x = targetX + radius * Math.sin(phi) * Math.cos(theta)
-      const y = targetY + radius * Math.cos(phi)
-      const z = targetZ + radius * Math.sin(phi) * Math.sin(theta)
+      let x = targetX + radius * Math.sin(phi) * Math.cos(theta)
+      let y = targetY + radius * Math.cos(phi)
+      let z = targetZ + radius * Math.sin(phi) * Math.sin(theta)
+
+      // Apply movement limits
+      const minZ = -500 // Limit Z negative to -500mm
+      const minY = -200 // Limit Y negative to -200mm
+      
+      // Clamp camera position to limits
+      z = Math.max(minZ, z)
+      y = Math.max(minY, y)
 
       camera.position.set(x, y, z)
       camera.lookAt(targetX, targetY, targetZ)
@@ -90,18 +98,18 @@ export const useCameraDrag = (
       if (isMenuOpen || !state.isDragging) return
 
       if (cameraMode === 'free') {
-        // Free mode - orbit camera rotation
+        // Free mode - orbit camera rotation (reversed: mouse left = camera right, mouse up = camera down)
         const deltaX = clientX - state.dragStart.x
         const deltaY = clientY - state.dragStart.y
 
         // Rotation sensitivity
         const rotateSpeed = 0.005
 
-        // Update spherical coordinates
-        const newTheta = state.orbitTheta - deltaX * rotateSpeed
+        // Update spherical coordinates (reversed directions)
+        const newTheta = state.orbitTheta + deltaX * rotateSpeed // Reversed: + instead of -
         const newPhi = Math.max(
           0.1, // Prevent gimbal lock at top
-          Math.min(Math.PI - 0.1, state.orbitPhi + deltaY * rotateSpeed) // Prevent gimbal lock at bottom
+          Math.min(Math.PI - 0.1, state.orbitPhi - deltaY * rotateSpeed) // Reversed: - instead of +
         )
 
         setState({
@@ -266,24 +274,42 @@ export const useCameraDrag = (
       right.setFromMatrixColumn(camera.matrix, 0) // Right vector
       up.setFromMatrixColumn(camera.matrix, 1) // Up vector
 
-      // Calculate pan offset in world space
-      const panX = -deltaX * panSpeed
-      const panY = deltaY * panSpeed
+      // Calculate pan offset in world space (reversed: mouse left = camera right, mouse up = camera down)
+      const panX = deltaX * panSpeed // Reversed: + instead of -
+      const panY = -deltaY * panSpeed // Reversed: - instead of +
 
       // Pan both camera and target
       const offsetX = panX * right.x + panY * up.x
       const offsetY = panX * right.y + panY * up.y
       const offsetZ = panX * right.z + panY * up.z
 
-      camera.position.x += offsetX
-      camera.position.y += offsetY
-      camera.position.z += offsetZ
+      // Calculate new position
+      let newCameraX = camera.position.x + offsetX
+      let newCameraY = camera.position.y + offsetY
+      let newCameraZ = camera.position.z + offsetZ
 
-      // Update orbit target to maintain relative position
+      // Apply movement limits
+      const minZ = -500 // Limit Z negative to -500mm
+      const minY = -200 // Limit Y negative to -200mm
+      
+      // Clamp camera position to limits
+      newCameraZ = Math.max(minZ, newCameraZ)
+      newCameraY = Math.max(minY, newCameraY)
+
+      // Calculate actual offset after clamping
+      const actualOffsetX = newCameraX - camera.position.x
+      const actualOffsetY = newCameraY - camera.position.y
+      const actualOffsetZ = newCameraZ - camera.position.z
+
+      camera.position.x = newCameraX
+      camera.position.y = newCameraY
+      camera.position.z = newCameraZ
+
+      // Update orbit target to maintain relative position (using actual offsets)
       const newTarget = {
-        x: state.orbitTarget.x + offsetX,
-        y: state.orbitTarget.y + offsetY,
-        z: state.orbitTarget.z + offsetZ,
+        x: state.orbitTarget.x + actualOffsetX,
+        y: state.orbitTarget.y + actualOffsetY,
+        z: state.orbitTarget.z + actualOffsetZ,
       }
 
       // Update state

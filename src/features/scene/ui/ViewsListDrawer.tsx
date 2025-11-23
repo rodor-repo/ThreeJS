@@ -10,7 +10,7 @@ type Props = {
   onViewClick?: (viewId: string) => void
 }
 
-export const ViewsSettingsDrawer: React.FC<Props> = ({
+export const ViewsListDrawer: React.FC<Props> = ({
   isOpen,
   onClose,
   activeViews,

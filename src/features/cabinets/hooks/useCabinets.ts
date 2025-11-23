@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useState, Dispatch, SetStateAction } from "react"
 import * as THREE from "three"
 import { createCabinet as createCabinetEntry } from "../factory/cabinetFactory"
 import {
@@ -17,10 +17,17 @@ export const useCabinets = (
   const [cabinets, setCabinets] = useState<CabinetData[]>([])
   const [cabinetCounter, setCabinetCounter] = useState(0)
   const [sortNumberCounter, setSortNumberCounter] = useState(1) // Track order cabinets are added
-  const [selectedCabinet, setSelectedCabinet] = useState<CabinetData | null>(
-    null
-  )
+  const [selectedCabinets, setSelectedCabinets] = useState<CabinetData[]>([])
   const [showProductPanel, setShowProductPanel] = useState(false)
+  
+  // Backward compatibility: selectedCabinet is the first selected cabinet
+  const selectedCabinet = selectedCabinets.length > 0 ? selectedCabinets[0] : null
+  const setSelectedCabinet = useCallback((cabinet: CabinetData | null) => {
+    setSelectedCabinets(cabinet ? [cabinet] : [])
+  }, [])
+  
+  // Type-safe wrapper for setSelectedCabinets that accepts both values and updater functions
+  const setSelectedCabinetsWrapper: Dispatch<SetStateAction<CabinetData[]>> = setSelectedCabinets
 
   const createCabinet = useCallback(
     (
@@ -50,27 +57,28 @@ export const useCabinets = (
     setCabinets([])
     setCabinetCounter(0)
     setSortNumberCounter(1) // Reset sort number counter
-    setSelectedCabinet(null)
+    setSelectedCabinets([])
     setShowProductPanel(false)
   }, [sceneRef, cabinets])
 
   useEffect(() => {
     cabinets.forEach((c) => clearHighlight(c.group))
-    if (selectedCabinet) highlightSelected(selectedCabinet.group)
-  }, [selectedCabinet, cabinets])
+    // Highlight all selected cabinets
+    selectedCabinets.forEach((cab) => highlightSelected(cab.group))
+  }, [selectedCabinets, cabinets])
 
   const addHoverEffect = useCallback(
     (cab: CabinetData) => {
-      if (cab === selectedCabinet) pulseHover(cab.group)
+      if (selectedCabinets.includes(cab)) pulseHover(cab.group)
     },
-    [selectedCabinet]
+    [selectedCabinets]
   )
 
   const removeHoverEffect = useCallback(
     (cab: CabinetData) => {
-      if (cab === selectedCabinet) unpulseHover(cab.group)
+      if (selectedCabinets.includes(cab)) unpulseHover(cab.group)
     },
-    [selectedCabinet]
+    [selectedCabinets]
   )
 
   const updateCabinetViewId = useCallback(
@@ -80,11 +88,14 @@ export const useCabinets = (
           cab.cabinetId === cabinetId ? { ...cab, viewId } : cab
         )
       )
-      if (selectedCabinet?.cabinetId === cabinetId) {
-        setSelectedCabinet({ ...selectedCabinet, viewId })
-      }
+      // Update selected cabinets if they were modified
+      setSelectedCabinets((prev) =>
+        prev.map((cab) =>
+          cab.cabinetId === cabinetId ? { ...cab, viewId } : cab
+        )
+      )
     },
-    [selectedCabinet, setSelectedCabinet]
+    []
   )
 
   const updateCabinetLock = useCallback(
@@ -94,11 +105,14 @@ export const useCabinets = (
           cab.cabinetId === cabinetId ? { ...cab, leftLock, rightLock } : cab
         )
       )
-      if (selectedCabinet?.cabinetId === cabinetId) {
-        setSelectedCabinet({ ...selectedCabinet, leftLock, rightLock })
-      }
+      // Update selected cabinets if they were modified
+      setSelectedCabinets((prev) =>
+        prev.map((cab) =>
+          cab.cabinetId === cabinetId ? { ...cab, leftLock, rightLock } : cab
+        )
+      )
     },
-    [selectedCabinet]
+    []
   )
 
   const deleteCabinet = useCallback(
@@ -149,20 +163,22 @@ export const useCabinets = (
       // Update cabinets state
       setCabinets(renumberedCabinets)
       
-      // Update selectedCabinet if it was renumbered (but not deleted)
-      if (selectedCabinet && selectedCabinet.cabinetId !== cabinetId) {
-        const updatedSelected = renumberedCabinets.find(c => c.cabinetId === selectedCabinet.cabinetId)
-        if (updatedSelected) {
-          setSelectedCabinet(updatedSelected)
-        }
-      }
+      // Update selected cabinets if they were renumbered (but not deleted)
+      setSelectedCabinets((prev) => {
+        const updated = prev
+          .filter(c => c.cabinetId !== cabinetId) // Remove deleted cabinet
+          .map(c => {
+            const updatedCab = renumberedCabinets.find(rc => rc.cabinetId === c.cabinetId)
+            return updatedCab || c
+          })
+        return updated
+      })
       
       // Clean up cabinet panel state
       cabinetPanelState.delete(cabinetId)
       
-      // Clear selection if this cabinet was selected
-      if (selectedCabinet?.cabinetId === cabinetId) {
-        setSelectedCabinet(null)
+      // Close panel if deleted cabinet was the only selected one
+      if (selectedCabinets.length === 1 && selectedCabinets[0]?.cabinetId === cabinetId) {
         setShowProductPanel(false)
       }
     },
@@ -172,8 +188,10 @@ export const useCabinets = (
   return {
     cabinets,
     cabinetCounter,
-    selectedCabinet,
-    setSelectedCabinet,
+    selectedCabinet, // Backward compatibility: first selected cabinet
+    selectedCabinets, // New: array of all selected cabinets
+    setSelectedCabinet, // Backward compatibility: sets single cabinet
+    setSelectedCabinets: setSelectedCabinetsWrapper, // New: sets multiple cabinets (with function support)
     showProductPanel,
     setShowProductPanel,
     createCabinet,

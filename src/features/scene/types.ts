@@ -11,12 +11,15 @@ export type WallDimensions = {
   rightWallLength?: number
   leftWallVisible?: boolean
   rightWallVisible?: boolean
+  // Right wall view association
+  rightWallViewId?: string // ViewId for right wall positioning
   // Additional walls (perpendicular to back wall, in Z-axis)
   additionalWalls?: Array<{
     id: string
     length: number
     distanceFromLeft: number // Distance from origin (X=0) in X direction
     thickness?: number // Wall thickness (defaults to back wall thickness)
+    viewId?: string // ViewId for internal wall positioning
   }>
 }
 
@@ -44,3 +47,4 @@ export type CabinetData = {
   /** Sort number based on order cabinets were added to the scene */
   sortNumber?: number
 }
+

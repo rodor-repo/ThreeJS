@@ -1,6 +1,6 @@
 import React from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X } from 'lucide-react'
+import { X, Trash2 } from 'lucide-react'
 import type { View } from '@/features/cabinets/ViewManager'
 
 type Props = {
@@ -8,6 +8,7 @@ type Props = {
   onClose: () => void
   onWallClick: () => void
   onViewClick?: (viewId: string) => void
+  onDeleteView?: (viewId: string) => void
   activeViews: View[]
 }
 
@@ -16,6 +17,7 @@ export const SettingsSidebar: React.FC<Props> = ({
   onClose,
   onWallClick,
   onViewClick,
+  onDeleteView,
   activeViews,
 }) => {
   return (
@@ -66,15 +68,31 @@ export const SettingsSidebar: React.FC<Props> = ({
 
               {/* View Options - List all active views */}
               {activeViews.map((view) => (
-                <button
+                <div
                   key={view.id}
-                  onClick={() => {
-                    onViewClick?.(view.id)
-                  }}
-                  className="w-full p-4 rounded-lg border-2 border-gray-200 hover:border-blue-500 hover:bg-blue-50 transition-all duration-150 text-left"
+                  className="w-full p-4 rounded-lg border-2 border-gray-200 hover:border-blue-500 hover:bg-blue-50 transition-all duration-150 flex items-center gap-3"
                 >
-                  <h3 className="font-semibold text-gray-800">{view.name}</h3>
-                </button>
+                  <button
+                    onClick={() => {
+                      onViewClick?.(view.id)
+                    }}
+                    className="flex-1 text-left"
+                  >
+                    <h3 className="font-semibold text-gray-800">{view.name}</h3>
+                  </button>
+                  {onDeleteView && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onDeleteView(view.id)
+                      }}
+                      className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors"
+                      title="Delete view"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  )}
+                </div>
               ))}
             </div>
           </motion.div>

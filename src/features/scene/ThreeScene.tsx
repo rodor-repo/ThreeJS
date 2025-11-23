@@ -832,6 +832,26 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
           setSelectedViewId(viewId)
           setShowViewDrawer(true)
         }}
+        onDeleteView={(viewId) => {
+          // Get all cabinets in this view
+          const cabinetIds = viewManager.getCabinetsInView(viewId as ViewId)
+          
+          // Update all cabinets in this view to have viewId = "none"
+          cabinetIds.forEach((cabinetId) => {
+            updateCabinetViewId(cabinetId, undefined) // undefined means "none"
+          })
+          
+          // If the right wall is linked to this view, remove the association
+          if (wallDimensions.rightWallViewId === viewId) {
+            handleDimensionChange({
+              ...wallDimensions,
+              rightWallViewId: undefined,
+            })
+          }
+          
+          // Delete the view from ViewManager
+          viewManager.deleteView(viewId as ViewId)
+        }}
         activeViews={viewManager.activeViews}
       />
 
@@ -855,6 +875,26 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         onViewClick={(viewId) => {
           // Could add view-specific settings here in the future
           console.log('View clicked:', viewId)
+        }}
+        onDeleteView={(viewId) => {
+          // Get all cabinets in this view
+          const cabinetIds = viewManager.getCabinetsInView(viewId as ViewId)
+          
+          // Update all cabinets in this view to have viewId = "none"
+          cabinetIds.forEach((cabinetId) => {
+            updateCabinetViewId(cabinetId, undefined) // undefined means "none"
+          })
+          
+          // If the right wall is linked to this view, remove the association
+          if (wallDimensions.rightWallViewId === viewId) {
+            handleDimensionChange({
+              ...wallDimensions,
+              rightWallViewId: undefined,
+            })
+          }
+          
+          // Delete the view from ViewManager
+          viewManager.deleteView(viewId as ViewId)
         }}
       />
 

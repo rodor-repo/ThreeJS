@@ -1,6 +1,6 @@
 import React from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ChevronLeft } from 'lucide-react'
+import { ChevronLeft, Trash2 } from 'lucide-react'
 import type { View } from '@/features/cabinets/ViewManager'
 
 type Props = {
@@ -8,6 +8,7 @@ type Props = {
   onClose: () => void
   activeViews: View[]
   onViewClick?: (viewId: string) => void
+  onDeleteView?: (viewId: string) => void
 }
 
 export const ViewsListDrawer: React.FC<Props> = ({
@@ -15,6 +16,7 @@ export const ViewsListDrawer: React.FC<Props> = ({
   onClose,
   activeViews,
   onViewClick,
+  onDeleteView,
 }) => {
   return (
     <AnimatePresence>
@@ -60,19 +62,35 @@ export const ViewsListDrawer: React.FC<Props> = ({
               ) : (
                 <div className="space-y-2">
                   {activeViews.map((view) => (
-                    <button
+                    <div
                       key={view.id}
-                      onClick={() => {
-                        onViewClick?.(view.id)
-                        onClose()
-                      }}
-                      className="w-full p-4 rounded-lg border-2 border-gray-200 hover:border-blue-500 hover:bg-blue-50 transition-all duration-150 text-left"
+                      className="w-full p-4 rounded-lg border-2 border-gray-200 hover:border-blue-500 hover:bg-blue-50 transition-all duration-150 flex items-center gap-3"
                     >
-                      <h3 className="font-semibold text-gray-800">{view.name}</h3>
-                      <p className="text-sm text-gray-500 mt-1">
-                        {view.cabinetIds.size} cabinet{view.cabinetIds.size !== 1 ? 's' : ''}
-                      </p>
-                    </button>
+                      <button
+                        onClick={() => {
+                          onViewClick?.(view.id)
+                          onClose()
+                        }}
+                        className="flex-1 text-left"
+                      >
+                        <h3 className="font-semibold text-gray-800">{view.name}</h3>
+                        <p className="text-sm text-gray-500 mt-1">
+                          {view.cabinetIds.size} cabinet{view.cabinetIds.size !== 1 ? 's' : ''}
+                        </p>
+                      </button>
+                      {onDeleteView && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            onDeleteView(view.id)
+                          }}
+                          className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors"
+                          title="Delete view"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      )}
+                    </div>
                   ))}
                 </div>
               )}

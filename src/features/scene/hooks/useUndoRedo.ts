@@ -227,12 +227,80 @@ export const useUndoRedo = ({
     setCabinetSyncs,
   ])
 
+  const jumpTo = useCallback(
+    async (index: number) => {
+      if (isRestoring.current) return
+
+      const allCheckpoints = [...past, ...future]
+      if (index < 0 || index >= allCheckpoints.length) return
+
+      const targetState = allCheckpoints[index]
+
+      // New past includes everything up to and including the target index
+      // But wait, if we restore targetState, it is the "current" state.
+      // In our undo logic:
+      // Undo -> pops from past, pushes to future. Restores.
+      // So "current" is NOT in past.
+      // So if we restore targetState, past should be everything BEFORE it.
+      // And future should be everything AFTER it.
+      // And targetState itself is "current" (not in either list? or in future[0]?)
+
+      // Let's stick to the pattern established by Undo:
+      // When we Undo to B. past=[A], future=[B].
+      // So if we jump to index 1 (B).
+      // past should be [A]. future should be [B, ...rest].
+
+      const newPast = allCheckpoints.slice(0, index)
+      const newFuture = allCheckpoints.slice(index)
+
+      isRestoring.current = true
+      setPast(newPast)
+      setFuture(newFuture)
+
+      await restoreRoom({
+        savedRoom: targetState,
+        setNumbersVisible,
+        clearCabinets,
+        setCabinetGroups,
+        applyDimensions,
+        setWallColor,
+        viewManagerInstance,
+        createView,
+        createCabinet,
+        updateCabinetViewId,
+        assignCabinetToView,
+        updateCabinetLock,
+        setCabinetSyncs,
+      })
+
+      isRestoring.current = false
+    },
+    [
+      past,
+      future,
+      setNumbersVisible,
+      clearCabinets,
+      setCabinetGroups,
+      applyDimensions,
+      setWallColor,
+      viewManagerInstance,
+      createView,
+      createCabinet,
+      updateCabinetViewId,
+      assignCabinetToView,
+      updateCabinetLock,
+      setCabinetSyncs,
+    ]
+  )
+
   return {
     undo,
     redo,
     createCheckpoint,
+    jumpTo,
     canUndo: past.length > 0,
     canRedo: future.length > 0,
-    past, // Expose past checkpoints for UI list
+    past,
+    future,
   }
 }

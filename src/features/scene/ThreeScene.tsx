@@ -237,7 +237,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     onLoadRoomReady,
   })
 
-  const { undo, redo, canUndo, canRedo, createCheckpoint, past } = useUndoRedo({
+  const { undo, redo, canUndo, canRedo, createCheckpoint, past, future, jumpTo } = useUndoRedo({
     cabinets,
     cabinetGroups,
     setCabinetGroups,
@@ -761,7 +761,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
       {/* Undo/Redo Buttons - Bottom Left (above Save) */}
       <div className="fixed bottom-20 left-4 z-50 flex gap-2 items-end">
         {/* History List Popover */}
-        {showHistory && past.length > 0 && (
+        {showHistory && (past.length > 0 || future.length > 0) && (
           <div className="absolute bottom-full left-0 mb-2 bg-white rounded-lg shadow-xl border border-gray-200 w-64 max-h-60 overflow-y-auto z-50">
             <div className="p-3 border-b border-gray-100 bg-gray-50 sticky top-0">
               <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
@@ -770,15 +770,43 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
               </h3>
             </div>
             <div className="py-1">
-              {[...past].reverse().map((room, index) => (
-                <div key={room.id || index} className="px-4 py-2 hover:bg-gray-50 text-sm text-gray-600 border-b border-gray-50 last:border-0 flex items-center justify-between">
-                  <span className="font-medium">Checkpoint {past.length - index}</span>
-                  <span className="text-xs text-gray-400 flex items-center gap-1">
-                    <Clock size={10} />
-                    {new Date(room.savedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                  </span>
-                </div>
-              ))}
+              {[...past, ...future].map((room, index) => {
+                const isFuture = index >= past.length
+
+                // If future has items, the "current" state is actually the first item of future (index = past.length)
+                // Wait, if we undo, we push to future. So future[0] is the state we are looking at.
+                // So if future.length > 0, current index is past.length.
+                // If future.length === 0, current index is past.length - 1.
+
+                const currentIndex = future.length > 0 ? past.length : past.length - 1
+                const isActive = index === currentIndex
+
+                return (
+                  <div
+                    key={room.id || index}
+                    onClick={() => {
+                      jumpTo(index)
+                      setShowHistory(false)
+                    }}
+                    className={`px-4 py-2 border-b border-gray-50 last:border-0 flex items-center justify-between cursor-pointer transition-colors duration-150
+                      ${isActive ? 'bg-blue-50 text-blue-700' : ''}
+                      ${!isActive && isFuture ? 'text-gray-400 hover:bg-gray-50' : ''}
+                      ${!isActive && !isFuture ? 'text-gray-600 hover:bg-gray-50' : ''}
+                    `}
+                  >
+                    <div className="flex items-center gap-2">
+                      {isActive && <div className="w-2 h-2 rounded-full bg-blue-500" />}
+                      <span className={`font-medium ${isActive ? 'font-bold' : ''}`}>
+                        Checkpoint {index + 1}
+                      </span>
+                    </div>
+                    <span className="text-xs text-gray-400 flex items-center gap-1">
+                      <Clock size={10} />
+                      {new Date(room.savedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                    </span>
+                  </div>
+                )
+              }).reverse()}
             </div>
           </div>
         )}
@@ -810,15 +838,15 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
           <button
             onClick={handleCreateCheckpoint}
             className={`p-3 rounded-full shadow-lg transition-all duration-500 ${isCheckpointed
-                ? 'bg-green-500 text-white scale-110 ring-4 ring-green-200'
-                : 'bg-white text-gray-700 hover:bg-gray-100'
+              ? 'bg-green-500 text-white scale-110 ring-4 ring-green-200'
+              : 'bg-white text-gray-700 hover:bg-gray-100'
               }`}
             title="Create Checkpoint"
           >
             <Flag size={20} className={isCheckpointed ? 'animate-bounce' : ''} />
           </button>
 
-          {past.length > 0 && (
+          {(past.length > 0 || future.length > 0) && (
             <button
               onClick={() => setShowHistory(!showHistory)}
               className={`p-3 rounded-full shadow-lg transition-colors duration-200 ${showHistory ? 'bg-blue-100 text-blue-600' : 'bg-white text-gray-700 hover:bg-gray-100'

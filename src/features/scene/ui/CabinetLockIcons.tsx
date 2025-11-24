@@ -121,7 +121,6 @@ export const CabinetLockIcons: React.FC<Props> = ({ cabinet, camera, allCabinets
             <Unlock size={20} className="text-gray-500" />
           )}
         </div>
-      )}
 
       {/* Center Lock Icon */}
       <div
@@ -181,7 +180,6 @@ export const CabinetLockIcons: React.FC<Props> = ({ cabinet, camera, allCabinets
             <Unlock size={20} className="text-gray-500" />
           )}
         </div>
-      )}
     </>
   )
 }

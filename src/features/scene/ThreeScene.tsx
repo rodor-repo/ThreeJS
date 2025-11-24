@@ -797,58 +797,58 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
               </div>
             </div>
             <div className="overflow-y-auto flex-1 py-1">
-              {[...past, ...future].map((room, index) => {
-                // Filter by tab
-                if (room.type !== historyTab && !(historyTab === 'manual' && !room.type)) return null
+              {[...past, ...future]
+                .map((room, index) => ({ room, index }))
+                .filter(({ room }) => room.type === historyTab || (historyTab === 'manual' && !room.type))
+                .map(({ room, index }, displayIndex) => {
+                  const isFuture = index >= past.length
+                  const currentIndex = past.length - 1
+                  const isActive = index === currentIndex
 
-                const isFuture = index >= past.length
-                const currentIndex = future.length > 0 ? past.length : past.length - 1
-                const isActive = index === currentIndex
-
-                return (
-                  <div
-                    key={room.id || index}
-                    className={`px-4 py-2 border-b border-gray-50 last:border-0 flex items-center justify-between cursor-pointer transition-colors duration-150 group
-                      ${isActive ? 'bg-blue-50 text-blue-700' : ''}
-                      ${!isActive && isFuture ? 'text-gray-400 hover:bg-gray-50' : ''}
-                      ${!isActive && !isFuture ? 'text-gray-600 hover:bg-gray-50' : ''}
-                    `}
-                  >
+                  return (
                     <div
-                      className="flex-1 flex items-center justify-between"
-                      onClick={() => {
-                        jumpTo(index)
-                        // Keep history open when jumping
-                      }}
+                      key={room.id || index}
+                      className={`px-4 py-2 border-b border-gray-50 last:border-0 flex items-center justify-between cursor-pointer transition-colors duration-150 group
+                        ${isActive ? 'bg-blue-50 text-blue-700' : ''}
+                        ${!isActive && isFuture ? 'text-gray-400 hover:bg-gray-50' : ''}
+                        ${!isActive && !isFuture ? 'text-gray-600 hover:bg-gray-50' : ''}
+                      `}
                     >
-                      <div className="flex items-center gap-2">
-                        {isActive && <div className="w-2 h-2 rounded-full bg-blue-500" />}
-                        <span className={`font-medium ${isActive ? 'font-bold' : ''}`}>
-                          {room.type === 'auto' ? 'Auto-Save' : `Checkpoint ${index + 1}`}
+                      <div
+                        className="flex-1 flex items-center justify-between"
+                        onClick={() => {
+                          jumpTo(index)
+                          // Keep history open when jumping
+                        }}
+                      >
+                        <div className="flex items-center gap-2">
+                          {isActive && <div className="w-2 h-2 rounded-full bg-blue-500" />}
+                          <span className={`font-medium ${isActive ? 'font-bold' : ''}`}>
+                            {room.type === 'auto' ? 'Auto-Save' : `Checkpoint ${displayIndex + 1}`}
+                          </span>
+                        </div>
+                        <span className="text-xs text-gray-400 flex items-center gap-1">
+                          <Clock size={10} />
+                          {new Date(room.savedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                         </span>
                       </div>
-                      <span className="text-xs text-gray-400 flex items-center gap-1">
-                        <Clock size={10} />
-                        {new Date(room.savedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                      </span>
-                    </div>
 
-                    {/* Delete button for manual checkpoints */}
-                    {room.type === 'manual' && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          deleteCheckpoint(index)
-                        }}
-                        className="ml-2 p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-all"
-                        title="Delete Checkpoint"
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    )}
-                  </div>
-                )
-              }).reverse()}
+                      {/* Delete button for manual checkpoints */}
+                      {room.type === 'manual' && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            deleteCheckpoint(index)
+                          }}
+                          className="ml-2 p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-all"
+                          title="Delete Checkpoint"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      )}
+                    </div>
+                  )
+                }).reverse()}
 
               {/* Empty state message */}
               {[...past, ...future].filter(r => (r.type === historyTab || (historyTab === 'manual' && !r.type))).length === 0 && (

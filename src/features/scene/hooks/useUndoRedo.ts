@@ -198,15 +198,16 @@ export const useUndoRedo = ({
   }, [getSnapshot])
 
   const undo = useCallback(async () => {
-    if (past.length === 0 || isRestoring.current) return
+    if (past.length <= 1 || isRestoring.current) return
 
     const newPast = [...past]
-    const previousState = newPast.pop()
+    const currentState = newPast.pop()
+    const previousState = newPast[newPast.length - 1]
 
-    if (previousState) {
+    if (currentState && previousState) {
       isRestoring.current = true
       setPast(newPast)
-      setFuture((prev) => [previousState, ...prev])
+      setFuture((prev) => [currentState, ...prev])
 
       await restoreRoom({
         savedRoom: previousState,
@@ -387,7 +388,7 @@ export const useUndoRedo = ({
     deleteCheckpoint,
     resetHistory,
     jumpTo,
-    canUndo: past.length > 0,
+    canUndo: past.length > 1,
     canRedo: future.length > 0,
     past,
     future,

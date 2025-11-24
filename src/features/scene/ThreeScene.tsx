@@ -27,6 +27,10 @@ import { WsProducts } from '@/types/erpTypes'
 import type { ViewId } from '../cabinets/ViewManager'
 import type { SavedRoom } from '@/data/savedRooms'
 import { WALL_THICKNESS } from './lib/sceneUtils'
+import { handleViewDimensionChange } from './utils/handlers/viewDimensionHandler'
+import { handleSplashbackHeightChange } from './utils/handlers/splashbackHandler'
+import { handleProductDimensionChange } from './utils/handlers/productDimensionHandler'
+import { handleDeleteCabinet } from './utils/handlers/deleteCabinetHandler'
 
 interface ThreeSceneProps {
   wallDimensions: WallDims
@@ -475,8 +479,8 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
             className="sr-only"
           />
           <div className={`px-6 py-2 rounded-lg shadow-lg transition-colors duration-200 font-medium ${selectedMode === 'admin'
-              ? 'bg-red-600 text-white'
-              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            ? 'bg-red-600 text-white'
+            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
             }`}>
             Admin
           </div>
@@ -491,8 +495,8 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
             className="sr-only"
           />
           <div className={`px-6 py-2 rounded-lg shadow-lg transition-colors duration-200 font-medium ${selectedMode === 'user'
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            ? 'bg-blue-600 text-white'
+            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
             }`}>
             User
           </div>

@@ -8,6 +8,7 @@ import { CabinetsInfoPanel } from '../cabinets/ui/CabinetsInfoPanel'
 import { CabinetLockIcons } from './ui/CabinetLockIcons'
 import ProductPanel from '../cabinets/ui/ProductPanel'
 import { cabinetPanelState, type PersistedPanelState } from '../cabinets/ui/ProductPanel'
+import { useRoomPersistence } from './hooks/useRoomPersistence'
 import { useCameraDrag } from './hooks/useCameraDrag'
 import { useSceneInteractions } from './hooks/useSceneInteractions'
 import { useSnapGuides } from './hooks/useSnapGuides'
@@ -24,7 +25,7 @@ import { SaveModal } from './ui/SaveModal'
 import { DeleteConfirmationModal } from './ui/DeleteConfirmationModal'
 import { WsProducts } from '@/types/erpTypes'
 import type { ViewId } from '../cabinets/ViewManager'
-import { saveRoom, generateRoomId, type RoomCategory, type SavedRoom, type SavedCabinet, type SavedView } from '@/data/savedRooms'
+import type { SavedRoom } from '@/data/savedRooms'
 import { WALL_THICKNESS } from './lib/sceneUtils'
 
 interface ThreeSceneProps {
@@ -37,7 +38,7 @@ interface ThreeSceneProps {
   selectedProductId?: string
   wsProducts?: WsProducts | null
   /** Callback to get the loadRoom function for restoring saved rooms */
-  onLoadRoomReady?: (loadRoom: (savedRoom: import('@/data/savedRooms').SavedRoom) => void) => void
+  onLoadRoomReady?: (loadRoom: (savedRoom: SavedRoom) => void) => void
 }
 
 const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChange, selectedCategory, selectedSubcategory, isMenuOpen = false, selectedProductId, wsProducts, onLoadRoomReady }) => {
@@ -58,7 +59,6 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
   // Cabinet sync relationships: Map of cabinetId -> array of synced cabinetIds
   const [cabinetSyncs, setCabinetSyncs] = useState<Map<string, string[]>>(new Map())
   const [showSaveModal, setShowSaveModal] = useState(false)
-  const [currentRoom, setCurrentRoom] = useState<SavedRoom | null>(null) // Track currently loaded room
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [cabinetToDelete, setCabinetToDelete] = useState<CabinetData | null>(null) // Store cabinet to delete before modal opens
 
@@ -306,6 +306,24 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     // Don't close drawer automatically - let user close it manually
   }
 
+  const { currentRoom, saveRoom: handleSaveRoom } = useRoomPersistence({
+    cabinets,
+    cabinetGroups,
+    setCabinetGroups,
+    wallDimensions,
+    wallColor,
+    setWallColor,
+    handleDimensionChange,
+    viewManager,
+    wsProducts,
+    setNumbersVisible,
+    clearCabinets,
+    createCabinet,
+    updateCabinetViewId,
+    updateCabinetLock,
+    onLoadRoomReady,
+  })
+
   // Auto-update back wall length when right wall is linked to a view and cabinets move
   // This handles the case where cabinets in a view penetrate the right wall
   // If the right wall is linked to the same view, adjust back wall length and right wall position
@@ -416,289 +434,6 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
       handleDimensionChange(newDimensions)
     }
   }, [cabinets.map(c => `${c.cabinetId}-${c.group.position.x}-${c.carcass.dimensions.width}`).join(','), wallDimensions.additionalWalls?.map(w => `${w.id}-${w.distanceFromLeft}`).join(','), wallDimensions.backWallLength, wallDimensions.length])
-
-  // Save room handler
-  const handleSaveRoom = async (roomName: string, roomCategory: RoomCategory) => {
-    try {
-      // Collect all cabinet data
-      const savedCabinets: SavedCabinet[] = cabinets.map((cabinet) => {
-        const persisted = cabinetPanelState.get(cabinet.cabinetId)
-        const productName = cabinet.productId && wsProducts?.products[cabinet.productId]?.product
-        
-        // Get viewId from ViewManager as source of truth, fallback to cabinet.viewId
-        const viewIdFromManager = viewManager.getCabinetView(cabinet.cabinetId)
-        const cabinetViewId = viewIdFromManager || cabinet.viewId || undefined
-        
-        return {
-          cabinetId: cabinet.cabinetId,
-          productId: cabinet.productId,
-          productName: productName || undefined,
-          cabinetType: cabinet.cabinetType,
-          subcategoryId: cabinet.subcategoryId,
-          dimensions: {
-            width: cabinet.carcass.dimensions.width,
-            height: cabinet.carcass.dimensions.height,
-            depth: cabinet.carcass.dimensions.depth,
-          },
-          viewId: cabinetViewId,
-          position: {
-            x: cabinet.group.position.x,
-            y: cabinet.group.position.y,
-            z: cabinet.group.position.z,
-          },
-          materialSelections: persisted?.materialSelections,
-          materialColor: persisted?.materialColor,
-          dimensionValues: persisted?.values,
-          shelfCount: cabinet.carcass.config.shelfCount,
-          doorEnabled: cabinet.carcass.config.doorEnabled,
-          doorCount: cabinet.carcass.config.doorCount,
-          overhangDoor: cabinet.carcass.config.overhangDoor,
-          drawerEnabled: cabinet.carcass.config.drawerEnabled,
-          drawerQuantity: cabinet.carcass.config.drawerQuantity,
-          drawerHeights: cabinet.carcass.config.drawerHeights,
-          kickerHeight: cabinet.cabinetType === 'base' || cabinet.cabinetType === 'tall' 
-            ? cabinet.group.position.y 
-            : undefined,
-          leftLock: cabinet.leftLock,
-          rightLock: cabinet.rightLock,
-          group: cabinetGroups.get(cabinet.cabinetId) || undefined, // Save group data
-          sortNumber: cabinet.sortNumber, // Save sort number for cabinet numbering
-        }
-      })
-
-      // Collect all views
-      const savedViews: SavedView[] = viewManager.activeViews.map((view) => ({
-        id: view.id,
-        name: view.name,
-        cabinetIds: Array.from(view.cabinetIds),
-      }))
-
-      // Create saved room object
-      const savedRoom: SavedRoom = {
-        id: generateRoomId(),
-        name: roomName,
-        category: roomCategory,
-        savedAt: new Date().toISOString(),
-        wallSettings: {
-          height: wallDimensions.height,
-          length: wallDimensions.backWallLength ?? wallDimensions.length, // Backward compatibility
-          color: wallColor,
-          backWallLength: wallDimensions.backWallLength ?? wallDimensions.length,
-          leftWallLength: wallDimensions.leftWallLength ?? wallDimensions.length,
-          rightWallLength: wallDimensions.rightWallLength ?? wallDimensions.length,
-          leftWallVisible: wallDimensions.leftWallVisible ?? true,
-          rightWallVisible: wallDimensions.rightWallVisible ?? true,
-          additionalWalls: wallDimensions.additionalWalls ?? [],
-        },
-        cabinets: savedCabinets,
-        views: savedViews,
-      }
-
-      // Save the room (now async)
-      await saveRoom(savedRoom)
-      // Update current room to the newly saved room
-      setCurrentRoom(savedRoom)
-      console.log('Room saved:', savedRoom)
-      alert(`Room "${roomName}" saved successfully!`)
-    } catch (error) {
-      console.error('Failed to save room:', error)
-      alert(`Failed to save room: ${error instanceof Error ? error.message : 'Unknown error'}`)
-    }
-  }
-
-  // Load room handler
-  const loadRoom = useCallback((savedRoom: SavedRoom) => {
-    // Track the currently loaded room
-    setCurrentRoom(savedRoom)
-    
-    // Reset numbers visibility when loading a room
-    setNumbersVisible(false)
-    
-    // Clear current cabinets and groups
-    clearCabinets()
-    setCabinetGroups(new Map())
-    
-    // Restore wall settings
-    const backWallLength = savedRoom.wallSettings.backWallLength ?? savedRoom.wallSettings.length
-    const newWallDims: WallDims = {
-      height: savedRoom.wallSettings.height,
-      length: backWallLength, // Backward compatibility
-      backWallLength: backWallLength,
-      leftWallLength: savedRoom.wallSettings.leftWallLength ?? 600,
-      rightWallLength: savedRoom.wallSettings.rightWallLength ?? 600,
-      leftWallVisible: savedRoom.wallSettings.leftWallVisible ?? true,
-      rightWallVisible: savedRoom.wallSettings.rightWallVisible ?? true,
-      additionalWalls: savedRoom.wallSettings.additionalWalls ?? [],
-    }
-    handleDimensionChange(newWallDims, savedRoom.wallSettings.color)
-    setWallColor(savedRoom.wallSettings.color)
-
-    // Wait a bit for wall to update, then restore cabinets
-    setTimeout(() => {
-      // First, restore views and build the viewId mapping
-      // This must happen BEFORE creating cabinets so we can set viewId immediately
-      const viewIdMap = new Map<string, ViewId>()
-      const viewIdsToRestore = new Set<string>()
-      
-      // Collect view IDs from saved views (for view names)
-      savedRoom.views.forEach((savedView) => {
-        if (savedView.id !== 'none') {
-          viewIdsToRestore.add(savedView.id)
-        }
-      })
-      
-      // Also collect view IDs from cabinets (in case some views are missing from views array)
-      savedRoom.cabinets.forEach((savedCabinet) => {
-        if (savedCabinet.viewId && savedCabinet.viewId !== 'none') {
-          viewIdsToRestore.add(savedCabinet.viewId)
-        }
-      })
-      
-      // Create or map views
-      viewIdsToRestore.forEach((savedViewId) => {
-        // Check if view already exists
-        const existingView = viewManager.viewManager.getView(savedViewId as ViewId)
-        const savedView = savedRoom.views.find(v => v.id === savedViewId)
-        
-        if (existingView) {
-          viewIdMap.set(savedViewId, savedViewId as ViewId)
-        } else {
-          // Create a new view (will get next available letter)
-          const newView = viewManager.createView()
-          // Update view name if it was saved
-          if (savedView && savedView.name) {
-            // Note: ViewManager doesn't have a setName method, so we'll need to handle this
-            // For now, the view will have the default name "View X"
-          }
-          viewIdMap.set(savedViewId, newView.id)
-        }
-      })
-
-      // Now restore cabinets with their viewId set immediately
-      const restoredCabinets: CabinetData[] = []
-      
-      savedRoom.cabinets.forEach((savedCabinet) => {
-        // Create cabinet with saved dimensions
-        const cabinetData = createCabinet(
-          savedCabinet.cabinetType,
-          savedCabinet.subcategoryId,
-          savedCabinet.productId
-        )
-
-        if (!cabinetData) {
-          console.error('Failed to create cabinet:', savedCabinet)
-          return
-        }
-
-        // Update dimensions
-        cabinetData.carcass.updateDimensions(savedCabinet.dimensions)
-
-        // Restore position
-        cabinetData.group.position.set(
-          savedCabinet.position.x,
-          savedCabinet.position.y,
-          savedCabinet.position.z
-        )
-
-        // Restore shelf count
-        if (savedCabinet.shelfCount !== undefined) {
-          cabinetData.carcass.updateConfig({ shelfCount: savedCabinet.shelfCount })
-        }
-
-        // Restore door settings
-        if (savedCabinet.doorEnabled !== undefined) {
-          cabinetData.carcass.toggleDoors(savedCabinet.doorEnabled)
-        }
-        if (savedCabinet.doorCount !== undefined) {
-          cabinetData.carcass.updateDoorConfiguration(savedCabinet.doorCount)
-        }
-        if (savedCabinet.overhangDoor !== undefined && cabinetData.cabinetType === 'top') {
-          cabinetData.carcass.updateOverhangDoor(savedCabinet.overhangDoor)
-        }
-
-        // Restore drawer settings
-        if (savedCabinet.drawerEnabled !== undefined) {
-          cabinetData.carcass.updateDrawerEnabled(savedCabinet.drawerEnabled)
-        }
-        if (savedCabinet.drawerQuantity !== undefined) {
-          cabinetData.carcass.updateDrawerQuantity(savedCabinet.drawerQuantity)
-        }
-        if (savedCabinet.drawerHeights && savedCabinet.drawerHeights.length > 0) {
-          savedCabinet.drawerHeights.forEach((height, index) => {
-            cabinetData.carcass.updateDrawerHeight(index, height)
-          })
-        }
-
-        // Restore kicker height for base/tall cabinets
-        if (savedCabinet.kickerHeight !== undefined && (cabinetData.cabinetType === 'base' || cabinetData.cabinetType === 'tall')) {
-          cabinetData.carcass.updateKickerHeight(savedCabinet.kickerHeight)
-        }
-
-        // Restore material selections to cabinetPanelState
-        if (savedCabinet.materialSelections || savedCabinet.materialColor || savedCabinet.dimensionValues) {
-          cabinetPanelState.set(cabinetData.cabinetId, {
-            values: savedCabinet.dimensionValues || {},
-            materialColor: savedCabinet.materialColor || '#ffffff',
-            materialSelections: savedCabinet.materialSelections,
-          })
-        }
-
-        // Restore viewId immediately - this is the key fix
-        // Get the mapped view ID from the viewIdMap we created earlier
-        if (savedCabinet.viewId && savedCabinet.viewId !== 'none') {
-          const mappedViewId = viewIdMap.get(savedCabinet.viewId)
-          if (mappedViewId) {
-            // Set viewId on the cabinet object immediately
-            cabinetData.viewId = mappedViewId
-            // Update React state to reflect the viewId
-            updateCabinetViewId(cabinetData.cabinetId, mappedViewId)
-            // Assign to ViewManager (updates internal state)
-            viewManager.assignCabinetToView(cabinetData.cabinetId, mappedViewId)
-          } else {
-            console.warn(`Could not find mapped view ID for cabinet ${cabinetData.cabinetId} with viewId ${savedCabinet.viewId}`)
-          }
-        } else {
-          // Cabinet is not assigned to any view
-          cabinetData.viewId = undefined
-          updateCabinetViewId(cabinetData.cabinetId, undefined)
-        }
-
-        // Restore lock states
-        if (savedCabinet.leftLock !== undefined || savedCabinet.rightLock !== undefined) {
-          updateCabinetLock(
-            cabinetData.cabinetId,
-            savedCabinet.leftLock ?? false,
-            savedCabinet.rightLock ?? false
-          )
-        }
-
-        // Restore group data
-        if (savedCabinet.group && savedCabinet.group.length > 0) {
-          setCabinetGroups(prev => {
-            const newMap = new Map(prev)
-            newMap.set(cabinetData.cabinetId, savedCabinet.group!)
-            return newMap
-          })
-        }
-
-        // Restore sortNumber for cabinet numbering
-        if (savedCabinet.sortNumber !== undefined) {
-          cabinetData.sortNumber = savedCabinet.sortNumber
-        }
-
-        restoredCabinets.push(cabinetData)
-        })
-
-        console.log('Room loaded:', savedRoom.name, 'Views restored:', viewIdsToRestore.size, 'Cabinets assigned to views')
-    }, 100)
-  }, [clearCabinets, createCabinet, handleDimensionChange, updateCabinetViewId, viewManager])
-
-  // Expose loadRoom function to parent via callback
-  useEffect(() => {
-    if (onLoadRoomReady) {
-      onLoadRoomReady(loadRoom)
-    }
-  }, [onLoadRoomReady, loadRoom])
 
   const handleSettingsClick = () => {
     setShowSettingsSidebar(true)

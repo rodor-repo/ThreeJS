@@ -1,6 +1,6 @@
 import { DoorMaterial } from '@/features/carcass'
 import { Subcategory } from '@/components/categoriesData'
-import { Settings, ShoppingCart, Undo, Redo, Flag, History, Clock } from 'lucide-react'
+import { Settings, ShoppingCart, Undo, Redo, Flag, History, Clock, Trash2 } from 'lucide-react'
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useCabinets } from '../cabinets/hooks/useCabinets'
 import { useViewManager } from '../cabinets/hooks/useViewManager'
@@ -217,7 +217,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
 
   // view helpers provided by useThreeRenderer
 
-  const { currentRoom, saveRoom: handleSaveRoom } = useRoomPersistence({
+  const { currentRoom, saveRoom: handleSaveRoom, loadRoom } = useRoomPersistence({
     cabinets,
     cabinetGroups,
     setCabinetGroups,
@@ -234,10 +234,10 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     createCabinet,
     updateCabinetViewId,
     updateCabinetLock,
-    onLoadRoomReady,
+    onLoadRoomReady: undefined, // We handle this manually below to reset history
   })
 
-  const { undo, redo, canUndo, canRedo, createCheckpoint, past, future, jumpTo } = useUndoRedo({
+  const { undo, redo, canUndo, canRedo, createCheckpoint, deleteCheckpoint, resetHistory, past, future, jumpTo } = useUndoRedo({
     cabinets,
     cabinetGroups,
     setCabinetGroups,
@@ -255,6 +255,16 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     updateCabinetViewId,
     updateCabinetLock,
   })
+
+  // Handle room loading and history reset
+  useEffect(() => {
+    if (onLoadRoomReady) {
+      onLoadRoomReady(async (room) => {
+        await loadRoom(room)
+        resetHistory(room)
+      })
+    }
+  }, [onLoadRoomReady, loadRoom, resetHistory])
 
   useWallsAutoAdjust({
     cabinets,
@@ -280,6 +290,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
   // When the product panel opens for a selected cabinet, try loading its WsProduct config
 
   const [showHistory, setShowHistory] = useState(false)
+  const [historyTab, setHistoryTab] = useState<'manual' | 'auto'>('manual')
   const [isCheckpointed, setIsCheckpointed] = useState(false)
 
   const handleCreateCheckpoint = () => {
@@ -762,51 +773,89 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
       <div className="fixed bottom-20 left-4 z-50 flex gap-2 items-end">
         {/* History List Popover */}
         {showHistory && (past.length > 0 || future.length > 0) && (
-          <div className="absolute bottom-full left-0 mb-2 bg-white rounded-lg shadow-xl border border-gray-200 w-64 max-h-60 overflow-y-auto z-50">
-            <div className="p-3 border-b border-gray-100 bg-gray-50 sticky top-0">
-              <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+          <div className="absolute bottom-full left-0 mb-2 bg-white rounded-lg shadow-xl border border-gray-200 w-72 max-h-80 overflow-hidden z-50 flex flex-col">
+            <div className="p-3 border-b border-gray-100 bg-gray-50">
+              <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2 mb-2">
                 <History size={14} />
                 Checkpoint History
               </h3>
+              <div className="flex bg-gray-200 rounded-lg p-1">
+                <button
+                  onClick={() => setHistoryTab('manual')}
+                  className={`flex-1 py-1 text-xs font-medium rounded-md transition-all ${historyTab === 'manual' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                >
+                  Manual
+                </button>
+                <button
+                  onClick={() => setHistoryTab('auto')}
+                  className={`flex-1 py-1 text-xs font-medium rounded-md transition-all ${historyTab === 'auto' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                >
+                  Auto
+                </button>
+              </div>
             </div>
-            <div className="py-1">
+            <div className="overflow-y-auto flex-1 py-1">
               {[...past, ...future].map((room, index) => {
+                // Filter by tab
+                if (room.type !== historyTab && !(historyTab === 'manual' && !room.type)) return null
+
                 const isFuture = index >= past.length
-
-                // If future has items, the "current" state is actually the first item of future (index = past.length)
-                // Wait, if we undo, we push to future. So future[0] is the state we are looking at.
-                // So if future.length > 0, current index is past.length.
-                // If future.length === 0, current index is past.length - 1.
-
                 const currentIndex = future.length > 0 ? past.length : past.length - 1
                 const isActive = index === currentIndex
 
                 return (
                   <div
                     key={room.id || index}
-                    onClick={() => {
-                      jumpTo(index)
-                      setShowHistory(false)
-                    }}
-                    className={`px-4 py-2 border-b border-gray-50 last:border-0 flex items-center justify-between cursor-pointer transition-colors duration-150
+                    className={`px-4 py-2 border-b border-gray-50 last:border-0 flex items-center justify-between cursor-pointer transition-colors duration-150 group
                       ${isActive ? 'bg-blue-50 text-blue-700' : ''}
                       ${!isActive && isFuture ? 'text-gray-400 hover:bg-gray-50' : ''}
                       ${!isActive && !isFuture ? 'text-gray-600 hover:bg-gray-50' : ''}
                     `}
                   >
-                    <div className="flex items-center gap-2">
-                      {isActive && <div className="w-2 h-2 rounded-full bg-blue-500" />}
-                      <span className={`font-medium ${isActive ? 'font-bold' : ''}`}>
-                        Checkpoint {index + 1}
+                    <div
+                      className="flex-1 flex items-center justify-between"
+                      onClick={() => {
+                        jumpTo(index)
+                        // Keep history open when jumping
+                      }}
+                    >
+                      <div className="flex items-center gap-2">
+                        {isActive && <div className="w-2 h-2 rounded-full bg-blue-500" />}
+                        <span className={`font-medium ${isActive ? 'font-bold' : ''}`}>
+                          {room.type === 'auto' ? 'Auto-Save' : `Checkpoint ${index + 1}`}
+                        </span>
+                      </div>
+                      <span className="text-xs text-gray-400 flex items-center gap-1">
+                        <Clock size={10} />
+                        {new Date(room.savedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                       </span>
                     </div>
-                    <span className="text-xs text-gray-400 flex items-center gap-1">
-                      <Clock size={10} />
-                      {new Date(room.savedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                    </span>
+
+                    {/* Delete button for manual checkpoints */}
+                    {room.type === 'manual' && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          deleteCheckpoint(index)
+                        }}
+                        className="ml-2 p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-all"
+                        title="Delete Checkpoint"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    )}
                   </div>
                 )
               }).reverse()}
+
+              {/* Empty state message */}
+              {[...past, ...future].filter(r => (r.type === historyTab || (historyTab === 'manual' && !r.type))).length === 0 && (
+                <div className="p-4 text-center text-gray-400 text-xs">
+                  No {historyTab} checkpoints found
+                </div>
+              )}
             </div>
           </div>
         )}

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { SavedRoom } from "@/data/savedRooms"
 import type { WsProducts } from "@/types/erpTypes"
 import type { CabinetData, WallDimensions as WallDims } from "../types"
@@ -14,6 +14,10 @@ type CabinetGroupsMap = Map<
   Array<{ cabinetId: string; percentage: number }>
 >
 type CabinetSyncsMap = Map<string, string[]>
+
+export interface Checkpoint extends SavedRoom {
+  type: "manual" | "auto"
+}
 
 type UseUndoRedoOptions = {
   cabinets: CabinetData[]
@@ -71,9 +75,11 @@ export const useUndoRedo = ({
   updateCabinetViewId,
   updateCabinetLock,
 }: UseUndoRedoOptions) => {
-  const [past, setPast] = useState<SavedRoom[]>([])
-  const [future, setFuture] = useState<SavedRoom[]>([])
+  const [past, setPast] = useState<Checkpoint[]>([])
+  const [future, setFuture] = useState<Checkpoint[]>([])
   const isRestoring = useRef(false)
+  const lastAutoSaveRef = useRef<number>(Date.now())
+  const lastAutoSaveContentRef = useRef<string>("")
   const {
     activeViews,
     viewManager: viewManagerInstance,
@@ -81,6 +87,12 @@ export const useUndoRedo = ({
     assignCabinetToView,
     getCabinetView,
   } = viewManager
+
+  // Helper to get content string for comparison
+  const getRoomContentString = (room: SavedRoom) => {
+    const { id, savedAt, ...content } = room
+    return JSON.stringify(content)
+  }
 
   // Serialize current state to SavedRoom
   const getSnapshot = useCallback((): SavedRoom => {
@@ -113,15 +125,76 @@ export const useUndoRedo = ({
 
     const currentState = getSnapshot()
 
+    // Update last known content so auto-save doesn't duplicate if no changes happen
+    const contentString = getRoomContentString(currentState)
+    lastAutoSaveContentRef.current = contentString
+
+    const checkpoint: Checkpoint = { ...currentState, type: "manual" }
+
     setPast((prev) => {
-      // Limit history size to 20
-      const newPast = [...prev, currentState]
-      if (newPast.length > 20) {
-        return newPast.slice(newPast.length - 20)
+      // Limit history size to 50 to accommodate auto-saves
+      const newPast = [...prev, checkpoint]
+      if (newPast.length > 50) {
+        return newPast.slice(newPast.length - 50)
       }
       return newPast
     })
     setFuture([])
+  }, [getSnapshot])
+
+  // Auto-save logic
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (isRestoring.current) return
+
+      const now = Date.now()
+      // Check if 5 seconds have passed (should be guaranteed by setInterval, but good for safety)
+      if (now - lastAutoSaveRef.current < 5000) return
+
+      const currentState = getSnapshot()
+      const contentString = getRoomContentString(currentState)
+
+      // Skip if content hasn't changed since last save (manual or auto)
+      if (contentString === lastAutoSaveContentRef.current) {
+        lastAutoSaveRef.current = now
+        return
+      }
+
+      lastAutoSaveContentRef.current = contentString
+      const checkpoint: Checkpoint = { ...currentState, type: "auto" }
+
+      setPast((prev) => {
+        // Pruning logic
+        // Keep all manual checkpoints
+        // Keep auto checkpoints from last 60s
+        // Keep auto checkpoints from last 20m (one per minute approx)
+
+        const newPast = [...prev, checkpoint]
+
+        return newPast.filter((cp) => {
+          if (cp.type === "manual") return true
+
+          const age = now - new Date(cp.savedAt).getTime()
+
+          // Keep if less than 60 seconds old
+          if (age < 60000) return true
+
+          // Keep if less than 20 minutes old AND it's roughly on the minute mark
+          // We use the timestamp to determine if it's a "minute marker"
+          // e.g. if seconds part of timestamp is < 5
+          if (age < 1200000) {
+            const seconds = new Date(cp.savedAt).getSeconds()
+            return seconds < 5
+          }
+
+          return false
+        })
+      })
+
+      lastAutoSaveRef.current = now
+    }, 5000)
+
+    return () => clearInterval(interval)
   }, [getSnapshot])
 
   const undo = useCallback(async () => {
@@ -129,24 +202,6 @@ export const useUndoRedo = ({
 
     const newPast = [...past]
     const previousState = newPast.pop()
-    // In manual mode, we don't save the current "drifting" state to future unless it was checkpointed.
-    // But to allow Redo to work for the checkpoint we just undid, we push the *current* state (which is effectively the checkpoint we are leaving?)
-    // No, if we are at B (checkpointed), and undo to A. We want to be able to Redo to B.
-    // So we push B to future.
-    // But wait, if we are at C (unsaved), and undo to B.
-    // We lose C.
-    // We load B.
-    // So we should push B to future? No, if we load B, we are at B.
-    // If we undo AGAIN (to A), then we push B to future.
-
-    // Let's assume the user clicked Checkpoint at B. So B is in `past`.
-    // Current state is C (unsaved).
-    // Undo -> Load B.
-    // `past` has B.
-    // We pop B.
-    // We restore B.
-    // We push B to future.
-    // So `past`=[A], `future`=[B]. Current=B.
 
     if (previousState) {
       isRestoring.current = true
@@ -241,22 +296,9 @@ export const useUndoRedo = ({
 
       const targetState = allCheckpoints[index]
 
-      // New past includes everything up to and including the target index
-      // But wait, if we restore targetState, it is the "current" state.
-      // In our undo logic:
-      // Undo -> pops from past, pushes to future. Restores.
-      // So "current" is NOT in past.
-      // So if we restore targetState, past should be everything BEFORE it.
-      // And future should be everything AFTER it.
-      // And targetState itself is "current" (not in either list? or in future[0]?)
-
-      // Let's stick to the pattern established by Undo:
-      // When we Undo to B. past=[A], future=[B].
-      // So if we jump to index 1 (B).
-      // past should be [A]. future should be [B, ...rest].
-
-      const newPast = allCheckpoints.slice(0, index)
-      const newFuture = allCheckpoints.slice(index)
+      // Fix: Include the target state in 'past' so that subsequent checkpoints append after it
+      const newPast = allCheckpoints.slice(0, index + 1)
+      const newFuture = allCheckpoints.slice(index + 1)
 
       isRestoring.current = true
       setPast(newPast)
@@ -298,10 +340,52 @@ export const useUndoRedo = ({
     ]
   )
 
+  const deleteCheckpoint = useCallback((index: number) => {
+    const allCheckpoints = [...past, ...future]
+    if (index < 0 || index >= allCheckpoints.length) return
+
+    // If the deleted index is in past
+    if (index < past.length) {
+      const newPast = [...past]
+      newPast.splice(index, 1)
+      setPast(newPast)
+    } else {
+      // If the deleted index is in future
+      const futureIndex = index - past.length
+      const newFuture = [...future]
+      newFuture.splice(futureIndex, 1)
+      setFuture(newFuture)
+    }
+  }, [past, future])
+
+  const resetHistory = useCallback((initialState?: SavedRoom) => {
+    setPast([])
+    setFuture([])
+    
+    let checkpoint: Checkpoint;
+    
+    if (initialState) {
+      checkpoint = { ...initialState, type: "manual" }
+      // Also update content ref
+      const contentString = getRoomContentString(initialState)
+      lastAutoSaveContentRef.current = contentString
+    } else {
+      // Create initial checkpoint from current state
+      const currentState = getSnapshot()
+      const contentString = getRoomContentString(currentState)
+      lastAutoSaveContentRef.current = contentString
+      checkpoint = { ...currentState, type: "manual" }
+    }
+    
+    setPast([checkpoint])
+  }, [getSnapshot])
+
   return {
     undo,
     redo,
     createCheckpoint,
+    deleteCheckpoint,
+    resetHistory,
     jumpTo,
     canUndo: past.length > 0,
     canRedo: future.length > 0,

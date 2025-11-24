@@ -38,6 +38,7 @@ export interface SavedCabinet {
   rightLock?: boolean // When locked, right edge is frozen - cabinet can only extend to the left
   group?: Array<{ cabinetId: string; percentage: number }> // Grouped cabinets with their percentage portions
   sortNumber?: number // Sort number based on order cabinets were added to the scene
+  syncCabinets?: string[] // Synced cabinets
 }
 
 export interface SavedView {
@@ -69,6 +70,7 @@ export interface SavedRoom {
   }
   cabinets: SavedCabinet[]
   views: SavedView[]
+  cabinetSyncs?: Array<{ cabinetId: string, syncedWith: string[] }>
 }
 
 // Import server actions for file storage

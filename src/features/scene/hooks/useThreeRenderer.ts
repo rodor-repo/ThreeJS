@@ -228,7 +228,7 @@ export const useThreeRenderer = (
   }, [wallColor])
 
   const applyDimensions = useCallback(
-    (newDimensions: WallDimensions, color?: string, zoomLevel = 1.5) => {
+    (newDimensions: WallDimensions, color?: string, zoomLevel = 1.5, preserveCamera = false) => {
       onDimensionsChange?.(newDimensions)
 
       if (!sceneRef.current) return
@@ -265,7 +265,7 @@ export const useThreeRenderer = (
         appliedColor
       )
 
-      if (cameraRef.current) {
+      if (cameraRef.current && !preserveCamera) {
         updateCameraPosition(
           newDimensions.height,
           nextBackWallLength,

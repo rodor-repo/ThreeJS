@@ -138,7 +138,12 @@ interface RestoreRoomOptions {
   setCabinetGroups: (
     groups: CabinetGroupsMap | ((prev: CabinetGroupsMap) => CabinetGroupsMap)
   ) => void
-  applyDimensions: (dimensions: WallDims, color?: string) => void
+  applyDimensions: (
+    dimensions: WallDims,
+    color?: string,
+    zoomLevel?: number,
+    preserveCamera?: boolean
+  ) => void
   setWallColor: (color: string) => void
   viewManagerInstance: ViewManager
   createView: () => View
@@ -188,7 +193,8 @@ export function restoreRoom({
       rightWallVisible: savedRoom.wallSettings.rightWallVisible ?? true,
       additionalWalls: savedRoom.wallSettings.additionalWalls ?? [],
     }
-    applyDimensions(newWallDims, savedRoom.wallSettings.color)
+    // Pass true for preserveCamera to prevent camera reset on restore
+    applyDimensions(newWallDims, savedRoom.wallSettings.color, undefined, true)
     setWallColor(savedRoom.wallSettings.color)
 
     setTimeout(() => {

@@ -28,7 +28,12 @@ type UseUndoRedoOptions = {
   wallDimensions: WallDims
   wallColor: string
   setWallColor: (color: string) => void
-  applyDimensions: (dimensions: WallDims, color?: string) => void
+  applyDimensions: (
+    dimensions: WallDims,
+    color?: string,
+    zoomLevel?: number,
+    preserveCamera?: boolean
+  ) => void
   viewManager: {
     activeViews: View[]
     viewManager: ViewManager

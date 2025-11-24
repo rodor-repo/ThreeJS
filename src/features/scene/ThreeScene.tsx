@@ -134,14 +134,14 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
       if (next.zoomLevel !== undefined) setZoomLevel(next.zoomLevel)
       if (next.isDragging !== undefined) setIsDragging(next.isDragging)
     }
-  ) 
+  )
 
   const handleWallClick = useCallback(() => {
     setShowWallDrawer(true)
   }, [])
 
-  const { 
-    cabinetWithLockIcons, 
+  const {
+    cabinetWithLockIcons,
     setCabinetWithLockIcons
   } = useSceneInteractions(
     cameraRef,
@@ -271,7 +271,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
       const backWallLength = newDimensions.backWallLength ?? newDimensions.length
       createWall(newDimensions.height, backWallLength, newColor)
       createFloor(backWallLength)
-      
+
       // Create left and right walls
       createLeftWall(
         newDimensions.height,
@@ -286,14 +286,14 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         newDimensions.rightWallVisible ?? true,
         newColor
       )
-      
+
       // Create additional walls
       createAdditionalWalls(
         newDimensions.height,
         newDimensions.additionalWalls ?? [],
         newColor
       )
-      
+
       if (cameraRef.current) updateCameraPosition(newDimensions.height, backWallLength, zoomLevel)
     }
   };
@@ -329,13 +329,13 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
   // If the right wall is linked to the same view, adjust back wall length and right wall position
   useEffect(() => {
     if (!wallDimensions.rightWallViewId || wallDimensions.rightWallViewId === 'none') return
-    
+
     // Calculate rightmost position in the linked view
     const cabinetIds = viewManager.getCabinetsInView(wallDimensions.rightWallViewId as ViewId)
     const viewCabinets = cabinets.filter(c => cabinetIds.includes(c.cabinetId))
-    
+
     if (viewCabinets.length === 0) return
-    
+
     // Find the rightmost edge: cabinet X position + cabinet width
     let rightmostX = 0
     viewCabinets.forEach(cabinet => {
@@ -344,7 +344,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         rightmostX = cabinetRightEdge
       }
     })
-    
+
     // Always update if cabinets penetrate the right wall (rightmostX > current back wall length)
     // This ensures the right wall moves with the cabinets when they penetrate
     const currentBackWallLength = wallDimensions.backWallLength ?? wallDimensions.length
@@ -419,7 +419,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
       })
 
       // Check if any wall positions changed
-      const wallsChanged = updatedAdditionalWalls.some((wall, index) => 
+      const wallsChanged = updatedAdditionalWalls.some((wall, index) =>
         wall.distanceFromLeft !== wallDimensions.additionalWalls![index].distanceFromLeft
       )
 
@@ -488,11 +488,10 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
             onChange={(e) => setSelectedMode(e.target.value as 'admin' | 'user')}
             className="sr-only"
           />
-          <div className={`px-6 py-2 rounded-lg shadow-lg transition-colors duration-200 font-medium ${
-            selectedMode === 'admin'
+          <div className={`px-6 py-2 rounded-lg shadow-lg transition-colors duration-200 font-medium ${selectedMode === 'admin'
               ? 'bg-red-600 text-white'
               : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-          }`}>
+            }`}>
             Admin
           </div>
         </label>
@@ -505,11 +504,10 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
             onChange={(e) => setSelectedMode(e.target.value as 'admin' | 'user')}
             className="sr-only"
           />
-          <div className={`px-6 py-2 rounded-lg shadow-lg transition-colors duration-200 font-medium ${
-            selectedMode === 'user'
+          <div className={`px-6 py-2 rounded-lg shadow-lg transition-colors duration-200 font-medium ${selectedMode === 'user'
               ? 'bg-blue-600 text-white'
               : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-          }`}>
+            }`}>
             User
           </div>
         </label>
@@ -530,7 +528,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
           <ShoppingCart size={20} />
           <span>Add to Cart</span>
         </button>
-        
+
         {/* Total Price Display - Same width as button */}
         <div className="bg-white px-4 py-1 rounded-lg shadow-lg border border-gray-200 w-full text-center">
           <div className="text-sm text-gray-600">Total Price</div>
@@ -570,12 +568,12 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         onDeleteView={(viewId) => {
           // Get all cabinets in this view
           const cabinetIds = viewManager.getCabinetsInView(viewId as ViewId)
-          
+
           // Update all cabinets in this view to have viewId = "none"
           cabinetIds.forEach((cabinetId) => {
             updateCabinetViewId(cabinetId, undefined) // undefined means "none"
           })
-          
+
           // If the right wall is linked to this view, remove the association
           if (wallDimensions.rightWallViewId === viewId) {
             handleDimensionChange({
@@ -583,7 +581,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
               rightWallViewId: undefined,
             })
           }
-          
+
           // Delete the view from ViewManager
           viewManager.deleteView(viewId as ViewId)
         }}
@@ -614,12 +612,12 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         onDeleteView={(viewId) => {
           // Get all cabinets in this view
           const cabinetIds = viewManager.getCabinetsInView(viewId as ViewId)
-          
+
           // Update all cabinets in this view to have viewId = "none"
           cabinetIds.forEach((cabinetId) => {
             updateCabinetViewId(cabinetId, undefined) // undefined means "none"
           })
-          
+
           // If the right wall is linked to this view, remove the association
           if (wallDimensions.rightWallViewId === viewId) {
             handleDimensionChange({
@@ -627,7 +625,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
               rightWallViewId: undefined,
             })
           }
-          
+
           // Delete the view from ViewManager
           viewManager.deleteView(viewId as ViewId)
         }}
@@ -1227,28 +1225,28 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         />
       )}
 
-            {/* Camera Movement Control */}
-            <CameraControls
-              isDragging={isDragging}
-              cameraMode={cameraMode}
-              onToggleMode={() => setCameraMode(prev => prev === 'constrained' ? 'free' : 'constrained')}
-              onReset={resetCameraPosition}
-              onClear={clearCabinets}
-              onX={() => { setCameraMode('constrained'); setCameraXView(); }}
-              onY={() => { setCameraMode('constrained'); setCameraYView(); }}
-              onZ={() => { setCameraMode('constrained'); setCameraZView(); }}
-              onToggleDimensions={() => setDimensionsVisible(prev => !prev)}
-              onToggleNumbers={() => setNumbersVisible(prev => !prev)}
-              numbersVisible={numbersVisible}
-              onDelete={() => {
-                if (selectedCabinet) {
-                  setCabinetToDelete(selectedCabinet)
-                  setShowDeleteModal(true)
-                }
-              }}
-              canDelete={!!selectedCabinet}
-              isMenuOpen={isMenuOpen}
-            />
+      {/* Camera Movement Control */}
+      <CameraControls
+        isDragging={isDragging}
+        cameraMode={cameraMode}
+        onToggleMode={() => setCameraMode(prev => prev === 'constrained' ? 'free' : 'constrained')}
+        onReset={resetCameraPosition}
+        onClear={clearCabinets}
+        onX={() => { setCameraMode('constrained'); setCameraXView(); }}
+        onY={() => { setCameraMode('constrained'); setCameraYView(); }}
+        onZ={() => { setCameraMode('constrained'); setCameraZView(); }}
+        onToggleDimensions={() => setDimensionsVisible(prev => !prev)}
+        onToggleNumbers={() => setNumbersVisible(prev => !prev)}
+        numbersVisible={numbersVisible}
+        onDelete={() => {
+          if (selectedCabinet) {
+            setCabinetToDelete(selectedCabinet)
+            setShowDeleteModal(true)
+          }
+        }}
+        canDelete={!!selectedCabinet}
+        isMenuOpen={isMenuOpen}
+      />
 
       {/* Camera Movement Instructions moved to CameraControls component - appears on hover */}
 
@@ -1320,15 +1318,15 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
           // Update the cabinet's viewId in the state
           // If viewId is "none", set to undefined
           updateCabinetViewId(cabinetId, viewId === 'none' ? undefined : viewId)
-          
+
           // If cabinet is removed from view (viewId is 'none'), remove all group relations
           if (viewId === 'none') {
             setCabinetGroups(prev => {
               const newMap = new Map(prev)
-              
+
               // Remove this cabinet's own group
               newMap.delete(cabinetId)
-              
+
               // Remove this cabinet from any other cabinets' groups
               newMap.forEach((group, otherCabinetId) => {
                 const updatedGroup = group.filter(g => g.cabinetId !== cabinetId)
@@ -1353,7 +1351,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
                   }
                 }
               })
-              
+
               return newMap
             })
           }

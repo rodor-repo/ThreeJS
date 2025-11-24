@@ -1,6 +1,6 @@
 import { DoorMaterial } from '@/features/carcass'
 import { Subcategory } from '@/components/categoriesData'
-import { Settings, ShoppingCart } from 'lucide-react'
+import { Settings, ShoppingCart, Undo, Redo, Flag, History, Clock } from 'lucide-react'
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useCabinets } from '../cabinets/hooks/useCabinets'
 import { useViewManager } from '../cabinets/hooks/useViewManager'
@@ -8,6 +8,7 @@ import { CabinetLockIcons } from './ui/CabinetLockIcons'
 import ProductPanel from '../cabinets/ui/ProductPanel'
 import { cabinetPanelState } from '../cabinets/ui/ProductPanel'
 import { useRoomPersistence } from './hooks/useRoomPersistence'
+import { useUndoRedo } from './hooks/useUndoRedo'
 import { useCameraDrag } from './hooks/useCameraDrag'
 import { useSceneInteractions } from './hooks/useSceneInteractions'
 import { useSnapGuides } from './hooks/useSnapGuides'
@@ -220,6 +221,8 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     cabinets,
     cabinetGroups,
     setCabinetGroups,
+    cabinetSyncs,
+    setCabinetSyncs,
     wallDimensions,
     wallColor,
     setWallColor,
@@ -232,6 +235,25 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     updateCabinetViewId,
     updateCabinetLock,
     onLoadRoomReady,
+  })
+
+  const { undo, redo, canUndo, canRedo, createCheckpoint, past } = useUndoRedo({
+    cabinets,
+    cabinetGroups,
+    setCabinetGroups,
+    cabinetSyncs,
+    setCabinetSyncs,
+    wallDimensions,
+    wallColor,
+    setWallColor,
+    applyDimensions,
+    viewManager,
+    wsProducts,
+    setNumbersVisible,
+    clearCabinets,
+    createCabinet,
+    updateCabinetViewId,
+    updateCabinetLock,
   })
 
   useWallsAutoAdjust({
@@ -256,6 +278,15 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
   }, [cabinets])
 
   // When the product panel opens for a selected cabinet, try loading its WsProduct config
+
+  const [showHistory, setShowHistory] = useState(false)
+  const [isCheckpointed, setIsCheckpointed] = useState(false)
+
+  const handleCreateCheckpoint = () => {
+    createCheckpoint()
+    setIsCheckpointed(true)
+    setTimeout(() => setIsCheckpointed(false), 1000)
+  }
 
   return (
     <div className="relative w-full h-screen overflow-hidden">
@@ -726,6 +757,79 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         }}
         itemName="the selected cabinet"
       />
+
+      {/* Undo/Redo Buttons - Bottom Left (above Save) */}
+      <div className="fixed bottom-20 left-4 z-50 flex gap-2 items-end">
+        {/* History List Popover */}
+        {showHistory && past.length > 0 && (
+          <div className="absolute bottom-full left-0 mb-2 bg-white rounded-lg shadow-xl border border-gray-200 w-64 max-h-60 overflow-y-auto z-50">
+            <div className="p-3 border-b border-gray-100 bg-gray-50 sticky top-0">
+              <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                <History size={14} />
+                Checkpoint History
+              </h3>
+            </div>
+            <div className="py-1">
+              {[...past].reverse().map((room, index) => (
+                <div key={room.id || index} className="px-4 py-2 hover:bg-gray-50 text-sm text-gray-600 border-b border-gray-50 last:border-0 flex items-center justify-between">
+                  <span className="font-medium">Checkpoint {past.length - index}</span>
+                  <span className="text-xs text-gray-400 flex items-center gap-1">
+                    <Clock size={10} />
+                    {new Date(room.savedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <button
+          onClick={undo}
+          disabled={!canUndo}
+          className={`p-3 rounded-full shadow-lg transition-colors duration-200 ${canUndo
+            ? 'bg-white text-gray-700 hover:bg-gray-100'
+            : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+            }`}
+          title="Undo"
+        >
+          <Undo size={20} />
+        </button>
+        <button
+          onClick={redo}
+          disabled={!canRedo}
+          className={`p-3 rounded-full shadow-lg transition-colors duration-200 ${canRedo
+            ? 'bg-white text-gray-700 hover:bg-gray-100'
+            : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+            }`}
+          title="Redo"
+        >
+          <Redo size={20} />
+        </button>
+
+        <div className="relative flex gap-2">
+          <button
+            onClick={handleCreateCheckpoint}
+            className={`p-3 rounded-full shadow-lg transition-all duration-500 ${isCheckpointed
+                ? 'bg-green-500 text-white scale-110 ring-4 ring-green-200'
+                : 'bg-white text-gray-700 hover:bg-gray-100'
+              }`}
+            title="Create Checkpoint"
+          >
+            <Flag size={20} className={isCheckpointed ? 'animate-bounce' : ''} />
+          </button>
+
+          {past.length > 0 && (
+            <button
+              onClick={() => setShowHistory(!showHistory)}
+              className={`p-3 rounded-full shadow-lg transition-colors duration-200 ${showHistory ? 'bg-blue-100 text-blue-600' : 'bg-white text-gray-700 hover:bg-gray-100'
+                }`}
+              title="View History"
+            >
+              <History size={20} />
+            </button>
+          )}
+        </div>
+      </div>
 
       {/* SAVE Button - Left Bottom Corner */}
       <button

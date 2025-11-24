@@ -21,7 +21,7 @@ type UseRoomPersistenceOptions = {
   wallDimensions: WallDims
   wallColor: string
   setWallColor: Dispatch<SetStateAction<string>>
-  handleDimensionChange: (dimensions: WallDims, color?: string) => void
+  applyDimensions: (dimensions: WallDims, color?: string) => void
   viewManager: {
     activeViews: View[]
     viewManager: ViewManager
@@ -45,7 +45,7 @@ export const useRoomPersistence = ({
   wallDimensions,
   wallColor,
   setWallColor,
-  handleDimensionChange,
+  applyDimensions,
   viewManager,
   wsProducts,
   setNumbersVisible,
@@ -157,7 +157,7 @@ export const useRoomPersistence = ({
       rightWallVisible: savedRoom.wallSettings.rightWallVisible ?? true,
       additionalWalls: savedRoom.wallSettings.additionalWalls ?? [],
     }
-    handleDimensionChange(newWallDims, savedRoom.wallSettings.color)
+    applyDimensions(newWallDims, savedRoom.wallSettings.color)
     setWallColor(savedRoom.wallSettings.color)
 
     setTimeout(() => {
@@ -286,7 +286,7 @@ export const useRoomPersistence = ({
 
       console.log('Room loaded:', savedRoom.name, 'Views restored:', viewIdsToRestore.size, 'Cabinets assigned to views')
     }, 100)
-  }, [assignCabinetToView, clearCabinets, createCabinet, createView, handleDimensionChange, setCabinetGroups, setNumbersVisible, setWallColor, updateCabinetLock, updateCabinetViewId, viewManagerInstance])
+  }, [applyDimensions, assignCabinetToView, clearCabinets, createCabinet, createView, setCabinetGroups, setNumbersVisible, setWallColor, updateCabinetLock, updateCabinetViewId, viewManagerInstance])
 
   useEffect(() => {
     if (onLoadRoomReady) {

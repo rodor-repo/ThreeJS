@@ -1,13 +1,12 @@
-import { CabinetType, DoorMaterial } from '@/features/carcass'
+import { DoorMaterial } from '@/features/carcass'
 import { Subcategory } from '@/components/categoriesData'
 import { Settings, ShoppingCart } from 'lucide-react'
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useCabinets } from '../cabinets/hooks/useCabinets'
 import { useViewManager } from '../cabinets/hooks/useViewManager'
-import { CabinetsInfoPanel } from '../cabinets/ui/CabinetsInfoPanel'
 import { CabinetLockIcons } from './ui/CabinetLockIcons'
 import ProductPanel from '../cabinets/ui/ProductPanel'
-import { cabinetPanelState, type PersistedPanelState } from '../cabinets/ui/ProductPanel'
+import { cabinetPanelState } from '../cabinets/ui/ProductPanel'
 import { useRoomPersistence } from './hooks/useRoomPersistence'
 import { useCameraDrag } from './hooks/useCameraDrag'
 import { useSceneInteractions } from './hooks/useSceneInteractions'
@@ -15,7 +14,10 @@ import { useSnapGuides } from './hooks/useSnapGuides'
 import { useDimensionLines } from './hooks/useDimensionLines'
 import { useCabinetNumbers } from './hooks/useCabinetNumbers'
 import { useThreeRenderer } from './hooks/useThreeRenderer'
-import type { Category, WallDimensions as WallDims, CabinetData } from './types'
+import { useScenePanels, DEFAULT_WALL_COLOR } from './hooks/useScenePanels'
+import { useWallsAutoAdjust } from './hooks/useWallsAutoAdjust'
+import { useProductDrivenCreation } from './hooks/useProductDrivenCreation'
+import type { Category, WallDimensions as WallDims } from './types'
 import { CameraControls } from './ui/CameraControls'
 import { SettingsSidebar } from './ui/SettingsSidebar'
 import { WallSettingsDrawer } from './ui/WallSettingsDrawer'
@@ -26,7 +28,6 @@ import { DeleteConfirmationModal } from './ui/DeleteConfirmationModal'
 import { WsProducts } from '@/types/erpTypes'
 import type { ViewId } from '../cabinets/ViewManager'
 import type { SavedRoom } from '@/data/savedRooms'
-import { WALL_THICKNESS } from './lib/sceneUtils'
 import { handleViewDimensionChange } from './utils/handlers/viewDimensionHandler'
 import { handleSplashbackHeightChange } from './utils/handlers/splashbackHandler'
 import { handleProductDimensionChange } from './utils/handlers/productDimensionHandler'
@@ -47,13 +48,6 @@ interface ThreeSceneProps {
 
 const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChange, selectedCategory, selectedSubcategory, isMenuOpen = false, selectedProductId, wsProducts, onLoadRoomReady }) => {
   const mountRef = useRef<HTMLDivElement>(null);
-  const [showSettingsSidebar, setShowSettingsSidebar] = useState(false)
-  const [showWallDrawer, setShowWallDrawer] = useState(false)
-  const [showViewsDrawer, setShowViewsDrawer] = useState(false)
-  const [showViewDrawer, setShowViewDrawer] = useState(false)
-  const [selectedViewId, setSelectedViewId] = useState<string | null>(null)
-  const [isDragging, setIsDragging] = useState(false)
-  const [zoomLevel, setZoomLevel] = useState(1.5)
   const [cameraMode, setCameraMode] = useState<'constrained' | 'free'>('constrained')
   const [dimensionsVisible, setDimensionsVisible] = useState(true)
   const [numbersVisible, setNumbersVisible] = useState(false)
@@ -62,9 +56,6 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
   const [cabinetGroups, setCabinetGroups] = useState<Map<string, Array<{ cabinetId: string; percentage: number }>>>(new Map())
   // Cabinet sync relationships: Map of cabinetId -> array of synced cabinetIds
   const [cabinetSyncs, setCabinetSyncs] = useState<Map<string, string[]>>(new Map())
-  const [showSaveModal, setShowSaveModal] = useState(false)
-  const [showDeleteModal, setShowDeleteModal] = useState(false)
-  const [cabinetToDelete, setCabinetToDelete] = useState<CabinetData | null>(null) // Store cabinet to delete before modal opens
 
   const {
     sceneRef,
@@ -72,17 +63,12 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     wallRef,
     leftWallRef,
     rightWallRef,
-    createWall,
-    createLeftWall,
-    createRightWall,
-    createAdditionalWalls,
-    createFloor,
-    updateCameraPosition,
     resetCamera,
     setCameraXView,
     setCameraYView,
-    setCameraZView
-  } = useThreeRenderer(mountRef, wallDimensions, '#dcbfa0')
+    setCameraZView,
+    applyDimensions
+  } = useThreeRenderer(mountRef, wallDimensions, DEFAULT_WALL_COLOR, onDimensionsChange)
 
   const {
     cabinets,
@@ -111,38 +97,48 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
   // Cabinet numbering system
   useCabinetNumbers(sceneRef, cabinets, numbersVisible)
 
-  // interactions hook wires global events and cabinet drag/select
-  const [dragState, setDragState] = useState({
-    isDragging: false,
-    dragStart: { x: 0, y: 0 },
-    cameraStart: { x: 0, y: 0 },
-    zoomLevel,
-    // Spherical coordinates for orbit camera
-    orbitRadius: wallDimensions.length * 1.5,
-    orbitTheta: 0, // horizontal angle
-    orbitPhi: Math.PI / 3, // vertical angle from top
-    orbitTarget: { // Point camera is looking at
-      x: wallDimensions.length / 2,
-      y: wallDimensions.height / 2,
-      z: 0
-    }
-  })
   const cameraDrag = useCameraDrag(
     cameraRef,
     wallDimensions,
     isMenuOpen || false,
-    cameraMode,
-    dragState,
-    next => {
-      setDragState(prev => ({ ...prev, ...next }))
-      if (next.zoomLevel !== undefined) setZoomLevel(next.zoomLevel)
-      if (next.isDragging !== undefined) setIsDragging(next.isDragging)
-    }
+    cameraMode
   )
+  const { isDragging, zoomLevel } = cameraDrag
+
+  const {
+    wallColor,
+    setWallColor,
+    showSettingsSidebar,
+    showWallDrawer,
+    showViewsDrawer,
+    showViewDrawer,
+    showSaveModal,
+    showDeleteModal,
+    selectedViewId,
+    cabinetToDelete,
+    setCabinetToDelete,
+    openSettings,
+    closeSettings,
+    openWallDrawer,
+    closeWallDrawer,
+    closeViewsDrawer,
+    openViewDrawer,
+    closeViewDrawer,
+    openSaveModal,
+    closeSaveModal,
+    requestDelete,
+    closeDeleteModal,
+    handleApplyWallSettings,
+  } = useScenePanels({
+    showProductPanel,
+    isMenuOpen: isMenuOpen || false,
+    applyDimensions,
+    initialWallColor: DEFAULT_WALL_COLOR,
+  })
 
   const handleWallClick = useCallback(() => {
-    setShowWallDrawer(true)
-  }, [])
+    openWallDrawer()
+  }, [openWallDrawer])
 
   const {
     cabinetWithLockIcons,
@@ -179,51 +175,14 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     }
   }, [selectedCategory]);
 
-  // Handle subcategory selection for cabinet creation
-  useEffect(() => {
-    if (selectedSubcategory && sceneRef.current) {
-      console.log('Subcategory selected:', selectedSubcategory.category.name, '>', selectedSubcategory.subcategory.name)
-
-      // Map general categories to supported CabinetType values
-      // const rawType = selectedSubcategory.category.id
-      // const cabinetType: CabinetType = rawType === 'wardrobe' ? 'tall' : (rawType as CabinetType)
-
-      if (!wsProducts) throw new Error("WsProducts data is required to create cabinets.")
-
-      const productEntry = wsProducts.products[selectedProductId || '']
-      const designId = productEntry?.designId
-      const designEntry = wsProducts.designs[designId || '']
-      if (!designEntry) {
-        throw new Error(`Design entry not found for designId: ${designId}`)
-      }
-
-      const { type3D, design } = designEntry
-
-      if (!type3D) {
-        throw new Error(`3D type not specified in design entry for design: ${design}`)
-      }
-
-      const legacyCategoryMap: Record<NonNullable<WsProducts["designs"][string]["type3D"]>, CabinetType> = {
-        'base': 'base',
-        'overhead': 'top',
-        tall: 'tall',
-      }
-
-      const cabinetType = legacyCategoryMap[type3D] || "base"
-
-      // Create cabinet based on mapped cabinet type and subcategory
-      const cabinetData = createCabinet(cabinetType, selectedSubcategory.subcategory.id, selectedProductId)
-      if (cabinetData) setSelectedCabinet(cabinetData)
-    }
-  }, [selectedSubcategory, selectedProductId])
-
-  // Reset dragging state when menu opens/closes
-  useEffect(() => {
-    if (isMenuOpen) {
-      // When menu opens, ensure dragging is stopped
-      setIsDragging(false);
-    }
-  }, [isMenuOpen]);
+  useProductDrivenCreation({
+    selectedSubcategory,
+    selectedProductId,
+    wsProducts,
+    sceneRef,
+    createCabinet,
+    setSelectedCabinet,
+  })
 
   // initial wall/floor creation is handled by useThreeRenderer
 
@@ -251,50 +210,11 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
 
   // Reset camera to default position
   const resetCameraPosition = () => resetCamera(zoomLevel)
+  const applyWallSettingsWithZoom = (dims: WallDims, color: string) => {
+    handleApplyWallSettings(dims, color, zoomLevel)
+  }
 
   // view helpers provided by useThreeRenderer
-
-  // Handle wall dimension changes
-  const handleDimensionChange = (newDimensions: WallDims, newColor?: string) => {
-    onDimensionsChange(newDimensions);
-    if (sceneRef.current) {
-      const backWallLength = newDimensions.backWallLength ?? newDimensions.length
-      createWall(newDimensions.height, backWallLength, newColor)
-      createFloor(backWallLength)
-
-      // Create left and right walls
-      createLeftWall(
-        newDimensions.height,
-        newDimensions.leftWallLength ?? 600,
-        newDimensions.leftWallVisible ?? true,
-        newColor
-      )
-      createRightWall(
-        newDimensions.height,
-        newDimensions.rightWallLength ?? 600,
-        backWallLength,
-        newDimensions.rightWallVisible ?? true,
-        newColor
-      )
-
-      // Create additional walls
-      createAdditionalWalls(
-        newDimensions.height,
-        newDimensions.additionalWalls ?? [],
-        newColor
-      )
-
-      if (cameraRef.current) updateCameraPosition(newDimensions.height, backWallLength, zoomLevel)
-    }
-  };
-
-  // Wall settings handlers
-  const [wallColor, setWallColor] = useState('#dcbfa0')
-  const handleApplyWallSettings = (dims: WallDims, color: string) => {
-    if (color !== wallColor) setWallColor(color)
-    handleDimensionChange(dims, color)
-    // Don't close drawer automatically - let user close it manually
-  }
 
   const { currentRoom, saveRoom: handleSaveRoom } = useRoomPersistence({
     cabinets,
@@ -303,7 +223,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     wallDimensions,
     wallColor,
     setWallColor,
-    handleDimensionChange,
+    applyDimensions,
     viewManager,
     wsProducts,
     setNumbersVisible,
@@ -314,119 +234,16 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     onLoadRoomReady,
   })
 
-  // Auto-update back wall length when right wall is linked to a view and cabinets move
-  // This handles the case where cabinets in a view penetrate the right wall
-  // If the right wall is linked to the same view, adjust back wall length and right wall position
-  useEffect(() => {
-    if (!wallDimensions.rightWallViewId || wallDimensions.rightWallViewId === 'none') return
-
-    // Calculate rightmost position in the linked view
-    const cabinetIds = viewManager.getCabinetsInView(wallDimensions.rightWallViewId as ViewId)
-    const viewCabinets = cabinets.filter(c => cabinetIds.includes(c.cabinetId))
-
-    if (viewCabinets.length === 0) return
-
-    // Find the rightmost edge: cabinet X position + cabinet width
-    let rightmostX = 0
-    viewCabinets.forEach(cabinet => {
-      const cabinetRightEdge = cabinet.group.position.x + cabinet.carcass.dimensions.width
-      if (cabinetRightEdge > rightmostX) {
-        rightmostX = cabinetRightEdge
-      }
-    })
-
-    // Always update if cabinets penetrate the right wall (rightmostX > current back wall length)
-    // This ensures the right wall moves with the cabinets when they penetrate
-    const currentBackWallLength = wallDimensions.backWallLength ?? wallDimensions.length
-    if (rightmostX > currentBackWallLength || Math.abs(rightmostX - currentBackWallLength) > 1) {
-      // Update back wall length to match rightmost position
-      // This automatically adjusts the right wall position since it's positioned at backWallLength
-      handleDimensionChange({
-        ...wallDimensions,
-        backWallLength: Math.max(100, rightmostX),
-        length: Math.max(100, rightmostX), // Keep for backward compatibility
-      })
-    }
-  }, [cabinets.map(c => `${c.cabinetId}-${c.group.position.x}-${c.carcass.dimensions.width}`).join(','), wallDimensions.rightWallViewId, viewManager])
-
-  // Detect cabinet penetration into right wall and internal walls, then adjust wall positions
-  useEffect(() => {
-    const currentBackWallLength = wallDimensions.backWallLength ?? wallDimensions.length
-    let needsUpdate = false
-    const newDimensions = { ...wallDimensions }
-
-    // Check for penetration into right wall
-    // Find the rightmost edge of all cabinets
-    let rightmostCabinetEdge = 0
-    cabinets.forEach(cabinet => {
-      const cabinetRightEdge = cabinet.group.position.x + cabinet.carcass.dimensions.width
-      if (cabinetRightEdge > rightmostCabinetEdge) {
-        rightmostCabinetEdge = cabinetRightEdge
-      }
-    })
-
-    // If cabinets penetrate the right wall, adjust back wall length
-    if (rightmostCabinetEdge > currentBackWallLength) {
-      newDimensions.backWallLength = Math.max(100, rightmostCabinetEdge)
-      newDimensions.length = Math.max(100, rightmostCabinetEdge) // Keep for backward compatibility
-      needsUpdate = true
-    }
-
-    // Check for penetration into internal walls
-    if (wallDimensions.additionalWalls && wallDimensions.additionalWalls.length > 0) {
-      const updatedAdditionalWalls = wallDimensions.additionalWalls.map(wall => {
-        const wallThickness = wall.thickness ?? WALL_THICKNESS
-        const wallLeft = wall.distanceFromLeft
-        const wallRight = wall.distanceFromLeft + wallThickness
-
-        // Check if any cabinet penetrates this wall
-        let maxPenetration = 0
-        cabinets.forEach(cabinet => {
-          const cabinetLeft = cabinet.group.position.x
-          const cabinetRight = cabinet.group.position.x + cabinet.carcass.dimensions.width
-
-          // Check if cabinet overlaps with wall
-          if (cabinetLeft < wallRight && cabinetRight > wallLeft) {
-            // Cabinet penetrates the wall
-            // Calculate how far the cabinet extends beyond the wall's right edge
-            const penetration = Math.max(0, cabinetRight - wallRight)
-            if (penetration > maxPenetration) {
-              maxPenetration = penetration
-            }
-          }
-        })
-
-        // If there's penetration, adjust wall position to accommodate
-        if (maxPenetration > 0) {
-          // Move wall to the right by the penetration amount
-          return {
-            ...wall,
-            distanceFromLeft: wall.distanceFromLeft + maxPenetration
-          }
-        }
-
-        return wall
-      })
-
-      // Check if any wall positions changed
-      const wallsChanged = updatedAdditionalWalls.some((wall, index) =>
-        wall.distanceFromLeft !== wallDimensions.additionalWalls![index].distanceFromLeft
-      )
-
-      if (wallsChanged) {
-        newDimensions.additionalWalls = updatedAdditionalWalls
-        needsUpdate = true
-      }
-    }
-
-    // Apply updates if needed
-    if (needsUpdate) {
-      handleDimensionChange(newDimensions)
-    }
-  }, [cabinets.map(c => `${c.cabinetId}-${c.group.position.x}-${c.carcass.dimensions.width}`).join(','), wallDimensions.additionalWalls?.map(w => `${w.id}-${w.distanceFromLeft}`).join(','), wallDimensions.backWallLength, wallDimensions.length])
+  useWallsAutoAdjust({
+    cabinets,
+    wallDimensions,
+    viewManager: viewManager.viewManager,
+    applyDimensions,
+    zoomLevel,
+  })
 
   const handleSettingsClick = () => {
-    setShowSettingsSidebar(true)
+    openSettings()
   }
 
   // Calculate total price of all cabinets
@@ -437,28 +254,6 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
       return sum + price
     }, 0)
   }, [cabinets])
-
-  const handleViewsClick = () => {
-    setShowViewsDrawer(true)
-  }
-
-  // Close drawers when other drawers open or when product panel opens
-  useEffect(() => {
-    if (showProductPanel) {
-      setShowSettingsSidebar(false)
-      setShowWallDrawer(false)
-      setShowViewsDrawer(false)
-    }
-  }, [showProductPanel])
-
-  // Close drawers when main menu opens
-  useEffect(() => {
-    if (isMenuOpen) {
-      setShowSettingsSidebar(false)
-      setShowWallDrawer(false)
-      setShowViewsDrawer(false)
-    }
-  }, [isMenuOpen])
 
   // When the product panel opens for a selected cabinet, try loading its WsProduct config
 
@@ -543,17 +338,10 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
       {/* Settings Sidebar */}
       <SettingsSidebar
         isOpen={showSettingsSidebar}
-        onClose={() => {
-          setShowSettingsSidebar(false)
-          setShowWallDrawer(false)
-          setShowViewsDrawer(false)
-          setShowViewDrawer(false)
-          setSelectedViewId(null)
-        }}
+        onClose={closeSettings}
         onWallClick={handleWallClick}
         onViewClick={(viewId) => {
-          setSelectedViewId(viewId)
-          setShowViewDrawer(true)
+          openViewDrawer(viewId)
         }}
         onDeleteView={(viewId) => {
           // Get all cabinets in this view
@@ -566,10 +354,10 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
 
           // If the right wall is linked to this view, remove the association
           if (wallDimensions.rightWallViewId === viewId) {
-            handleDimensionChange({
+            applyDimensions({
               ...wallDimensions,
               rightWallViewId: undefined,
-            })
+            }, undefined, zoomLevel)
           }
 
           // Delete the view from ViewManager
@@ -581,19 +369,19 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
       {/* Wall Settings Drawer */}
       <WallSettingsDrawer
         isOpen={showWallDrawer}
-        onClose={() => setShowWallDrawer(false)}
+        onClose={closeWallDrawer}
         wallDimensions={wallDimensions}
         wallColor={wallColor}
         activeViews={viewManager.activeViews}
         cabinets={cabinets}
         viewManager={viewManager.viewManager}
-        onApply={handleApplyWallSettings}
+        onApply={applyWallSettingsWithZoom}
       />
 
       {/* Views List Drawer - Shows list of all views */}
       <ViewsListDrawer
         isOpen={showViewsDrawer}
-        onClose={() => setShowViewsDrawer(false)}
+        onClose={closeViewsDrawer}
         activeViews={viewManager.activeViews}
         onViewClick={(viewId) => {
           // Could add view-specific settings here in the future
@@ -610,10 +398,10 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
 
           // If the right wall is linked to this view, remove the association
           if (wallDimensions.rightWallViewId === viewId) {
-            handleDimensionChange({
+            applyDimensions({
               ...wallDimensions,
               rightWallViewId: undefined,
-            })
+            }, undefined, zoomLevel)
           }
 
           // Delete the view from ViewManager
@@ -625,10 +413,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
       {selectedViewId && (
         <ViewDetailDrawer
           isOpen={showViewDrawer}
-          onClose={() => {
-            setShowViewDrawer(false)
-            setSelectedViewId(null)
-          }}
+          onClose={closeViewDrawer}
           viewName={viewManager.activeViews.find(v => v.id === selectedViewId)?.name || `View ${selectedViewId}`}
           viewId={selectedViewId}
           cabinets={cabinets}
@@ -666,8 +451,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         numbersVisible={numbersVisible}
         onDelete={() => {
           if (selectedCabinet) {
-            setCabinetToDelete(selectedCabinet)
-            setShowDeleteModal(true)
+            requestDelete(selectedCabinet)
           }
         }}
         canDelete={!!selectedCabinet}
@@ -920,7 +704,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
       {/* Save Modal */}
       <SaveModal
         isOpen={showSaveModal}
-        onClose={() => setShowSaveModal(false)}
+        onClose={closeSaveModal}
         onSave={handleSaveRoom}
         currentRoom={currentRoom}
       />
@@ -928,10 +712,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
       {/* Delete Confirmation Modal */}
       <DeleteConfirmationModal
         isOpen={showDeleteModal}
-        onClose={() => {
-          setShowDeleteModal(false)
-          setCabinetToDelete(null)
-        }}
+        onClose={closeDeleteModal}
         onConfirm={() => {
           if (cabinetToDelete) {
             handleDeleteCabinet(cabinetToDelete, {
@@ -940,6 +721,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
               deleteCabinet,
               setCabinetToDelete
             })
+            closeDeleteModal()
           }
         }}
         itemName="the selected cabinet"
@@ -947,7 +729,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
 
       {/* SAVE Button - Left Bottom Corner */}
       <button
-        onClick={() => setShowSaveModal(true)}
+        onClick={openSaveModal}
         className="fixed bottom-4 left-4 z-50 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-lg transition-colors duration-200 font-medium"
       >
         SAVE

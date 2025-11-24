@@ -16,7 +16,8 @@ import type { WallDimensions } from "../types"
 export const useThreeRenderer = (
   mountRef: React.RefObject<HTMLDivElement>,
   wallDimensions: WallDimensions,
-  wallColor: string
+  wallColor: string,
+  onDimensionsChange?: (dimensions: WallDimensions) => void
 ) => {
   const sceneRef = useRef<THREE.Scene | null>(null)
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null)
@@ -27,6 +28,7 @@ export const useThreeRenderer = (
   const additionalWallsRef = useRef<Map<string, THREE.Group>>(new Map())
   const floorRef = useRef<THREE.Mesh | null>(null)
   const floorGridRef = useRef<THREE.GridHelper | null>(null)
+  const wallColorRef = useRef(wallColor)
 
   const createWall = useCallback(
     (height: number, length: number, color?: string) => {
@@ -222,6 +224,67 @@ export const useThreeRenderer = (
   }, [wallDimensions])
 
   useEffect(() => {
+    wallColorRef.current = wallColor
+  }, [wallColor])
+
+  const applyDimensions = useCallback(
+    (newDimensions: WallDimensions, color?: string, zoomLevel = 1.5) => {
+      onDimensionsChange?.(newDimensions)
+
+      if (!sceneRef.current) return
+
+      const appliedColor = color ?? wallColorRef.current
+      if (color) {
+        wallColorRef.current = color
+      }
+
+      const nextBackWallLength =
+        newDimensions.backWallLength ?? newDimensions.length
+
+      createWall(newDimensions.height, nextBackWallLength, appliedColor)
+      createFloor(nextBackWallLength)
+
+      createLeftWall(
+        newDimensions.height,
+        newDimensions.leftWallLength ?? 600,
+        newDimensions.leftWallVisible ?? true,
+        appliedColor
+      )
+
+      createRightWall(
+        newDimensions.height,
+        newDimensions.rightWallLength ?? 600,
+        nextBackWallLength,
+        newDimensions.rightWallVisible ?? true,
+        appliedColor
+      )
+
+      createAdditionalWalls(
+        newDimensions.height,
+        newDimensions.additionalWalls ?? [],
+        appliedColor
+      )
+
+      if (cameraRef.current) {
+        updateCameraPosition(
+          newDimensions.height,
+          nextBackWallLength,
+          zoomLevel
+        )
+      }
+    },
+    [
+      createAdditionalWalls,
+      createFloor,
+      createLeftWall,
+      createRightWall,
+      createWall,
+      onDimensionsChange,
+      updateCameraPosition,
+    ]
+  )
+
+  useEffect(() => {
     if (!mountRef.current) return
 
     const scene = new THREE.Scene()
@@ -352,5 +415,6 @@ export const useThreeRenderer = (
     setCameraXView,
     setCameraYView,
     setCameraZView,
+    applyDimensions,
   }
 }

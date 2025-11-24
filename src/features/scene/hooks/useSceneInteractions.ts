@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react"
+import React, { useCallback, useEffect, useRef, useState } from "react"
 import * as THREE from "three"
 import type { CabinetData, WallDimensions } from "../types"
 import {
@@ -6,7 +6,7 @@ import {
   getSnapGuides,
   DEFAULT_SNAP_CONFIG,
 } from "../lib/snapUtils"
-import type { ViewManager, ViewId } from '../../cabinets/ViewManager'
+import type { ViewManager, ViewId } from "../../cabinets/ViewManager"
 
 type CameraDragAPI = {
   startDrag: (x: number, y: number) => void
@@ -22,7 +22,7 @@ export const useSceneInteractions = (
   cameraRef: React.MutableRefObject<THREE.PerspectiveCamera | null>,
   wallDimensions: WallDimensions,
   isMenuOpen: boolean,
-  cameraMode: 'constrained' | 'free',
+  cameraMode: "constrained" | "free",
   cabinets: CabinetData[],
   selectedCabinet: CabinetData | null,
   selectedCabinets: CabinetData[],
@@ -39,25 +39,28 @@ export const useSceneInteractions = (
   rightWallRef?: React.MutableRefObject<THREE.Group | null>,
   onOpenWallDrawer?: () => void
 ) => {
-  const [isDraggingCabinet, setIsDraggingCabinet] = useState(false)
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
+  const isDraggingCabinetRef = useRef(false)
+  const dragStartRef = useRef({ x: 0, y: 0 })
   const [isPanningCamera, setIsPanningCamera] = useState(false)
-  const [cabinetWithLockIcons, setCabinetWithLockIcons] = useState<CabinetData | null>(null)
-  const [clickStartPosition, setClickStartPosition] = useState<{ x: number; y: number } | null>(null)
-  const [clickStartCabinet, setClickStartCabinet] = useState<CabinetData | null>(null)
+  const [cabinetWithLockIcons, setCabinetWithLockIcons] =
+    useState<CabinetData | null>(null)
+  const clickStartPositionRef = useRef<{ x: number; y: number } | null>(null)
+  const clickStartCabinetRef = useRef<CabinetData | null>(null)
 
   const isEventOnProductPanel = useCallback((target: EventTarget | null) => {
     if (!target) return false
     const el = target as HTMLElement
     return !!(
-      el.closest(".productPanel") || 
-      el.closest("[data-product-panel]") ||
-      el.closest("[data-settings-drawer]") ||
-      el.closest("[data-wall-drawer]") ||
-      el.closest("[data-views-drawer]") ||
-      el.closest("[data-view-drawer]") ||
-      el.closest("[data-camera-controls]") ||
-      el.closest("button") // Also ignore all button clicks
+      (
+        el.closest(".productPanel") ||
+        el.closest("[data-product-panel]") ||
+        el.closest("[data-settings-drawer]") ||
+        el.closest("[data-wall-drawer]") ||
+        el.closest("[data-views-drawer]") ||
+        el.closest("[data-view-drawer]") ||
+        el.closest("[data-camera-controls]") ||
+        el.closest("button")
+      ) // Also ignore all button clicks
     )
   }, [])
 
@@ -70,7 +73,7 @@ export const useSceneInteractions = (
       const raycaster = new THREE.Raycaster()
       raycaster.setFromCamera(mouse, cameraRef.current)
       // Check if mouse is over any selected cabinet
-      return selectedCabinets.some(cab => {
+      return selectedCabinets.some((cab) => {
         const intersects = raycaster.intersectObject(cab.group, true)
         return intersects.length > 0
       })
@@ -91,7 +94,7 @@ export const useSceneInteractions = (
     ): boolean => {
       const cabinetWidth = cabinet.carcass.dimensions.width
       const cabinetHeight = cabinet.carcass.dimensions.height
-      
+
       const cabinetLeft = newX
       const cabinetRight = newX + cabinetWidth
       const cabinetBottom = newY
@@ -112,11 +115,15 @@ export const useSceneInteractions = (
         const otherTop = otherY + otherHeight
 
         // Check for X-axis overlap (cabinets must overlap in X to check Y overlap)
-        const xOverlap = !(cabinetRight <= otherLeft || cabinetLeft >= otherRight)
-        
+        const xOverlap = !(
+          cabinetRight <= otherLeft || cabinetLeft >= otherRight
+        )
+
         if (xOverlap) {
           // Check for Y-axis overlap
-          const yOverlap = !(cabinetTop <= otherBottom || cabinetBottom >= otherTop)
+          const yOverlap = !(
+            cabinetTop <= otherBottom || cabinetBottom >= otherTop
+          )
           if (yOverlap) {
             return true // Y-axis overlap detected
           }
@@ -130,20 +137,20 @@ export const useSceneInteractions = (
 
   const moveCabinetWithMouse = useCallback(
     (event: MouseEvent) => {
-      if (selectedCabinets.length === 0 || !isDraggingCabinet) return
+      if (selectedCabinets.length === 0 || !isDraggingCabinetRef.current) return
       const camera = cameraRef.current
       if (!camera) return
-      const deltaX = event.clientX - dragStart.x
-      const deltaY = event.clientY - dragStart.y
+      const deltaX = event.clientX - dragStartRef.current.x
+      const deltaY = event.clientY - dragStartRef.current.y
       const worldDeltaX =
         (deltaX / window.innerWidth) * wallDimensions.length * 0.8
       const worldDeltaY =
         -(deltaY / window.innerHeight) * wallDimensions.height * 0.8
-      
+
       // Use the cabinet being dragged (the one that was clicked on)
-      const draggedCabinet = clickStartCabinet || selectedCabinets[0]
+      const draggedCabinet = clickStartCabinetRef.current || selectedCabinets[0]
       if (!draggedCabinet) return
-      
+
       const currentX = draggedCabinet.group.position.x
       const currentY = draggedCabinet.group.position.y
       const intendedX = currentX + worldDeltaX
@@ -168,25 +175,37 @@ export const useSceneInteractions = (
         newY = currentY // Base/tall cabinets stay on ground
       }
 
+      // Ignore cabinets in the same view when calculating snap targets so the whole view can move smoothly
+      const snapCandidates =
+        draggedCabinet.viewId && draggedCabinet.viewId !== "none"
+          ? cabinets.filter((cab) => cab.viewId !== draggedCabinet.viewId)
+          : cabinets
+
       // Apply snap logic AFTER boundary clamping (using dragged cabinet)
       const snapResult = calculateSnapPosition(
         draggedCabinet,
         newX,
         newY,
-        cabinets,
+        snapCandidates,
         DEFAULT_SNAP_CONFIG,
         wallDimensions.additionalWalls // Pass additional walls for snap detection
       )
 
       // Use snapped position if snapping occurred
       if (snapResult.snapped) {
-        console.log('Snap detected:', snapResult.activeSnapPoints.map(s => s.type))
+        console.log(
+          "Snap detected:",
+          snapResult.activeSnapPoints.map((s) => s.type)
+        )
         newX = snapResult.position.x
         newY = snapResult.position.y
 
         // Update visual snap guides
         const guides = getSnapGuides(snapResult)
-        console.log('Guides:', guides.map(g => `${g.type} at ${g.position.x ?? g.position.y}`))
+        console.log(
+          "Guides:",
+          guides.map((g) => `${g.type} at ${g.position.x ?? g.position.y}`)
+        )
         updateSnapGuides(guides)
       } else {
         // Clear snap guides if not snapping
@@ -213,46 +232,58 @@ export const useSceneInteractions = (
 
       // If dragged cabinet belongs to a view (not "none"), check view boundary and move view cabinets
       // Note: Right wall can be penetrated - cabinets will push behind the right wall
-      if (draggedCabinet.viewId && draggedCabinet.viewId !== "none" && viewManager) {
-        const cabinetsInSameView = viewManager.getCabinetsInView(draggedCabinet.viewId as ViewId)
-        
+      if (
+        draggedCabinet.viewId &&
+        draggedCabinet.viewId !== "none" &&
+        viewManager
+      ) {
+        const cabinetsInSameView = viewManager.getCabinetsInView(
+          draggedCabinet.viewId as ViewId
+        )
+
         // Calculate current min and max X positions in the view
         let minX = Infinity
         let maxX = -Infinity
-        
+
         for (const cabinetId of cabinetsInSameView) {
-          const cabinetInView = cabinets.find(c => c.cabinetId === cabinetId)
+          const cabinetInView = cabinets.find((c) => c.cabinetId === cabinetId)
           if (cabinetInView) {
             const cabinetX = cabinetInView.group.position.x
             const cabinetWidth = cabinetInView.carcass.dimensions.width
             const cabinetRight = cabinetX + cabinetWidth
-            
+
             minX = Math.min(minX, cabinetX)
             maxX = Math.max(maxX, cabinetRight)
           }
         }
-        
+
         // Calculate what the new min and max X would be after movement
         const newMinX = minX + actualDeltaX
-        
+
         // Only check left boundary - right wall can be penetrated
         // If minimum X would be 0 or less, stop all movement (left boundary reached)
         if (newMinX <= 0) {
           // Don't move any cabinets - stop movement but allow resize
           return
         }
-        
+
         // Note: Right wall boundary check removed - cabinets can penetrate and push the right wall
         // The right wall position will be adjusted automatically if it's linked to this view
       }
 
       // If dragged cabinet belongs to a view (not "none"), move ALL cabinets in that view together
       // This maintains relative positions because they all move by the same delta
-      if (draggedCabinet.viewId && draggedCabinet.viewId !== "none" && viewManager) {
-        const cabinetsInSameView = viewManager.getCabinetsInView(draggedCabinet.viewId as ViewId)
-        
+      if (
+        draggedCabinet.viewId &&
+        draggedCabinet.viewId !== "none" &&
+        viewManager
+      ) {
+        const cabinetsInSameView = viewManager.getCabinetsInView(
+          draggedCabinet.viewId as ViewId
+        )
+
         cabinetsInSameView.forEach((cabinetId) => {
-          const cabinetInView = cabinets.find(c => c.cabinetId === cabinetId)
+          const cabinetInView = cabinets.find((c) => c.cabinetId === cabinetId)
           // Skip the dragged cabinet itself (already moved)
           if (cabinetInView && cabinetInView !== draggedCabinet) {
             const cabinetCurrentX = cabinetInView.group.position.x
@@ -269,7 +300,8 @@ export const useSceneInteractions = (
               clampedY = Math.max(
                 0,
                 Math.min(
-                  wallDimensions.height - cabinetInView.carcass.dimensions.height,
+                  wallDimensions.height -
+                    cabinetInView.carcass.dimensions.height,
                   cabinetNewY
                 )
               )
@@ -292,20 +324,17 @@ export const useSceneInteractions = (
             )
           }
         })
-        
+
         // After moving cabinets in a view, check if they penetrate the right wall
         // and if the right wall is linked to this view, update back wall length
         // This is handled by the useEffect in ThreeScene.tsx, but we trigger it here
         // by ensuring the cabinet positions are updated
       }
 
-      setDragStart({ x: event.clientX, y: event.clientY })
+      dragStartRef.current = { x: event.clientX, y: event.clientY }
     },
     [
       cameraRef,
-      dragStart.x,
-      dragStart.y,
-      isDraggingCabinet,
       selectedCabinets,
       wallDimensions.height,
       wallDimensions.length,
@@ -323,23 +352,30 @@ export const useSceneInteractions = (
 
   useEffect(() => {
     const handleMouseMove = (event: MouseEvent) => {
-      if (isDraggingCabinet) {
+      if (isDraggingCabinetRef.current) {
         moveCabinetWithMouse(event)
       } else if (isPanningCamera) {
         cameraDrag.movePan(event.clientX, event.clientY)
       } else if (cameraRef.current) {
         // Check if user started clicking on a cabinet and is now moving (click-and-drag)
-        if (clickStartPosition && clickStartCabinet && selectedCabinets.includes(clickStartCabinet)) {
+        if (
+          clickStartPositionRef.current &&
+          clickStartCabinetRef.current &&
+          selectedCabinets.includes(clickStartCabinetRef.current)
+        ) {
           const moveDistance = Math.sqrt(
-            Math.pow(event.clientX - clickStartPosition.x, 2) + 
-            Math.pow(event.clientY - clickStartPosition.y, 2)
+            Math.pow(event.clientX - clickStartPositionRef.current.x, 2) +
+              Math.pow(event.clientY - clickStartPositionRef.current.y, 2)
           )
           // If mouse moved more than 5 pixels, start dragging
           if (moveDistance > 5) {
-            setIsDraggingCabinet(true)
-            setDragStart({ x: clickStartPosition.x, y: clickStartPosition.y })
-            setClickStartPosition(null)
-            setClickStartCabinet(null)
+            isDraggingCabinetRef.current = true
+            dragStartRef.current = {
+              x: clickStartPositionRef.current.x,
+              y: clickStartPositionRef.current.y,
+            }
+            clickStartPositionRef.current = null
+            clickStartCabinetRef.current = null
           }
         }
         cameraDrag.move(event.clientX, event.clientY)
@@ -348,7 +384,7 @@ export const useSceneInteractions = (
 
     const handleMouseDown = (event: MouseEvent) => {
       if (isMenuOpen) {
-        setIsDraggingCabinet(false)
+        isDraggingCabinetRef.current = false
         setIsPanningCamera(false)
         return
       }
@@ -358,7 +394,7 @@ export const useSceneInteractions = (
 
       if (event.button === 0 && cameraRef.current) {
         // Left click
-        if (cameraMode === 'free' && !hasModifier) {
+        if (cameraMode === "free" && !hasModifier) {
           // Free mode without modifier: start orbit rotation
           cameraDrag.startDrag(event.clientX, event.clientY)
           return
@@ -369,11 +405,11 @@ export const useSceneInteractions = (
           selectedCabinet &&
           isMouseOverSelectedCabinet(event.clientX, event.clientY)
         ) {
-          setIsDraggingCabinet(true)
-          setDragStart({ x: event.clientX, y: event.clientY })
+          isDraggingCabinetRef.current = true
+          dragStartRef.current = { x: event.clientX, y: event.clientY }
           // Clear click tracking since we're starting drag immediately
-          setClickStartPosition(null)
-          setClickStartCabinet(null)
+          clickStartPositionRef.current = null
+          clickStartCabinetRef.current = null
           return
         }
 
@@ -391,7 +427,7 @@ export const useSceneInteractions = (
         })
         const intersects = raycaster.intersectObjects(cabinetMeshes)
 
-        if (cameraMode === 'free' && hasModifier && intersects.length > 0) {
+        if (cameraMode === "free" && hasModifier && intersects.length > 0) {
           // Free mode with modifier: select cabinet (without opening panel)
           const intersectedMesh = intersects[0].object
           let clickedCabinet: CabinetData | null = null
@@ -410,10 +446,15 @@ export const useSceneInteractions = (
             if (event.shiftKey) {
               // Multi-select: toggle cabinet in selection
               setSelectedCabinets((prev: CabinetData[]) => {
-                const isAlreadySelected = prev.some((c: CabinetData) => c.cabinetId === clickedCabinet!.cabinetId)
+                const isAlreadySelected = prev.some(
+                  (c: CabinetData) => c.cabinetId === clickedCabinet!.cabinetId
+                )
                 if (isAlreadySelected) {
                   // Deselect if already selected
-                  return prev.filter((c: CabinetData) => c.cabinetId !== clickedCabinet!.cabinetId)
+                  return prev.filter(
+                    (c: CabinetData) =>
+                      c.cabinetId !== clickedCabinet!.cabinetId
+                  )
                 } else {
                   // Add to selection
                   return [...prev, clickedCabinet!]
@@ -425,13 +466,16 @@ export const useSceneInteractions = (
             }
             // Don't open panel on single click
             // Store click position and cabinet for potential drag detection
-            setClickStartPosition({ x: event.clientX, y: event.clientY })
-            setClickStartCabinet(clickedCabinet)
+            clickStartPositionRef.current = {
+              x: event.clientX,
+              y: event.clientY,
+            }
+            clickStartCabinetRef.current = clickedCabinet
           }
           return
         }
 
-        if (cameraMode === 'constrained' && intersects.length > 0) {
+        if (cameraMode === "constrained" && intersects.length > 0) {
           // Constrained mode: select cabinet on single click (without opening panel)
           const intersectedMesh = intersects[0].object
           let clickedCabinet: CabinetData | null = null
@@ -450,10 +494,15 @@ export const useSceneInteractions = (
             if (event.shiftKey) {
               // Multi-select: toggle cabinet in selection
               setSelectedCabinets((prev: CabinetData[]) => {
-                const isAlreadySelected = prev.some((c: CabinetData) => c.cabinetId === clickedCabinet!.cabinetId)
+                const isAlreadySelected = prev.some(
+                  (c: CabinetData) => c.cabinetId === clickedCabinet!.cabinetId
+                )
                 if (isAlreadySelected) {
                   // Deselect if already selected
-                  return prev.filter((c: CabinetData) => c.cabinetId !== clickedCabinet!.cabinetId)
+                  return prev.filter(
+                    (c: CabinetData) =>
+                      c.cabinetId !== clickedCabinet!.cabinetId
+                  )
                 } else {
                   // Add to selection
                   return [...prev, clickedCabinet!]
@@ -464,10 +513,13 @@ export const useSceneInteractions = (
               setSelectedCabinets([clickedCabinet])
             }
             // Don't open panel on single click - only right-click opens it
-            setIsDraggingCabinet(false)
+            isDraggingCabinetRef.current = false
             // Store click position and cabinet for potential drag detection
-            setClickStartPosition({ x: event.clientX, y: event.clientY })
-            setClickStartCabinet(clickedCabinet)
+            clickStartPositionRef.current = {
+              x: event.clientX,
+              y: event.clientY,
+            }
+            clickStartCabinetRef.current = clickedCabinet
             return
           }
         }
@@ -479,20 +531,20 @@ export const useSceneInteractions = (
             setSelectedCabinets([])
           }
           // Clear click tracking
-          setClickStartPosition(null)
-          setClickStartCabinet(null)
+          clickStartPositionRef.current = null
+          clickStartCabinetRef.current = null
         }
 
-        setIsDraggingCabinet(false)
+        isDraggingCabinetRef.current = false
 
-        if (cameraMode === 'constrained') {
+        if (cameraMode === "constrained") {
           cameraDrag.startDrag(event.clientX, event.clientY)
         }
       } else if (event.button === 2 && cameraRef.current) {
         // Right click
         event.preventDefault()
 
-        if (cameraMode === 'free' && !hasModifier) {
+        if (cameraMode === "free" && !hasModifier) {
           // Free mode without modifier: start camera pan
           setIsPanningCamera(true)
           cameraDrag.startPan(event.clientX, event.clientY)
@@ -543,12 +595,12 @@ export const useSceneInteractions = (
     const handleMouseUp = (event: MouseEvent) => {
       if (event.button === 0) {
         cameraDrag.end()
-        setIsDraggingCabinet(false)
+        isDraggingCabinetRef.current = false
         // Clear snap guides when drag ends
         clearSnapGuides()
         // Clear click start tracking
-        setClickStartPosition(null)
-        setClickStartCabinet(null)
+        clickStartPositionRef.current = null
+        clickStartCabinetRef.current = null
       } else if (event.button === 2) {
         cameraDrag.end()
         setIsPanningCamera(false)
@@ -594,11 +646,11 @@ export const useSceneInteractions = (
       // Check all objects together - raycaster returns intersections sorted by distance
       const allMeshes = [...cabinetMeshes, ...wallMeshes]
       const allIntersects = raycaster.intersectObjects(allMeshes)
-      
+
       if (allIntersects.length > 0) {
         const closestIntersect = allIntersects[0]
         const intersectedMesh = closestIntersect.object
-        
+
         // Check if the closest intersection is a cabinet (cabinets have priority)
         let clickedCabinet: CabinetData | null = null
         for (const cab of cabinets) {
@@ -611,12 +663,12 @@ export const useSceneInteractions = (
             break
           }
         }
-        
+
         if (clickedCabinet) {
           // Cabinet was double-clicked - handle cabinet interaction
           // Double-click selects single cabinet and shows lock icons
           setSelectedCabinets([clickedCabinet])
-          
+
           // Toggle lock icons - if same cabinet, hide; if different, show on new one
           if (cabinetWithLockIcons === clickedCabinet) {
             setCabinetWithLockIcons(null)
@@ -625,7 +677,7 @@ export const useSceneInteractions = (
           }
           return // Stop here - cabinet interaction takes priority
         }
-        
+
         // Check if the closest intersection is a wall (no cabinet was in front)
         const isWall = wallMeshes.includes(intersectedMesh as THREE.Object3D)
         if (isWall && onOpenWallDrawer) {
@@ -694,13 +746,11 @@ export const useSceneInteractions = (
     showProductPanel,
     clearSnapGuides,
     cabinetWithLockIcons,
-    clickStartPosition,
-    clickStartCabinet,
   ])
 
-  return { 
-    isDraggingCabinet, 
-    cabinetWithLockIcons, 
-    setCabinetWithLockIcons
+  return {
+    isDraggingCabinet: isDraggingCabinetRef.current,
+    cabinetWithLockIcons,
+    setCabinetWithLockIcons,
   }
 }

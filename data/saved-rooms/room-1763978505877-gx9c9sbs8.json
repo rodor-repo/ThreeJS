@@ -2,7 +2,7 @@
   "id": "room-1763978505877-gx9c9sbs8",
   "name": "Test Dev M",
   "category": "Kitchen",
-  "savedAt": "2025-11-24T11:02:47.633Z",
+  "savedAt": "2025-11-24T15:19:07.612Z",
   "wallSettings": {
     "height": 2700,
     "length": 4000,
@@ -23,12 +23,12 @@
       "subcategoryId": "standard",
       "dimensions": {
         "width": 600,
-        "height": 720,
-        "depth": 600
+        "height": 450,
+        "depth": 700
       },
       "viewId": "A",
       "position": {
-        "x": 930.5586254676396,
+        "x": 1234.4969736351163,
         "y": 100,
         "z": 0
       },
@@ -50,8 +50,8 @@
         "2": 2,
         "8258155301514-dim-d340a151-df72-4ea7-81ba-21564d7805ae": 1,
         "8261314903663-dim-5e312aa4-a998-4369-92d6-1288fc9f77dc": 600,
-        "8261315085495-dim-40d0af67-6436-4be6-a8eb-499733c38e6e": 720,
-        "8260381186817-dim-847ff9ec-3631-48f4-a0f7-f016272146ec": 600
+        "8261315085495-dim-40d0af67-6436-4be6-a8eb-499733c38e6e": 450,
+        "8260381186817-dim-847ff9ec-3631-48f4-a0f7-f016272146ec": 700
       },
       "shelfCount": 0,
       "doorEnabled": true,
@@ -77,12 +77,12 @@
       "subcategoryId": "drawer",
       "dimensions": {
         "width": 600,
-        "height": 730,
-        "depth": 600
+        "height": 450,
+        "depth": 700
       },
       "viewId": "A",
       "position": {
-        "x": 1525.5586254676396,
+        "x": 1829.4969736351163,
         "y": 100,
         "z": 0
       },
@@ -102,12 +102,12 @@
       "dimensionValues": {
         "1": 1,
         "2": 2,
-        "8261315085495-dim-40d0af67-6436-4be6-a8eb-499733c38e6e": 730,
+        "8261315085495-dim-40d0af67-6436-4be6-a8eb-499733c38e6e": 450,
         "8256099627969-dim-be15eaa6-6df5-41b2-ab7f-6dbe230e6cd9": 2,
         "8261314903663-dim-5e312aa4-a998-4369-92d6-1288fc9f77dc": 600,
         "8256621221664-dim-abd0cf66-0631-4ff9-9763-a4e17da5e852": 365,
         "8256621196150-dim-99b9e4ae-4868-4f1e-93ee-23efc803f97a": 365,
-        "8260381186817-dim-847ff9ec-3631-48f4-a0f7-f016272146ec": 600
+        "8260381186817-dim-847ff9ec-3631-48f4-a0f7-f016272146ec": 700
       },
       "shelfCount": 0,
       "doorEnabled": false,
@@ -116,9 +116,9 @@
       "drawerEnabled": true,
       "drawerQuantity": 3,
       "drawerHeights": [
-        243.3,
-        243.3,
-        243.3
+        150,
+        150,
+        150
       ],
       "kickerHeight": 100,
       "leftLock": false,
@@ -139,12 +139,12 @@
       "subcategoryId": "standard",
       "dimensions": {
         "width": 600,
-        "height": 2400,
-        "depth": 600
+        "height": 2000,
+        "depth": 700
       },
       "viewId": "A",
       "position": {
-        "x": 2135.1831398735862,
+        "x": 2439.121488041063,
         "y": 100,
         "z": 0
       },
@@ -165,12 +165,12 @@
         "1": 1,
         "2": 2,
         "8258155301514-dim-d340a151-df72-4ea7-81ba-21564d7805ae": 2,
-        "8259832525570-dim-665fcc5e-ba1e-46dd-9956-d65942ec8ab0": 4,
-        "8260381186817-dim-847ff9ec-3631-48f4-a0f7-f016272146ec": 600,
+        "8259832525570-dim-665fcc5e-ba1e-46dd-9956-d65942ec8ab0": 10,
+        "8260381186817-dim-847ff9ec-3631-48f4-a0f7-f016272146ec": 700,
         "8261314903663-dim-5e312aa4-a998-4369-92d6-1288fc9f77dc": 600,
-        "8261315085495-dim-40d0af67-6436-4be6-a8eb-499733c38e6e": 2400
+        "8261315085495-dim-40d0af67-6436-4be6-a8eb-499733c38e6e": 2000
       },
-      "shelfCount": 4,
+      "shelfCount": 10,
       "doorEnabled": true,
       "doorCount": 2,
       "overhangDoor": false,
@@ -192,13 +192,13 @@
       "subcategoryId": "standard",
       "dimensions": {
         "width": 831,
-        "height": 758,
-        "depth": 600
+        "height": 550,
+        "depth": 700
       },
       "viewId": "A",
       "position": {
-        "x": 1303.0349257809917,
-        "y": 1742,
+        "x": 1606.9732739484684,
+        "y": 1550,
         "z": 0
       },
       "materialSelections": {
@@ -217,14 +217,14 @@
       "dimensionValues": {
         "1": 1,
         "2": 2,
-        "8261315085495-dim-40d0af67-6436-4be6-a8eb-499733c38e6e": 758,
-        "8260381186817-dim-847ff9ec-3631-48f4-a0f7-f016272146ec": 600,
-        "8259832525570-dim-665fcc5e-ba1e-46dd-9956-d65942ec8ab0": 1,
+        "8261315085495-dim-40d0af67-6436-4be6-a8eb-499733c38e6e": 550,
+        "8260381186817-dim-847ff9ec-3631-48f4-a0f7-f016272146ec": 700,
+        "8259832525570-dim-665fcc5e-ba1e-46dd-9956-d65942ec8ab0": 2,
         "8261314903663-dim-5e312aa4-a998-4369-92d6-1288fc9f77dc": 1032,
         "8258155301514-dim-d340a151-df72-4ea7-81ba-21564d7805ae": 2,
         "8251321365125-dim-14bac23a-23f2-4cd9-a3b5-9e5148fc4397": "YES"
       },
-      "shelfCount": 1,
+      "shelfCount": 2,
       "doorEnabled": true,
       "doorCount": 2,
       "overhangDoor": true,

@@ -1,4 +1,4 @@
-import { useEffect, type MutableRefObject } from "react"
+import { useEffect, type MutableRefObject, useRef } from "react"
 import type { Subcategory } from "@/components/categoriesData"
 import type { WsProducts } from "@/types/erpTypes"
 import type { CabinetType } from "@/features/carcass"
@@ -26,6 +26,18 @@ export const useProductDrivenCreation = ({
   createCabinet,
   setSelectedCabinet,
 }: UseProductDrivenCreationOptions) => {
+  // Use refs for functions to avoid unnecessary effect triggers
+  const createCabinetRef = useRef(createCabinet)
+  const setSelectedCabinetRef = useRef(setSelectedCabinet)
+
+  useEffect(() => {
+    createCabinetRef.current = createCabinet
+  }, [createCabinet])
+
+  useEffect(() => {
+    setSelectedCabinetRef.current = setSelectedCabinet
+  }, [setSelectedCabinet])
+
   useEffect(() => {
     if (!selectedSubcategory || !sceneRef.current) return
 
@@ -62,18 +74,18 @@ export const useProductDrivenCreation = ({
 
     const cabinetType = legacyCategoryMap[type3D] || "base"
 
-    const cabinetData = createCabinet(
+    const cabinetData = createCabinetRef.current(
       cabinetType,
       selectedSubcategory.subcategory.id,
       selectedProductId
     )
-    if (cabinetData) setSelectedCabinet(cabinetData)
+    if (cabinetData) setSelectedCabinetRef.current(cabinetData)
   }, [
-    createCabinet,
+    // createCabinet and setSelectedCabinet are intentionally omitted to prevent infinite loops
+    // as they change on every render when a cabinet is added
     sceneRef,
     selectedProductId,
     selectedSubcategory,
-    setSelectedCabinet,
     wsProducts,
   ])
 }

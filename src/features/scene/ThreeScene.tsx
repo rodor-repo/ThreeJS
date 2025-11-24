@@ -2144,41 +2144,12 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         }}
         onConfirm={() => {
           if (cabinetToDelete) {
-            // Remove from ViewManager if assigned to a view
-            if (cabinetToDelete.viewId && cabinetToDelete.viewId !== 'none') {
-              viewManager.viewManager.assignCabinetToView(cabinetToDelete.cabinetId, 'none')
-            }
-            // Remove group data for this cabinet
-            setCabinetGroups(prev => {
-              const newMap = new Map(prev)
-              newMap.delete(cabinetToDelete.cabinetId)
-              // Also remove this cabinet from any other cabinet's groups
-              newMap.forEach((group, cabinetId) => {
-                const updatedGroup = group.filter(g => g.cabinetId !== cabinetToDelete.cabinetId)
-                if (updatedGroup.length !== group.length) {
-                  // Recalculate percentages if a cabinet was removed
-                  if (updatedGroup.length > 0) {
-                    const total = updatedGroup.reduce((sum, g) => sum + g.percentage, 0)
-                    if (total !== 100) {
-                      updatedGroup.forEach(g => {
-                        g.percentage = Math.round((g.percentage / total) * 100)
-                      })
-                      const finalTotal = updatedGroup.reduce((sum, g) => sum + g.percentage, 0)
-                      if (finalTotal !== 100) {
-                        updatedGroup[0].percentage += (100 - finalTotal)
-                      }
-                    }
-                    newMap.set(cabinetId, updatedGroup)
-                  } else {
-                    newMap.delete(cabinetId)
-                  }
-                }
-              })
-              return newMap
+            handleDeleteCabinet(cabinetToDelete, {
+              viewManager,
+              setCabinetGroups,
+              deleteCabinet,
+              setCabinetToDelete
             })
-            // Delete the cabinet
-            deleteCabinet(cabinetToDelete.cabinetId)
-            setCabinetToDelete(null)
           }
         }}
         itemName="the selected cabinet"

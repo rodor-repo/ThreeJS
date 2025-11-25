@@ -19,7 +19,7 @@ interface MainMenuProps {
   onLoadRoom?: (savedRoom: import('@/data/savedRooms').SavedRoom) => void
 }
 
-const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySelect, selectedCategory, onMenuStateChange, wsProducts, setWsProducts, onLoadRoom }) => {
+const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect: _onCategorySelect, onSubcategorySelect, selectedCategory: _selectedCategory, onMenuStateChange, wsProducts, setWsProducts, onLoadRoom }) => {
   const [isOpen, setIsOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -27,7 +27,6 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySele
   const [selectedRoom, setSelectedRoom] = useState<RoomCategory | null>(null) // New state for selected room
   const [selectedCategoryForSubmenu, setSelectedCategoryForSubmenu] = useState<Category | null>(null)
   const [showSubmenu, setShowSubmenu] = useState(false)
-  const [expandedSubcategories, setExpandedSubcategories] = useState<Record<string, boolean>>({})
   const [savedRooms, setSavedRooms] = useState<SavedRoom[]>([]) // State for saved rooms
   const [loadingRooms, setLoadingRooms] = useState(false) // Loading state for rooms
   const [selectedSubcategoryForDesigns, setSelectedSubcategoryForDesigns] = useState<Subcategory | null>(null)
@@ -141,28 +140,10 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySele
     return set
   }, [mappedCategories, subcategoriesWithProducts])
 
-  const handleCategorySelect = (category: Category) => {
-    onCategorySelect(category)
+  const openDesignsForSubcategory = (category: Category, subcategory: Subcategory) => {
     setSelectedCategoryForSubmenu(category)
-    setShowSubmenu(true)
-    setSelectedSubcategoryForDesigns(null)
-    setExpandedDesigns({})
-    onMenuStateChange?.(true)
-  }
-
-  const closeSubmenu = () => {
-    setShowSubmenu(false)
-    setSelectedCategoryForSubmenu(null)
-    setSelectedSubcategoryForDesigns(null)
-    setExpandedDesigns({})
-  }
-
-  const toggleSubcategoryExpand = (subcategoryId: string) => {
-    setExpandedSubcategories(prev => ({ ...prev, [subcategoryId]: !prev[subcategoryId] }))
-  }
-
-  const openDesignsForSubcategory = (subcategory: Subcategory) => {
     setSelectedSubcategoryForDesigns(subcategory)
+    setShowSubmenu(true)
     setExpandedDesigns({})
   }
 
@@ -207,15 +188,15 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySele
   const toggleMenu = () => {
     const newState = !isOpen
     setIsOpen(newState)
-      // Immediately close submenu when main menu is closed for better responsiveness
-      if (!newState) {
-        setSelectedTopLevelMenu(null) // Reset top-level menu selection
-        setSelectedRoom(null)
-        setShowSubmenu(false)
-        setSelectedCategoryForSubmenu(null)
-        setSelectedSubcategoryForDesigns(null)
-        setExpandedDesigns({})
-      }
+    // Immediately close submenu when main menu is closed for better responsiveness
+    if (!newState) {
+      setSelectedTopLevelMenu(null) // Reset top-level menu selection
+      setSelectedRoom(null)
+      setShowSubmenu(false)
+      setSelectedCategoryForSubmenu(null)
+      setSelectedSubcategoryForDesigns(null)
+      setExpandedDesigns({})
+    }
     onMenuStateChange?.(newState)
   }
 
@@ -248,10 +229,10 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySele
   // Handle room deletion
   const handleDeleteRoom = useCallback(async (room: SavedRoom, e: React.MouseEvent) => {
     e.stopPropagation() // Prevent triggering the load room action
-    
+
     // Show confirmation alert
     const confirmed = window.confirm(`Are you sure you want to delete "${room.name}"? This action cannot be undone.`)
-    
+
     if (!confirmed) {
       return
     }
@@ -259,17 +240,17 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySele
     try {
       // Delete from local folder
       const deleted = await deleteSavedRoom(room.id)
-      
+
       if (deleted) {
         // TODO: Delete from Firebase database in future stage
         // await deleteRoomFromFirebase(room.id)
-        
+
         // Refresh the saved rooms list
         if (selectedRoom) {
           const rooms = await getSavedRoomsByCategory(selectedRoom)
           setSavedRooms(rooms)
         }
-        
+
         alert(`Room "${room.name}" has been deleted successfully.`)
       } else {
         alert(`Failed to delete room "${room.name}". Please try again.`)
@@ -287,7 +268,7 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySele
         setSavedRooms([])
         return
       }
-      
+
       setLoadingRooms(true)
       try {
         const rooms = await getSavedRoomsByCategory(selectedRoom)
@@ -380,7 +361,7 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySele
                         {selectedTopLevelMenu === 'cabinets' ? 'Cabinets' : selectedTopLevelMenu === 'appliances' ? 'Appliances' : selectedRoom || 'Rooms'}
                       </h2>
                       <p className="text-gray-600 mt-2">
-                        {selectedTopLevelMenu === 'cabinets' ? 'Select a category to get started' : selectedTopLevelMenu === 'appliances' ? 'Select an appliance' : selectedRoom ? '' : 'Select a room type'}
+                        {selectedTopLevelMenu === 'cabinets' ? 'Select a subcategory' : selectedTopLevelMenu === 'appliances' ? 'Select an appliance' : selectedRoom ? '' : 'Select a room type'}
                       </p>
                     </div>
                   </div>
@@ -441,7 +422,7 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySele
                 </div>
               )}
 
-              {/* Categories (shown when Cabinets is selected) */}
+              {/* Subcategories grouped by Category (shown when Cabinets is selected) */}
               {selectedTopLevelMenu === 'cabinets' && (
                 <div className="p-2 sm:p-4">
                   {loading ? (
@@ -459,43 +440,40 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySele
                       </button>
                     </div>
                   ) : (
-                    <div className="space-y-3">
-                      {mappedCategories.map((category) => {
-                        const isEnabled = categoriesWithProducts.has(category.id)
-                        return (
-                          <motion.button
-                            key={category.id}
-                            onClick={() => isEnabled && handleCategorySelect(category)}
-                            disabled={!isEnabled}
-                            className={`w-full p-4 rounded-lg border-2 transition-all duration-150 ${isEnabled
-                                ? `hover:shadow-md ${selectedCategory?.id === category.id
-                                  ? 'border-blue-500 bg-blue-50 shadow-md'
-                                  : 'border-gray-200 hover:border-gray-300'
-                                }`
-                                : 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
-                              }`}
-                            whileHover={isEnabled ? { scale: 1.01 } : {}}
-                            whileTap={isEnabled ? { scale: 0.99 } : {}}
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center space-x-3">
-                                <div
-                                  className="text-2xl"
-                                  style={{ color: isEnabled ? category.color : '#9CA3AF' }}
-                                >
-                                  {category.icon}
-                                </div>
-                                <div className="text-left">
-                                  <h3 className={`font-semibold ${isEnabled ? 'text-gray-800' : 'text-gray-400'}`}>
-                                    {category.name}
-                                  </h3>
-                                </div>
+                    <div className="space-y-4">
+                      {mappedCategories
+                        .filter((category) => categoriesWithProducts.has(category.id))
+                        .map((category) => {
+                          const filteredSubs = category.subcategories.filter((sub) => subcategoriesWithProducts.has(sub.id))
+                          if (filteredSubs.length === 0) return null
+                          return (
+                            <div key={category.id}>
+                              {/* Category header - subtle */}
+                              <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2 px-1">
+                                {category.name}
+                              </h4>
+                              {/* Subcategories */}
+                              <div className="space-y-2">
+                                {filteredSubs.map((subcategory) => (
+                                  <motion.button
+                                    key={subcategory.id}
+                                    onClick={() => openDesignsForSubcategory(category, subcategory)}
+                                    className="w-full p-3 rounded-lg border-2 transition-all duration-150 border-gray-200 hover:border-gray-300 hover:shadow-md hover:bg-gray-50"
+                                    whileHover={{ scale: 1.01 }}
+                                    whileTap={{ scale: 0.99 }}
+                                  >
+                                    <div className="flex items-center justify-between">
+                                      <h3 className="font-semibold text-gray-800 text-left">
+                                        {subcategory.name}
+                                      </h3>
+                                      <ChevronRight size={18} className="text-gray-400" />
+                                    </div>
+                                  </motion.button>
+                                ))}
                               </div>
-                              <ChevronRight size={20} className={isEnabled ? 'text-gray-400' : 'text-gray-300'} />
                             </div>
-                          </motion.button>
-                        )
-                      })}
+                          )
+                        })}
                     </div>
                   )}
                 </div>
@@ -602,68 +580,12 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySele
               )}
             </motion.div>
 
-            {/* Submenu Panel */}
+            {/* Designs Panel */}
             <AnimatePresence>
-              {showSubmenu && selectedCategoryForSubmenu && (
+              {showSubmenu && selectedSubcategoryForDesigns && selectedCategoryForSubmenu && (
                 <motion.div
                   initial={{ x: '-100%' }}
                   animate={{ x: '320px' }}
-                  exit={{ x: '-100%' }}
-                  transition={{ duration: 0 }}
-                  className="fixed left-0 top-0 h-full w-80 max-w-[90vw] bg-white shadow-2xl z-50 overflow-y-auto overflow-x-hidden border-l border-gray-200 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100"
-                >
-                  {/* Submenu Header */}
-                  <div className="p-3 sm:p-6 border-b border-gray-200 bg-gray-50">
-                    <div className="flex items-center space-x-3">
-                      <button
-                        onClick={closeSubmenu}
-                        className="p-2 hover:bg-gray-200 rounded-full transition-colors duration-150"
-                      >
-                        <ChevronRight size={20} className="text-gray-600 rotate-180" />
-                      </button>
-                      <div>
-                        <h2 className="text-xl font-bold text-gray-800">{selectedCategoryForSubmenu.name}</h2>
-                        {/* Category description removed per UI note */}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Subcategories */}
-                  <div className="p-2 sm:p-4">
-                    <div className="space-y-3">
-                      {selectedCategoryForSubmenu.subcategories.map((subcategory) => {
-                        const isEnabled = subcategoriesWithProducts.has(subcategory.id)
-                        return (
-                          <motion.button
-                            key={subcategory.id}
-                            onClick={() => isEnabled && openDesignsForSubcategory(subcategory)}
-                            disabled={!isEnabled}
-                            className={`w-full p-4 rounded-lg border-2 transition-all duration-150 ${isEnabled
-                                ? 'border-gray-200 hover:border-gray-300 hover:shadow-md hover:bg-gray-50'
-                                : 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
-                              }`}
-                            whileHover={isEnabled ? { scale: 1.01 } : {}}
-                            whileTap={isEnabled ? { scale: 0.99 } : {}}
-                          >
-                            <div className="text-left">
-                              <h3 className={`font-semibold ${isEnabled ? 'text-gray-800' : 'text-gray-400'}`}>
-                                {subcategory.name}
-                              </h3>
-                            </div>
-                          </motion.button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-            {/* Designs Panel */}
-            <AnimatePresence>
-              {showSubmenu && selectedCategoryForSubmenu && selectedSubcategoryForDesigns && (
-                <motion.div
-                  initial={{ x: '-100%' }}
-                  animate={{ x: '640px' }}
                   exit={{ x: '-100%' }}
                   transition={{ duration: 0 }}
                   className="fixed left-0 top-0 h-full w-80 max-w-[90vw] bg-white shadow-2xl z-50 overflow-y-auto overflow-x-hidden border-l border-gray-200 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100"
@@ -687,64 +609,64 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySele
                   {/* Designs and products */}
                   <div className="p-2 sm:p-4">
                     <div className="space-y-3">
-                      {(designsBySubId[selectedSubcategoryForDesigns.id] || []).map((design) => {
-                        const isExpanded = !!expandedDesigns[design.id]
-                        const products = productsByDesignId[design.id] || []
-                        const isEnabled = designsWithProducts.has(design.id)
-                        return (
-                          <div key={design.id} className={`border-2 rounded-lg overflow-hidden ${isEnabled ? 'border-gray-200' : 'border-gray-200 bg-gray-50 opacity-50'}`}>
-                            <button
-                              onClick={() => isEnabled && toggleDesignExpand(design.id)}
-                              disabled={!isEnabled}
-                              className={`w-full p-4 flex items-center justify-between transition-colors duration-150 ${isEnabled ? 'hover:bg-gray-50 cursor-pointer' : 'cursor-not-allowed'}`}
-                            >
-                              <span className={`font-semibold ${isEnabled ? 'text-gray-800' : 'text-gray-400'}`}>{design.name}</span>
-                              <ChevronRight size={18} className={`transition-transform ${isExpanded ? 'rotate-90' : ''} ${isEnabled ? 'text-gray-500' : 'text-gray-300'}`} />
-                            </button>
+                      {(designsBySubId[selectedSubcategoryForDesigns.id] || [])
+                        .filter((design) => designsWithProducts.has(design.id))
+                        .map((design) => {
+                          const isExpanded = !!expandedDesigns[design.id]
+                          const products = productsByDesignId[design.id] || []
+                          return (
+                            <div key={design.id} className="border-2 rounded-lg overflow-hidden border-gray-200">
+                              <button
+                                onClick={() => toggleDesignExpand(design.id)}
+                                className="w-full p-4 flex items-center justify-between transition-colors duration-150 hover:bg-gray-50 cursor-pointer"
+                              >
+                                <span className="font-semibold text-gray-800">{design.name}</span>
+                                <ChevronRight size={18} className={`transition-transform ${isExpanded ? 'rotate-90' : ''} text-gray-500`} />
+                              </button>
 
-                            <AnimatePresence initial={false}>
-                              {isExpanded && (
-                                <motion.div
-                                  initial={{ height: 0, opacity: 0 }}
-                                  animate={{ height: 220, opacity: 1 }}
-                                  exit={{ height: 0, opacity: 0 }}
-                                  transition={{ duration: 0.2 }}
-                                  className="px-2 pb-2"
-                                >
-                                  <div className="max-h-52 overflow-y-auto rounded-md border border-gray-200 bg-white">
-                                    {products.length === 0 ? (
-                                      <div className="p-3 text-sm text-gray-500">No products found</div>
-                                    ) : (
-                                      <ul className="divide-y divide-gray-100">
-                                        {products.map(p => (
-                                          <li key={p.id}>
-                                            <button
-                                              onClick={() => handleProductClick(selectedCategoryForSubmenu, selectedSubcategoryForDesigns, p.id)}
-                                              className="w-full flex items-center gap-3 p-2 hover:bg-gray-50 transition-colors text-left"
-                                            >
-                                              <div className="w-12 h-12 flex-shrink-0 bg-gray-100 rounded overflow-hidden">
-                                                {p.img ? (
-                                                  // eslint-disable-next-line @next/next/no-img-element
-                                                  <img src={p.img} alt={p.name} className="w-full h-full object-cover" />
-                                                ) : (
-                                                  <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">No Image</div>
-                                                )}
-                                              </div>
-                                              <div className="flex-1 min-w-0">
-                                                <p className="text-sm font-medium text-gray-800 whitespace-normal break-words leading-snug">{p.name}</p>
-                                              </div>
-                                            </button>
-                                          </li>
-                                        ))}
-                                      </ul>
-                                    )}
-                                  </div>
-                                </motion.div>
-                              )}
-                            </AnimatePresence>
-                          </div>
-                        )
-                      })}
+                              <AnimatePresence initial={false}>
+                                {isExpanded && (
+                                  <motion.div
+                                    initial={{ height: 0, opacity: 0 }}
+                                    animate={{ height: 220, opacity: 1 }}
+                                    exit={{ height: 0, opacity: 0 }}
+                                    transition={{ duration: 0.2 }}
+                                    className="px-2 pb-2"
+                                  >
+                                    <div className="max-h-52 overflow-y-auto rounded-md border border-gray-200 bg-white">
+                                      {products.length === 0 ? (
+                                        <div className="p-3 text-sm text-gray-500">No products found</div>
+                                      ) : (
+                                        <ul className="divide-y divide-gray-100">
+                                          {products.map(p => (
+                                            <li key={p.id}>
+                                              <button
+                                                onClick={() => handleProductClick(selectedCategoryForSubmenu, selectedSubcategoryForDesigns, p.id)}
+                                                className="w-full flex items-center gap-3 p-2 hover:bg-gray-50 transition-colors text-left"
+                                              >
+                                                <div className="w-12 h-12 flex-shrink-0 bg-gray-100 rounded overflow-hidden">
+                                                  {p.img ? (
+                                                    // eslint-disable-next-line @next/next/no-img-element
+                                                    <img src={p.img} alt={p.name} className="w-full h-full object-cover" />
+                                                  ) : (
+                                                    <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">No Image</div>
+                                                  )}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                  <p className="text-sm font-medium text-gray-800 whitespace-normal break-words leading-snug">{p.name}</p>
+                                                </div>
+                                              </button>
+                                            </li>
+                                          ))}
+                                        </ul>
+                                      )}
+                                    </div>
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
+                            </div>
+                          )
+                        })}
                     </div>
                   </div>
                 </motion.div>

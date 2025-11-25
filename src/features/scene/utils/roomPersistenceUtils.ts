@@ -228,6 +228,9 @@ export function restoreRoom({
         }
       })
 
+      const oldIdToNewId = new Map<string, string>()
+
+      // Pass 1: Create cabinets and build ID map
       savedRoom.cabinets.forEach((savedCabinet) => {
         const cabinetData = createCabinet(
           savedCabinet.cabinetType as CabinetType,
@@ -239,6 +242,8 @@ export function restoreRoom({
           console.error("Failed to create cabinet:", savedCabinet)
           return
         }
+
+        oldIdToNewId.set(savedCabinet.cabinetId, cabinetData.cabinetId)
 
         cabinetData.carcass.updateDimensions(savedCabinet.dimensions)
 
@@ -329,23 +334,47 @@ export function restoreRoom({
           )
         }
 
-        if (savedCabinet.group && savedCabinet.group.length > 0) {
-          setCabinetGroups((prev) => {
-            const newMap = new Map(prev)
-            newMap.set(cabinetData.cabinetId, savedCabinet.group!)
-            return newMap
-          })
-        }
-
         if (savedCabinet.sortNumber !== undefined) {
           cabinetData.sortNumber = savedCabinet.sortNumber
+        }
+      })
+
+      // Pass 2: Restore groups and syncs using ID map
+      savedRoom.cabinets.forEach((savedCabinet) => {
+        const newCabinetId = oldIdToNewId.get(savedCabinet.cabinetId)
+        if (!newCabinetId) return
+
+        if (savedCabinet.group && savedCabinet.group.length > 0) {
+          const mappedGroup = savedCabinet.group
+            .map((g) => ({
+              cabinetId: oldIdToNewId.get(g.cabinetId) || g.cabinetId,
+              percentage: g.percentage,
+            }))
+            .filter((g) => g.cabinetId)
+
+          if (mappedGroup.length > 0) {
+            setCabinetGroups((prev) => {
+              const newMap = new Map(prev)
+              newMap.set(newCabinetId, mappedGroup)
+              return newMap
+            })
+          }
         }
       })
 
       if (savedRoom.cabinetSyncs && setCabinetSyncs) {
         const syncsMap = new Map<string, string[]>()
         savedRoom.cabinetSyncs.forEach((sync) => {
-          syncsMap.set(sync.cabinetId, sync.syncedWith)
+          const newSourceId = oldIdToNewId.get(sync.cabinetId)
+          if (newSourceId) {
+            const mappedSyncedWith = sync.syncedWith
+              .map((id) => oldIdToNewId.get(id))
+              .filter((id): id is string => !!id)
+
+            if (mappedSyncedWith.length > 0) {
+              syncsMap.set(newSourceId, mappedSyncedWith)
+            }
+          }
         })
         setCabinetSyncs(syncsMap)
       }

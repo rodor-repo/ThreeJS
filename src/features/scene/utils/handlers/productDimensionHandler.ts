@@ -139,204 +139,59 @@ export const handleProductDimensionChange = (
         )
         const cabinetsToLeft = sortedSyncCabinets.slice(0, changingCabinetIndex)
 
-        // Distribute width delta among other selected synced cabinets
-        // Repositioning depends on position in X-SyncList:
-        // - Rightmost cabinets: resize and maintain right edge position (move left)
-        // - Middle cabinets: resize and reposition left based on adjustments from right
-        if (cabinetsToRight.length > 0) {
-          // Distribute delta among cabinets to the right
-          // Negative delta (width decreased) means other cabinets increase width
-          // Positive delta (width increased) means other cabinets decrease width
-          const deltaPerCabinet = -widthDelta / cabinetsToRight.length
+        // Distribute width delta among other synced cabinets
+        // The algorithm is simple:
+        // 1. Update all widths (changing cabinet gets new width, others shrink/grow proportionally)
+        // 2. Reposition all cabinets left-to-right, maintaining edge-to-edge contact
+        // This ensures: leftmost left edge fixed, rightmost right edge fixed (total width preserved)
 
-          // Store rightmost right edge to maintain it
-          const rightmostCabinet = cabinetsToRight[cabinetsToRight.length - 1]
-          const rightmostRightEdge =
-            rightmostCabinet.group.position.x +
-            rightmostCabinet.carcass.dimensions.width
+        // Calculate how many other cabinets need to absorb the delta
+        const otherSyncCabinets = sortedSyncCabinets.filter(
+          (c) => c.cabinetId !== selectedCabinet.cabinetId
+        )
+        const deltaPerCabinet = -widthDelta / otherSyncCabinets.length
 
-          // Process from rightmost to leftmost (right to left)
-          // Rightmost: Size adjustment, extend left (right edge fixed), Position: No move (right edge stays fixed)
-          // Middle: Size adjustment, extend left, Position: Move left by width increase of cabinets to the right
+        console.log(
+          `[Sync] Distributing delta: widthDelta=${widthDelta}, otherCabinets=${otherSyncCabinets.length}, deltaPerCabinet=${deltaPerCabinet}`
+        )
 
-          // First, calculate width increases for all cabinets
-          const widthIncreases: number[] = []
-          for (let i = 0; i < cabinetsToRight.length; i++) {
-            widthIncreases.push(deltaPerCabinet)
-          }
-
-          // Process from rightmost to leftmost
-          // IMPORTANT: Process rightmost first, then middle cabinets
-          // This ensures we can calculate cumulative shifts correctly
-          for (let i = cabinetsToRight.length - 1; i >= 0; i--) {
-            const cab = cabinetsToRight[i]
-            const oldWidth = cab.carcass.dimensions.width
-            const newWidth = oldWidth + deltaPerCabinet
-            const oldCabX = cab.group.position.x
-
-            if (i === cabinetsToRight.length - 1) {
-              // Cabinet #3 (rightmost):
-              // - Size adjustment: +deltaPerCabinet
-              // - Direction: Like locked on right (extend toward X negative/left)
-              // - Position: No move (right edge stays fixed, so X moves left by width increase)
-
-              // Update dimensions first
-              cab.carcass.updateDimensions({
-                width: newWidth,
-                height: cab.carcass.dimensions.height,
-                depth: cab.carcass.dimensions.depth,
-              })
-
-              const newCabX = rightmostRightEdge - newWidth
-              // Only clamp left boundary - right wall can be penetrated
-              const clampedX = Math.max(0, newCabX)
-
-              console.log(
-                `[Sync] Rightmost cabinet (index ${i}): oldX=${oldCabX.toFixed(
-                  2
-                )}, newWidth=${newWidth.toFixed(
-                  2
-                )}, rightEdge=${rightmostRightEdge.toFixed(
-                  2
-                )}, newX=${newCabX.toFixed(2)}, clampedX=${clampedX.toFixed(2)}`
-              )
-
-              cab.group.position.set(
-                clampedX,
-                cab.group.position.y,
-                cab.group.position.z
-              )
-            } else {
-              // Cabinet #2 (middle):
-              // - Size adjustment: +deltaPerCabinet (e.g., +50mm)
-              // - Direction: Like locked from right (extend toward X negative/left)
-              // - Position: Move left by cumulative width increase of cabinets to the right
-
-              // Calculate how many cabinets are to the right (higher indices)
-              const cabinetsToRightCount = cabinetsToRight.length - (i + 1)
-              // Each cabinet to the right increased by deltaPerCabinet
-              // Example: If #3 (1 cabinet to the right) increased by 50mm, #2 moves left by 50mm
-              const cumulativeWidthIncrease =
-                cabinetsToRightCount * deltaPerCabinet
-
-              // Update dimensions first
-              cab.carcass.updateDimensions({
-                width: newWidth,
-                height: cab.carcass.dimensions.height,
-                depth: cab.carcass.dimensions.depth,
-              })
-
-              // Move left by the cumulative width increase
-              // This ensures Cabinet #2 moves left by the width increase of Cabinet #3
-              const newCabX = oldCabX - cumulativeWidthIncrease
-
-              // Clamp to wall boundaries
-              // Only clamp left boundary - right wall can be penetrated
-              const clampedX = Math.max(0, newCabX)
-
-              console.log(
-                `[Sync] Middle cabinet (index ${i}): oldX=${oldCabX.toFixed(
-                  2
-                )}, cumulativeWidthIncrease=${cumulativeWidthIncrease.toFixed(
-                  2
-                )}, newX=${newCabX.toFixed(2)}, clampedX=${clampedX.toFixed(
-                  2
-                )}, newWidth=${newWidth.toFixed(2)}`
-              )
-
-              // Set position - this should move Cabinet #2 left by cumulativeWidthIncrease
-              // Use set() with all three coordinates to ensure position is updated
-              cab.group.position.set(
-                clampedX,
-                cab.group.position.y,
-                cab.group.position.z
-              )
-
-              // Force update matrix to ensure position change is applied
-              cab.group.updateMatrixWorld(true)
-
-              // Verify position was set correctly
-              const actualX = cab.group.position.x
-              console.log(
-                `[Sync] Position set - Expected: ${clampedX.toFixed(
-                  2
-                )}, Actual: ${actualX.toFixed(2)}, Difference: ${(
-                  actualX - clampedX
-                ).toFixed(2)}`
-              )
-
-              if (Math.abs(actualX - clampedX) > 0.1) {
-                console.warn(
-                  `[Sync] ⚠️ Position mismatch! Expected ${clampedX.toFixed(
-                    2
-                  )}, got ${actualX.toFixed(2)}`
-                )
-              } else {
-                console.log(
-                  `[Sync] ✅ Position set correctly for middle cabinet`
-                )
-              }
-            }
-          }
-
-          // Calculate total width increase for left cabinets
-          const totalWidthIncrease = cabinetsToRight.length * deltaPerCabinet
-
-          // If there are cabinets to the left of changing cabinet, shift them left too
-          if (cabinetsToLeft.length > 0) {
-            // Shift left by the total width increase of all right cabinets
-            cabinetsToLeft.forEach((cab) => {
-              const newCabX = cab.group.position.x - totalWidthIncrease
-              cab.group.position.set(
-                Math.max(0, newCabX), // Only clamp left boundary - right wall can be penetrated
-                cab.group.position.y,
-                cab.group.position.z
-              )
-            })
-          }
-        } else if (cabinetsToLeft.length > 0) {
-          // All cabinets to adjust are on the left - extend right
-          // Negative delta (width decreased) means left cabinets increase width
-          // Positive delta (width increased) means left cabinets decrease width
-          const deltaPerCabinet = -widthDelta / cabinetsToLeft.length
-
-          // Leftmost cabinet maintains left edge, others shift right
-          cabinetsToLeft.forEach((cab, index) => {
-            const newWidth = cab.carcass.dimensions.width + deltaPerCabinet
-            const oldCabX = cab.group.position.x
-
-            // Update dimensions
-            cab.carcass.updateDimensions({
-              width: newWidth,
-              height: cab.carcass.dimensions.height,
-              depth: cab.carcass.dimensions.depth,
-            })
-
-            if (index === 0) {
-              // Leftmost: maintain left edge position (X stays same, extends right)
-              // Only clamp left boundary - right wall can be penetrated
-              const clampedX = Math.max(0, oldCabX)
-              cab.group.position.set(
-                clampedX,
-                cab.group.position.y,
-                cab.group.position.z
-              )
-            } else {
-              // Middle cabinets: shift right based on cumulative width changes from left
-              // Calculate cumulative shift from all cabinets to the left
-              let cumulativeRightShift = 0
-              for (let j = 0; j < index; j++) {
-                cumulativeRightShift += deltaPerCabinet
-              }
-              const newCabX = oldCabX + cumulativeRightShift
-              cab.group.position.set(
-                Math.max(0, newCabX), // Only clamp left boundary - right wall can be penetrated
-                cab.group.position.y,
-                cab.group.position.z
-              )
-            }
+        // Update widths for all other synced cabinets
+        otherSyncCabinets.forEach((cab) => {
+          const newWidth = cab.carcass.dimensions.width + deltaPerCabinet
+          cab.carcass.updateDimensions({
+            width: newWidth,
+            height: cab.carcass.dimensions.height,
+            depth: cab.carcass.dimensions.depth,
           })
-        }
+          console.log(
+            `[Sync] Updated width for cabinet: oldWidth=${(
+              newWidth - deltaPerCabinet
+            ).toFixed(2)}, newWidth=${newWidth.toFixed(2)}`
+          )
+        })
+
+        // Reposition all cabinets left-to-right, starting from leftmost position
+        let currentX = leftmostX
+        sortedSyncCabinets.forEach((cab, index) => {
+          const clampedX = Math.max(0, currentX)
+          console.log(
+            `[Sync] Positioning cabinet ${index}: X=${clampedX.toFixed(
+              2
+            )}, width=${cab.carcass.dimensions.width.toFixed(2)}`
+          )
+          cab.group.position.set(
+            clampedX,
+            cab.group.position.y,
+            cab.group.position.z
+          )
+          currentX += cab.carcass.dimensions.width
+        })
+
+        console.log(
+          `[Sync] Final right edge: ${currentX.toFixed(
+            2
+          )}, expected: ${rightmostX.toFixed(2)}`
+        )
 
         // Sync logic applied - skip pair system and lock system
         return

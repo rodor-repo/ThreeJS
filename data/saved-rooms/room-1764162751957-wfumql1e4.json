@@ -1,0 +1,205 @@
+{
+  "id": "room-1764162751957-wfumql1e4",
+  "name": "test new 2",
+  "category": "Kitchen",
+  "savedAt": "2025-11-26T13:12:31.957Z",
+  "wallSettings": {
+    "height": 2700,
+    "length": 4000,
+    "color": "#dcbfa0",
+    "backWallLength": 4000,
+    "leftWallLength": 600,
+    "rightWallLength": 600,
+    "leftWallVisible": true,
+    "rightWallVisible": true,
+    "additionalWalls": []
+  },
+  "cabinets": [
+    {
+      "cabinetId": "cabinet-1764162716684",
+      "productId": "8253380203552-Product-fe355647-55c4-4cce-b77b-20bf68a9f0db",
+      "productName": "Base Pull out Door Cabinet",
+      "cabinetType": "base",
+      "subcategoryId": "standard",
+      "dimensions": {
+        "width": 600,
+        "height": 720,
+        "depth": 600
+      },
+      "viewId": "A",
+      "position": {
+        "x": 0,
+        "y": 100,
+        "z": 0
+      },
+      "materialSelections": {
+        "8261315543186-ebc50a1c-c56e-417f-91f7-07c1c482c084": {
+          "priceRangeId": "8267397881822-e37c1cb7-7204-4c15-86c8-31c559626784",
+          "colorId": "8267768680717-color-bf7856ce-77f4-4413-96aa-02ef4df44793",
+          "finishId": "8267769252261-finish-29d69792-7601-4912-b1f2-f6fe7cee4104"
+        },
+        "8258413213288-886694e9-db95-427a-ac62-a20422aca3cf": {
+          "priceRangeId": "8267602758367-50d4a8bc-e4fc-430e-95d7-d59022992fc6",
+          "colorId": "8252116682325-color-fb3e0766-5137-4b8a-860f-a585e0934bdf",
+          "finishId": "8253753365439-finish-b25f9fc2-672e-4831-aa88-3cfade50dfa7"
+        }
+      },
+      "materialColor": "#ffffff",
+      "dimensionValues": {
+        "1": 1,
+        "2": 2,
+        "8258155301514-dim-d340a151-df72-4ea7-81ba-21564d7805ae": 1,
+        "8261314903663-dim-5e312aa4-a998-4369-92d6-1288fc9f77dc": 600,
+        "8261315085495-dim-40d0af67-6436-4be6-a8eb-499733c38e6e": 720,
+        "8260381186817-dim-847ff9ec-3631-48f4-a0f7-f016272146ec": 600
+      },
+      "shelfCount": 2,
+      "doorEnabled": true,
+      "doorCount": 2,
+      "overhangDoor": false,
+      "drawerEnabled": false,
+      "drawerQuantity": 3,
+      "drawerHeights": [
+        240,
+        240,
+        240
+      ],
+      "kickerHeight": 100,
+      "sortNumber": 1
+    },
+    {
+      "cabinetId": "cabinet-1764162716691",
+      "productId": "8255901116507-Product-0c5b13bb-1f64-474d-8ed1-5d284ea0ecc2",
+      "productName": "Custom 3 Drawers Pot Drawer Cabinet",
+      "cabinetType": "base",
+      "subcategoryId": "drawer",
+      "dimensions": {
+        "width": 600,
+        "height": 730,
+        "depth": 600
+      },
+      "viewId": "A",
+      "position": {
+        "x": 599.9999999999991,
+        "y": 100,
+        "z": 0
+      },
+      "materialSelections": {
+        "8261315543186-ebc50a1c-c56e-417f-91f7-07c1c482c084": {
+          "priceRangeId": "8267397881822-e37c1cb7-7204-4c15-86c8-31c559626784",
+          "colorId": "8267768680717-color-bf7856ce-77f4-4413-96aa-02ef4df44793",
+          "finishId": "8267769252261-finish-29d69792-7601-4912-b1f2-f6fe7cee4104"
+        },
+        "8258413213288-886694e9-db95-427a-ac62-a20422aca3cf": {
+          "priceRangeId": "8267602758367-50d4a8bc-e4fc-430e-95d7-d59022992fc6",
+          "colorId": "8252116682325-color-fb3e0766-5137-4b8a-860f-a585e0934bdf",
+          "finishId": "8253753365439-finish-b25f9fc2-672e-4831-aa88-3cfade50dfa7"
+        }
+      },
+      "materialColor": "#ffffff",
+      "dimensionValues": {
+        "1": 1,
+        "2": 2,
+        "8261315085495-dim-40d0af67-6436-4be6-a8eb-499733c38e6e": 730,
+        "8260381186817-dim-847ff9ec-3631-48f4-a0f7-f016272146ec": 600,
+        "8261314903663-dim-5e312aa4-a998-4369-92d6-1288fc9f77dc": 600,
+        "8256621221664-dim-abd0cf66-0631-4ff9-9763-a4e17da5e852": 180,
+        "8256621196150-dim-99b9e4ae-4868-4f1e-93ee-23efc803f97a": 220,
+        "8256621159070-dim-3d9ba507-6863-4ce5-ab7b-d397472c4bea": 330,
+        "8256099627969-dim-be15eaa6-6df5-41b2-ab7f-6dbe230e6cd9": 3
+      },
+      "shelfCount": 0,
+      "doorEnabled": false,
+      "doorCount": 2,
+      "overhangDoor": false,
+      "drawerEnabled": true,
+      "drawerQuantity": 3,
+      "drawerHeights": [
+        180,
+        220,
+        330
+      ],
+      "kickerHeight": 100,
+      "sortNumber": 2
+    },
+    {
+      "cabinetId": "cabinet-1764162716698",
+      "productId": "8255901116507-Product-0c5b13bb-1f64-474d-8ed1-5d284ea0ecc2",
+      "productName": "Custom 3 Drawers Pot Drawer Cabinet",
+      "cabinetType": "base",
+      "subcategoryId": "drawer",
+      "dimensions": {
+        "width": 600,
+        "height": 730,
+        "depth": 600
+      },
+      "viewId": "A",
+      "position": {
+        "x": 1199.999999999999,
+        "y": 100,
+        "z": 0
+      },
+      "materialSelections": {
+        "8261315543186-ebc50a1c-c56e-417f-91f7-07c1c482c084": {
+          "priceRangeId": "8267397881822-e37c1cb7-7204-4c15-86c8-31c559626784",
+          "colorId": "8267768680717-color-bf7856ce-77f4-4413-96aa-02ef4df44793",
+          "finishId": "8267769252261-finish-29d69792-7601-4912-b1f2-f6fe7cee4104"
+        },
+        "8258413213288-886694e9-db95-427a-ac62-a20422aca3cf": {
+          "priceRangeId": "8267602758367-50d4a8bc-e4fc-430e-95d7-d59022992fc6",
+          "colorId": "8252116682325-color-fb3e0766-5137-4b8a-860f-a585e0934bdf",
+          "finishId": "8253753365439-finish-b25f9fc2-672e-4831-aa88-3cfade50dfa7"
+        }
+      },
+      "materialColor": "#ffffff",
+      "dimensionValues": {
+        "1": 1,
+        "2": 2,
+        "8261315085495-dim-40d0af67-6436-4be6-a8eb-499733c38e6e": 730,
+        "8260381186817-dim-847ff9ec-3631-48f4-a0f7-f016272146ec": 600,
+        "8261314903663-dim-5e312aa4-a998-4369-92d6-1288fc9f77dc": 600,
+        "8256621221664-dim-abd0cf66-0631-4ff9-9763-a4e17da5e852": 180,
+        "8256621196150-dim-99b9e4ae-4868-4f1e-93ee-23efc803f97a": 220,
+        "8256621159070-dim-3d9ba507-6863-4ce5-ab7b-d397472c4bea": 330,
+        "8256099627969-dim-be15eaa6-6df5-41b2-ab7f-6dbe230e6cd9": 3
+      },
+      "shelfCount": 0,
+      "doorEnabled": false,
+      "doorCount": 2,
+      "overhangDoor": false,
+      "drawerEnabled": true,
+      "drawerQuantity": 3,
+      "drawerHeights": [
+        243.3,
+        243.3,
+        243.3
+      ],
+      "kickerHeight": 100,
+      "sortNumber": 3
+    }
+  ],
+  "views": [
+    {
+      "id": "A",
+      "name": "View A",
+      "cabinetIds": [
+        "cabinet-1764162582491",
+        "cabinet-1764162586392",
+        "cabinet-1764162616229",
+        "cabinet-1764162651679",
+        "cabinet-1764162651689",
+        "cabinet-1764162651699",
+        "cabinet-1764162655556",
+        "cabinet-1764162655563",
+        "cabinet-1764162655571",
+        "cabinet-1764162709005",
+        "cabinet-1764162709013",
+        "cabinet-1764162709021",
+        "cabinet-1764162716684",
+        "cabinet-1764162716691",
+        "cabinet-1764162716698"
+      ]
+    }
+  ],
+  "cabinetSyncs": []
+}

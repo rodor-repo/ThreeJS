@@ -548,7 +548,8 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
           drawerQuantity: selectedCabinet.carcass.config.drawerQuantity,
           drawerHeights: selectedCabinet.carcass.config.drawerHeights,
           cabinetId: selectedCabinet.cabinetId,
-          viewId: selectedCabinet.viewId
+          viewId: selectedCabinet.viewId,
+          carcass: selectedCabinet.carcass
         } : null}
         viewManager={viewManager}
         allCabinets={cabinets}
@@ -703,12 +704,12 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
             setSelectedCabinet({ ...selectedCabinet })
           }
         }}
-        onDrawerHeightChange={(index, height) => {
+        onDrawerHeightChange={(index, height, changedId) => {
           if (selectedCabinet) {
-            console.log('Updating drawer height:', index, height);
+            console.log('Updating drawer height:', index, height, changedId);
 
             // Update individual drawer height directly on the carcass
-            selectedCabinet.carcass.updateDrawerHeight(index, height);
+            selectedCabinet.carcass.updateDrawerHeight(index, height, changedId);
 
             // Trigger re-render
             setSelectedCabinet({ ...selectedCabinet })

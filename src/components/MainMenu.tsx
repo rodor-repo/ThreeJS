@@ -8,6 +8,9 @@ import { getWsProducts } from '@/server/getWsProducts'
 import type { WsProducts } from '@/types/erpTypes'
 import { getSavedRoomsByCategory, deleteSavedRoom, type RoomCategory, type SavedRoom } from '@/data/savedRooms'
 import _ from 'lodash'
+import { getClient } from '@/app/QueryProvider'
+import { getProductData } from '@/server/getProductData'
+import toast from 'react-hot-toast'
 
 interface MainMenuProps {
   onCategorySelect: (category: Category) => void
@@ -153,8 +156,31 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect: _onCategorySelect
 
   // When a product is clicked, we want to add a DEMO 3D object.
   // We leverage existing ThreeScene flows by invoking onSubcategorySelect with a demo base config.
-  const handleProductClick = useCallback((category: Category, subcategory: Subcategory, productId: string) => {
+  const handleProductClick = useCallback(async (category: Category, subcategory: Subcategory, productId: string) => {
     console.log('Product clicked:', { productId, subcategory: subcategory.id, category: category.id })
+
+    // Close menus immediately for better responsiveness
+    setShowSubmenu(false)
+    setIsOpen(false)
+    onMenuStateChange?.(false)
+
+    // Prefetch product data before adding cabinet
+    const queryClient = getClient()
+    const cached = queryClient.getQueryData(["productData", productId])
+
+    if (!cached) {
+      const toastId = toast.loading("Loading product...")
+      try {
+        const data = await getProductData(productId)
+        queryClient.setQueryData(["productData", productId], data)
+        toast.success("Product loaded", { id: toastId })
+      } catch (error) {
+        console.error("Failed to prefetch product:", error)
+        toast.error("Failed to load product", { id: toastId })
+        return // Don't add cabinet if prefetch failed
+      }
+    }
+
     // Force DEMO: always add a base cabinet with a standard subcategory
     const demoCategory: Category = {
       id: 'base',
@@ -179,10 +205,6 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect: _onCategorySelect
     }
 
     onSubcategorySelect?.(demoCategory, demoSub, productId)
-    // Close menus for responsiveness, like the previous behavior
-    setShowSubmenu(false)
-    setIsOpen(false)
-    onMenuStateChange?.(false)
   }, [onSubcategorySelect])
 
   const toggleMenu = () => {

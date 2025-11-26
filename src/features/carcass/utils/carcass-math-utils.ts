@@ -28,7 +28,8 @@ export function distributeHeightEqually(
  */
 export function validateTotalHeight(
   heights: number[],
-  maxHeight: number
+  maxHeight: number,
+  tolerance: number = 0.1
 ): {
   isValid: boolean
   totalHeight: number
@@ -36,7 +37,7 @@ export function validateTotalHeight(
 } {
   const totalHeight = heights.reduce((sum, height) => sum + height, 0)
   const remainingHeight = maxHeight - totalHeight
-  const isValid = totalHeight <= maxHeight
+  const isValid = totalHeight <= maxHeight + tolerance
 
   return { isValid, totalHeight, remainingHeight }
 }

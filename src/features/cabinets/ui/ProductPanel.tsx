@@ -4,7 +4,7 @@ import { GDThreeJsType } from '@/types/erpTypes'
 import { useQuery } from '@tanstack/react-query'
 import _ from 'lodash'
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { Plus, X, RefreshCw } from 'lucide-react'
+import { Plus, X, RefreshCw, RotateCcw } from 'lucide-react'
 import type { ProductPanelProps } from './productPanel.types'
 import { ViewSelector } from './ViewSelector'
 import type { ViewId } from '../ViewManager'
@@ -28,19 +28,40 @@ const ProductPanel: React.FC<LocalProductPanelProps> = props => {
 export default ProductPanel
 
 // -------- Fetcher wrapper + Dynamic Dims-only variant driven by WsProduct --------
-const DynamicPanelWithQuery: React.FC<LocalProductPanelProps> = ({ isVisible, onClose, selectedCabinet, onDimensionsChange, onMaterialChange, onOverhangDoorToggle, onShelfCountChange, viewManager, onViewChange, allCabinets, onGroupChange, initialGroupData, onSyncChange, initialSyncData }) => {
+const DynamicPanelWithQuery: React.FC<LocalProductPanelProps> = ({ isVisible, onClose, selectedCabinet, onDimensionsChange, onMaterialChange, onOverhangDoorToggle, onShelfCountChange, onDrawerHeightChange, onDrawerQuantityChange, viewManager, onViewChange, allCabinets, onGroupChange, initialGroupData, onSyncChange, initialSyncData }) => {
   const productId = selectedCabinet?.productId
   const { data, isLoading, isError } = useQuery({
     queryKey: ['productData', productId],
     queryFn: async () => {
       if (!productId) throw new Error('No productId')
       // Call Next.js Server Action directly for type-safe data
-      return await getProductData(productId)
+      const data = await getProductData(productId)
+
+      // apply drawer qty to all products of this productId in the cabinets state
+      if (allCabinets) {
+        for (const cabinet of allCabinets) {
+          const cabProductId = cabinet.carcass?.productId
+          if (cabProductId !== data.product.productId) continue
+
+          const drawerQtyGDIds = data.threeJsGDs?.["drawerQty"] || []
+          const wsProduct = data.product
+          const dimsList = _.sortBy(Object.entries(wsProduct?.dims || {}), ([, dimObj]) => Number(dimObj.sortNum))
+
+          let drawerQty: number | undefined = selectedCabinet?.carcass?.config?.drawerQuantity
+          dimsList.forEach(([id, dimObj]) => {
+            const gdId = dimObj.GDId
+            if (!gdId) return
+            if (drawerQtyGDIds.includes(gdId)) drawerQty = toNum(dimObj.defaultValue) || drawerQty
+            if (drawerQty) cabinet.carcass?.updateDrawerQuantity?.(drawerQty)
+          })
+        }
+      }
+      return data
     },
     // enabled: !!productId && !!isVisible,
     enabled: !!productId,
     staleTime: 5 * 60 * 1000,
-    gcTime: 5 * 60 * 1000
+    gcTime: Infinity
   })
 
   const wsProduct = data?.product
@@ -78,6 +99,8 @@ const DynamicPanelWithQuery: React.FC<LocalProductPanelProps> = ({ isVisible, on
       onOverhangDoorToggle={onOverhangDoorToggle}
       onShelfCountChange={onShelfCountChange}
       onMaterialChange={onMaterialChange}
+      onDrawerHeightChange={onDrawerHeightChange}
+      onDrawerQuantityChange={onDrawerQuantityChange}
       viewManager={viewManager}
       onViewChange={onViewChange}
       allCabinets={allCabinets}
@@ -91,9 +114,11 @@ const DynamicPanelWithQuery: React.FC<LocalProductPanelProps> = ({ isVisible, on
   )
 }
 
+export const toNum = (v: number | string | undefined) => typeof v === 'number' ? v : Number(v)
+
 type DynamicPanelProps = LocalProductPanelProps & { loading?: boolean, error?: boolean, materialOptions?: MaterialOptionsResponse, defaultMaterialSelections?: DefaultMaterialSelections, threeJsGDs: Record<GDThreeJsType, string[]> | undefined, onGroupChange?: (cabinetId: string, groupCabinets: Array<{ cabinetId: string; percentage: number }>) => void, initialGroupData?: Array<{ cabinetId: string; percentage: number }>, onSyncChange?: (cabinetId: string, syncCabinets: string[]) => void, initialSyncData?: string[] }
 
-const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProduct, materialOptions, defaultMaterialSelections, selectedCabinet, onDimensionsChange, onMaterialChange, loading, error, threeJsGDs, onOverhangDoorToggle, onShelfCountChange, viewManager, onViewChange, allCabinets, onGroupChange, initialGroupData, onSyncChange, initialSyncData }) => {
+const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProduct, materialOptions, defaultMaterialSelections, selectedCabinet, onDimensionsChange, onMaterialChange, loading, error, threeJsGDs, onOverhangDoorToggle, onShelfCountChange, onDrawerHeightChange, onDrawerQuantityChange, viewManager, onViewChange, allCabinets, onGroupChange, initialGroupData, onSyncChange, initialSyncData }) => {
 
 
   const [isExpanded, setIsExpanded] = useState(true)
@@ -143,6 +168,39 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
     setMaterialColor(selectedCabinet?.material.getColour() || '#ffffff')
   }, [selectedCabinet])
 
+  // add window event listener for productPanel:updateDim
+  useEffect(() => {
+    if (!cabinetId) return
+    // Handler expects a CustomEvent with detail: { id: string, value: number }
+    const handler = (e: Event) => {
+      const ev = e as CustomEvent<{ id: string; value: number }>
+      const payload = ev.detail || (e as MessageEvent).data
+      if (!payload || typeof payload.id !== 'string') return
+      const id = payload.id
+      const valNum = Number(payload.value)
+      if (isNaN(valNum)) return
+
+      setValues(prev => {
+        const next = { ...prev, [id]: valNum }
+        return next
+      })
+      const saved = cabinetPanelState.get(cabinetId)
+      if (!saved) throw new Error("Cabinet panel state not found.")
+      cabinetPanelState.set(cabinetId, {
+        ...saved,
+        values: {
+          ...saved?.values,
+          [id]: valNum,
+        },
+      })
+    }
+
+    window.addEventListener('productPanel:updateDim', handler)
+    return () => {
+      window.removeEventListener('productPanel:updateDim', handler)
+    }
+  }, [cabinetId])
+
 
   // const envWidthGDIds = process.env.NEXT_PUBLIC_WIDTH_GDID?.split(',') || []
   // const envHeightGDIds = process.env.NEXT_PUBLIC_HEIGHT_GDID?.split(',') || []
@@ -152,12 +210,30 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
   const depthGDIds = threeJsGDs?.["depth"] || []
   const doorOverhangGDIds = threeJsGDs?.["doorOverhang"] || []
   const shelfQtyGDIds = threeJsGDs?.["shelfQty"] || []
+  const drawerQtyGDIds = threeJsGDs?.["drawerQty"] || []
+  // Drawer height GD mappings (index based)
+  const drawerHeightGDMap: Record<number, string[]> = {
+    0: threeJsGDs?.drawerH1 || [],
+    1: threeJsGDs?.drawerH2 || [],
+    2: threeJsGDs?.drawerH3 || [],
+    3: threeJsGDs?.drawerH4 || [],
+    4: threeJsGDs?.drawerH5 || []
+  }
 
   const dimsList = useMemo(() => {
     const entries = Object.entries(wsProduct?.dims || {})
-    const visibleEntries = entries.filter(([, dimObj]) => dimObj.visible !== false)
-    return _.sortBy(visibleEntries, ([, dimObj]) => Number(dimObj.sortNum))
+    return _.sortBy(entries, ([, dimObj]) => Number(dimObj.sortNum))
   }, [wsProduct?.dims])
+
+  useEffect(() => {
+    let drawerQty: number | undefined = selectedCabinet?.carcass?.config?.drawerQuantity
+    dimsList.forEach(([_id, dimObj]) => {
+      const gdId = dimObj.GDId
+      if (!gdId) return
+      if (drawerQtyGDIds.includes(gdId)) drawerQty = toNum(dimObj.defaultValue) || drawerQty
+      if (drawerQty) onDrawerQuantityChange?.(drawerQty)
+    })
+  }, [dimsList, threeJsGDs])
 
   // Sync values with current cabinet dimensions when they change externally (e.g., from group rule)
   useEffect(() => {
@@ -304,7 +380,10 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
     cabinetPanelState.set(cabinetId, { values: nextValues, materialColor: nextColor, materialSelections: nextSelections || {}, price: saved?.price })
     console.log('Persisted state for', cabinetId)
     // lastInitRef.current = cabinetId
-    applyPrimaryDimsTo3D(nextValues)
+    if (!selectedCabinet.carcass?.defaultDimValuesApplied) {
+      applyPrimaryDimsTo3D(nextValues)
+      selectedCabinet.carcass!.defaultDimValuesApplied = true
+    }
     console.groupEnd()
   }, [wsProduct?.dims, cabinetId, materialOptions, defaultMaterialSelections])
 
@@ -356,28 +435,61 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
   }, [priceData, cabinetId])
 
 
-  const applyPrimaryDimsTo3D = (vals: Record<string, number | string>) => {
+  const applyPrimaryDimsTo3D = (vals: Record<string, number | string>, changedId?: string) => {
     if (!selectedCabinet || !onDimensionsChange) return
-    const toNum = (v: number | string | undefined) => typeof v === 'number' ? v : Number(v)
     let width = selectedCabinet.dimensions.width
     let height = selectedCabinet.dimensions.height
     let depth = selectedCabinet.dimensions.depth
     let overhangDoor = selectedCabinet.overhangDoor
     let shelfCount: number | undefined = selectedCabinet.carcass?.config?.shelfCount
+    let drawerQty: number | undefined = selectedCabinet.carcass?.config?.drawerQuantity
+    // Collect drawer heights by index from GDIds
+    const pendingDrawerHeights: Record<number, number> = {}
 
     dimsList.forEach(([id, dimObj]) => {
       if (!dimObj.GDId) return
       const v = vals[id]
-      if (widthGDIds.includes(dimObj.GDId)) width = toNum(v) || width
-      if (heightGDIds.includes(dimObj.GDId)) height = toNum(v) || height
-      if (depthGDIds.includes(dimObj.GDId)) depth = toNum(v) || depth
-      if (doorOverhangGDIds.includes(dimObj.GDId)) overhangDoor = v.toString().toLowerCase() === 'yes' || v === 1 || v === '1'
-      if (shelfQtyGDIds.includes(dimObj.GDId)) shelfCount = toNum(v) || shelfCount
+      const gdId = dimObj.GDId
+      if (widthGDIds.includes(gdId)) width = toNum(v) || width
+      if (heightGDIds.includes(gdId)) height = toNum(v) || height
+      if (depthGDIds.includes(gdId)) depth = toNum(v) || depth
+      if (doorOverhangGDIds.includes(gdId)) overhangDoor = v.toString().toLowerCase() === 'yes' || v === 1 || v === '1'
+      if (shelfQtyGDIds.includes(gdId)) shelfCount = toNum(v) || shelfCount
+      if (drawerQtyGDIds.includes(gdId)) drawerQty = toNum(v) || drawerQty
+      // Drawer heights
+      Object.entries(drawerHeightGDMap).forEach(([drawerIndexStr, gdList]) => {
+        const drawerIndex = Number(drawerIndexStr)
+        if (gdList.includes(gdId)) {
+          const numVal = toNum(v)
+          if (!isNaN(numVal)) {
+            if (!changedId) { // This is the initial setup of dimensions, apply to all
+              pendingDrawerHeights[drawerIndex] = numVal
+            } else { // This was a user change, only apply if this is the changed one
+              if (id === changedId) {
+                pendingDrawerHeights[drawerIndex] = numVal
+              }
+            }
+          }
+        }
+      })
     })
     onDimensionsChange({ width, height, depth })
     onOverhangDoorToggle?.(overhangDoor || false)
     onShelfCountChange?.(shelfCount || 0)
-    console.log('[ProductPanel] Applied primary dims to 3D', { width, height, depth })
+    // Apply drawer quantity before heights so drawers exist
+    if (drawerQty !== undefined && onDrawerQuantityChange && drawerQty > 0) {
+      onDrawerQuantityChange(drawerQty)
+    }
+
+    // Apply drawer heights only if enabled and callback present
+    if (drawerQty && onDrawerHeightChange) {
+      Object.entries(pendingDrawerHeights).forEach(([idxStr, h]) => {
+        const idx = Number(idxStr)
+        if (idx < drawerQty!) onDrawerHeightChange(idx, h, changedId)
+      })
+    }
+
+    console.log('[ProductPanel] Applied primary dims to 3D', { width, height, depth, drawerHeights: pendingDrawerHeights })
   }
 
   // Price is calculated automatically via debounced query
@@ -708,95 +820,230 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
             
             {/* Dimensions */}
             <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-200">
-              <div className="flex items-center space-x-2 mb-2.5 text-gray-700 font-medium">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 3h5v5" /><path d="M8 21H3v-5" /><path d="M21 3l-7 7" /><path d="M3 21l7-7" /></svg>
-                <h3>Dimensions</h3>
+              <div className="flex items-center justify-between mb-2.5 text-gray-700 font-medium">
+                <div className="flex items-center space-x-2">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 3h5v5" /><path d="M8 21H3v-5" /><path d="M21 3l-7 7" /><path d="M3 21l7-7" /></svg>
+                  <h3>Dimensions</h3>
+                </div>
+                <button
+                  type="button"
+                  title="Reset all dimensions"
+                  onClick={() => {
+                    if (!wsProduct?.dims) return
+                    const next: Record<string, number | string> = {}
+                    Object.entries(wsProduct.dims).forEach(([id, dimObj]) => {
+                      if (dimObj.valueType === 'range') {
+                        let defVal = Number(dimObj.defaultValue ?? dimObj.min ?? 0)
+                        if (isNaN(defVal)) defVal = 0
+                        if (typeof dimObj.min === 'number') defVal = Math.max(dimObj.min, defVal)
+                        if (typeof dimObj.max === 'number') defVal = Math.min(dimObj.max, defVal)
+                        next[id] = defVal
+                      } else {
+                        next[id] = String(dimObj.defaultValue ?? dimObj.options?.[0] ?? '')
+                      }
+                    })
+                    setValues(next)
+                    if (cabinetId) {
+                      const persisted = cabinetPanelState.get(cabinetId)
+                      cabinetPanelState.set(cabinetId, { ...(persisted || {} as any), values: next, materialColor, materialSelections, price: priceData || persisted?.price })
+                    }
+                    console.log('[ProductPanel] Reset all dims', next)
+                    applyPrimaryDimsTo3D(next)
+                  }}
+                  className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-blue-600 transition-colors px-2 py-1 rounded-md hover:bg-blue-50"
+                >
+                  <RotateCcw size={14} />
+                  Reset
+                </button>
               </div>
               <div className="space-y-3">
-                {dimsList.map(([id, dimObj]) => (
-                  <div key={id} className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <label className="block text-sm font-medium text-gray-700">
-                        {dimObj.dim}
-                      </label>
-                      <div className="flex items-center gap-2">
-                        {dimObj.GDId && widthGDIds.includes(dimObj.GDId) && <span className="px-1.5 py-0.5 text-[10px] rounded-full bg-blue-50 text-blue-600">Width</span>}
-                        {dimObj.GDId && heightGDIds.includes(dimObj.GDId) && <span className="px-1.5 py-0.5 text-[10px] rounded-full bg-blue-50 text-blue-600">Height</span>}
-                        {dimObj.GDId && depthGDIds.includes(dimObj.GDId) && <span className="px-1.5 py-0.5 text-[10px] rounded-full bg-blue-50 text-blue-600">Depth</span>}
-                        {dimObj.GDId && doorOverhangGDIds.includes(dimObj.GDId) && <div className="px-1.5 py-0.5 text-[10px] rounded-full bg-blue-50 text-blue-600">Door Overhang</div>}
-                        {dimObj.GDId && shelfQtyGDIds.includes(dimObj.GDId) && <div className="px-1.5 py-0.5 text-[10px] rounded-full bg-blue-50 text-blue-600">Shelf Qty</div>}
-                      </div>
-                    </div>
+                {dimsList
+                  .filter(([, dimObj]) => dimObj.visible !== false)
+                  .map(([id, dimObj]) => {
+                    // Resolve drawer height index if GDId matches one of the drawer height GD lists
+                    let drawerHeightIndex: number | null = null
+                    if (dimObj.GDId) {
+                      for (const [idxStr, list] of Object.entries(drawerHeightGDMap)) {
+                        if (list.includes(dimObj.GDId)) { drawerHeightIndex = Number(idxStr); break }
+                      }
+                    }
 
-                    {dimObj.valueType === 'range' ? (
-                      <div>
-                        <div className="flex items-center gap-1.5 mb-1.5">
-                          <input
-                            type="number"
-                            className="w-20 text-center text-sm px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent leading-tight"
-                            value={Number(((values[id] ?? dimObj.defaultValue ?? dimObj.min) as any))}
-                            min={dimObj.min}
-                            max={dimObj.max}
+                    // Calculate default value to check if changed
+                    let defVal = Number(dimObj.defaultValue ?? dimObj.min ?? 0)
+                    if (isNaN(defVal)) defVal = 0
+                    if (typeof dimObj.min === 'number') defVal = Math.max(dimObj.min, defVal)
+                    if (typeof dimObj.max === 'number') defVal = Math.min(dimObj.max, defVal)
+
+                    const drawerQty = selectedCabinet?.carcass?.config?.drawerQuantity || 0
+                    const isDependentDrawer = drawerHeightIndex !== null && drawerHeightIndex === (drawerQty - 1)
+
+                    return (
+                      <div key={id} className={`space-y-2 ${isDependentDrawer ? 'opacity-50' : ''}`}>
+                        <div className="flex items-center justify-between">
+                          <label className="block text-sm font-medium text-gray-700">
+                            {dimObj.dim}
+                          </label>
+                          <div className="flex items-center gap-2">
+                            {dimObj.GDId && widthGDIds.includes(dimObj.GDId) && <span className="px-1.5 py-0.5 text-[10px] rounded-full bg-blue-50 text-blue-600">Width</span>}
+                            {dimObj.GDId && heightGDIds.includes(dimObj.GDId) && <span className="px-1.5 py-0.5 text-[10px] rounded-full bg-blue-50 text-blue-600">Height</span>}
+                            {dimObj.GDId && depthGDIds.includes(dimObj.GDId) && <span className="px-1.5 py-0.5 text-[10px] rounded-full bg-blue-50 text-blue-600">Depth</span>}
+                            {dimObj.GDId && doorOverhangGDIds.includes(dimObj.GDId) && <div className="px-1.5 py-0.5 text-[10px] rounded-full bg-blue-50 text-blue-600">Door Overhang</div>}
+                            {dimObj.GDId && shelfQtyGDIds.includes(dimObj.GDId) && <div className="px-1.5 py-0.5 text-[10px] rounded-full bg-blue-50 text-blue-600">Shelf Qty</div>}
+                            {dimObj.GDId && drawerQtyGDIds.includes(dimObj.GDId) && <div className="px-1.5 py-0.5 text-[10px] rounded-full bg-blue-50 text-blue-600">Drawer Qty</div>}
+                            {drawerHeightIndex !== null && <div className="px-1.5 py-0.5 text-[10px] rounded-full bg-blue-50 text-blue-600">Drawer H{drawerHeightIndex + 1}</div>}
+                          </div>
+                        </div>
+
+                        {dimObj.valueType === 'range' ? (
+                          <div>
+                            <div className="flex items-center gap-1.5 mb-1.5">
+                              <input
+                                type="number"
+                                disabled={isDependentDrawer}
+                                className="w-20 text-center text-sm px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent leading-tight"
+                                value={Number(((values[id] ?? dimObj.defaultValue ?? dimObj.min) as any))}
+                                min={dimObj.min}
+                                max={dimObj.max}
+                                onChange={e => {
+                                  let val = Number(e.target.value)
+                                  if (isNaN(val)) return
+                                  // Clamp to min/max
+                                  if (typeof dimObj.min === 'number') val = Math.max(dimObj.min, val)
+                                  if (typeof dimObj.max === 'number') val = Math.min(dimObj.max, val)
+
+                                  // Validation for drawer heights
+                                  if (drawerHeightIndex !== null && !isDependentDrawer) {
+                                    const lastDrawerIdx = drawerQty - 1
+                                    const lastDrawerDimEntry = dimsList.find(([_, d]) => d.GDId && drawerHeightGDMap[lastDrawerIdx]?.includes(d.GDId))
+                                    if (lastDrawerDimEntry) {
+                                      const [lastId, lastDimObj] = lastDrawerDimEntry
+                                      const lastCurrentVal = Number(values[lastId] ?? lastDimObj.defaultValue ?? lastDimObj.min)
+                                      const currentVal = Number(values[id] ?? dimObj.defaultValue ?? dimObj.min)
+                                      const delta = val - currentVal
+                                      const projectedLastVal = lastCurrentVal - delta
+
+                                      const lastMin = typeof lastDimObj.min === 'number' ? lastDimObj.min : 50
+                                      const lastMax = typeof lastDimObj.max === 'number' ? lastDimObj.max : 2000
+
+                                      if (projectedLastVal < lastMin) {
+                                        alert(`Cannot increase height: Last drawer would be too small (min ${lastMin}mm).`)
+                                        return
+                                      }
+                                      if (projectedLastVal > lastMax) {
+                                        alert(`Cannot decrease height: Last drawer would be too large (max ${lastMax}mm).`)
+                                        return
+                                      }
+                                    }
+                                  }
+
+                                  const next = { ...values, [id]: val }
+                                  setValues(next)
+                                  if (cabinetId) {
+                                    const persisted = cabinetPanelState.get(cabinetId)
+                                    cabinetPanelState.set(cabinetId, { ...(persisted || {} as any), values: next, materialColor, materialSelections, price: priceData || persisted?.price })
+                                  }
+                                  console.log('[ProductPanel] Number dim changed', { id, dim: dimObj.dim, val })
+                                  applyPrimaryDimsTo3D(next, id)
+                                }}
+                              />
+                              <button
+                                type="button"
+                                disabled={isDependentDrawer}
+                                title="Reset dimension"
+                                onClick={() => {
+                                  const next = { ...values, [id]: defVal }
+                                  setValues(next)
+                                  if (cabinetId) {
+                                    const persisted = cabinetPanelState.get(cabinetId)
+                                    cabinetPanelState.set(cabinetId, { ...(persisted || {} as any), values: next, materialColor, materialSelections, price: priceData || persisted?.price })
+                                  }
+                                  console.log('[ProductPanel] Reset dim', { id, dim: dimObj.dim, defVal })
+                                  applyPrimaryDimsTo3D(next, id)
+                                }}
+                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
+                              >
+                                <RotateCcw size={14} />
+                              </button>
+                              <span className="text-sm text-gray-500">mm</span>
+                            </div>
+                            <input
+                              type="range"
+                              disabled={isDependentDrawer}
+                              className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
+                              value={Number(((values[id] ?? dimObj.defaultValue ?? dimObj.min) as any))}
+                              min={dimObj.min}
+                              max={dimObj.max}
+                              onChange={e => {
+                                let val = Number(e.target.value)
+                                if (isNaN(val)) return
+                                if (typeof dimObj.min === 'number') val = Math.max(dimObj.min, val)
+                                if (typeof dimObj.max === 'number') val = Math.min(dimObj.max, val)
+
+                                // Validation for drawer heights
+                                if (drawerHeightIndex !== null && !isDependentDrawer) {
+                                  const lastDrawerIdx = drawerQty - 1
+                                  const lastDrawerDimEntry = dimsList.find(([_, d]) => d.GDId && drawerHeightGDMap[lastDrawerIdx]?.includes(d.GDId))
+                                  if (lastDrawerDimEntry) {
+                                    const [lastId, lastDimObj] = lastDrawerDimEntry
+                                    const lastCurrentVal = Number(values[lastId] ?? lastDimObj.defaultValue ?? lastDimObj.min)
+                                    const currentVal = Number(values[id] ?? dimObj.defaultValue ?? dimObj.min)
+                                    const delta = val - currentVal
+                                    const projectedLastVal = lastCurrentVal - delta
+
+                                    const lastMin = typeof lastDimObj.min === 'number' ? lastDimObj.min : 50
+                                    const lastMax = typeof lastDimObj.max === 'number' ? lastDimObj.max : 2000
+
+                                    if (projectedLastVal < lastMin) {
+                                      alert(`Cannot increase height: Last drawer would be too small (min ${lastMin}mm).`)
+                                      return
+                                    }
+                                    if (projectedLastVal > lastMax) {
+                                      alert(`Cannot decrease height: Last drawer would be too large (max ${lastMax}mm).`)
+                                      return
+                                    }
+                                  }
+                                }
+
+                                const next = { ...values, [id]: val }
+                                setValues(next)
+                                if (cabinetId) {
+                                  const persisted = cabinetPanelState.get(cabinetId)
+                                  cabinetPanelState.set(cabinetId, { ...(persisted || {} as any), values: next, materialColor, materialSelections, price: priceData || persisted?.price })
+                                }
+                                console.log('[ProductPanel] Range dim changed', { id, dim: dimObj.dim, val })
+                                applyPrimaryDimsTo3D(next, id)
+                              }}
+                            />
+                            <div className="flex justify-between text-xs text-gray-500 mt-1">
+                              <span>{dimObj.min}</span>
+                              <span>{dimObj.max}</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <select
+                            disabled={isDependentDrawer}
+                            className="w-full text-sm px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent leading-tight"
+                            value={String(values[id] ?? dimObj.defaultValue ?? (dimObj.options?.[0] ?? ''))}
                             onChange={e => {
-                              const val = Number(e.target.value)
+                              const val = e.target.value
                               const next = { ...values, [id]: val }
                               setValues(next)
                               if (cabinetId) {
                                 const persisted = cabinetPanelState.get(cabinetId)
                                 cabinetPanelState.set(cabinetId, { ...(persisted || {} as any), values: next, materialColor, materialSelections, price: priceData || persisted?.price })
                               }
-                              console.log('[ProductPanel] Number dim changed', { id, dim: dimObj.dim, val })
-                              applyPrimaryDimsTo3D(next)
+                              console.log('[ProductPanel] Select dim changed', { id, dim: dimObj.dim, val })
+                              applyPrimaryDimsTo3D(next, id)
                             }}
-                          />
-                          <span className="text-sm text-gray-500">mm</span>
-                        </div>
-                        <input
-                          type="range"
-                          className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
-                          value={Number(((values[id] ?? dimObj.defaultValue ?? dimObj.min) as any))}
-                          min={dimObj.min}
-                          max={dimObj.max}
-                          onChange={e => {
-                            const val = Number(e.target.value)
-                            const next = { ...values, [id]: val }
-                            setValues(next)
-                            if (cabinetId) {
-                              const persisted = cabinetPanelState.get(cabinetId)
-                              cabinetPanelState.set(cabinetId, { ...(persisted || {} as any), values: next, materialColor, materialSelections, price: priceData || persisted?.price })
-                            }
-                            console.log('[ProductPanel] Range dim changed', { id, dim: dimObj.dim, val })
-                            applyPrimaryDimsTo3D(next)
-                          }}
-                        />
-                        <div className="flex justify-between text-xs text-gray-500 mt-1">
-                          <span>{dimObj.min}</span>
-                          <span>{dimObj.max}</span>
-                        </div>
+                          >
+                            {dimObj.options.map(opt => (
+                              <option key={String(opt)} value={String(opt)}>{String(opt)}</option>
+                            ))}
+                          </select>
+                        )}
                       </div>
-                    ) : (
-                      <select
-                        className="w-full text-sm px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent leading-tight"
-                        value={String(values[id] ?? dimObj.defaultValue ?? (dimObj.options?.[0] ?? ''))}
-                        onChange={e => {
-                          const val = e.target.value
-                          const next = { ...values, [id]: val }
-                          setValues(next)
-                          if (cabinetId) {
-                            const persisted = cabinetPanelState.get(cabinetId)
-                            cabinetPanelState.set(cabinetId, { ...(persisted || {} as any), values: next, materialColor, materialSelections, price: priceData || persisted?.price })
-                          }
-                          console.log('[ProductPanel] Select dim changed', { id, dim: dimObj.dim, val })
-                          applyPrimaryDimsTo3D(next)
-                        }}
-                      >
-                        {dimObj.options.map(opt => (
-                          <option key={String(opt)} value={String(opt)}>{String(opt)}</option>
-                        ))}
-                      </select>
-                    )}
-                  </div>
-                ))}
+                    )
+                  })}
               </div>
             </div>
 

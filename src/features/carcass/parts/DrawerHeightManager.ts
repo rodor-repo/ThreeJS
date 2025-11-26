@@ -136,32 +136,147 @@ export interface DrawerHeightConfig {
         errors
       };
     }
+
+    /**
+     * Validate if total minimum height of drawers fits within carcass height
+     */
+    static validateTotalMinHeight(
+        constraints: { min: number }[],
+        carcassHeight: number
+    ): boolean {
+        const totalMin = constraints.reduce((sum, c) => sum + (c.min || this.MIN_DRAWER_HEIGHT), 0);
+        return totalMin <= carcassHeight;
+    }
+
+    /**
+     * Validate if total maximum height of drawers is at least the carcass height
+     * (i.e. can the drawers expand to fill the carcass?)
+     */
+    static validateTotalMaxHeight(
+        constraints: { max: number }[],
+        carcassHeight: number
+    ): boolean {
+        const totalMax = constraints.reduce((sum, c) => sum + (c.max || Number.MAX_SAFE_INTEGER), 0);
+        return totalMax >= carcassHeight;
+    }
   
     /**
      * Scale drawer heights proportionally when carcass height changes
+     * Handles minimum and maximum height constraints recursively
      */
     static scaleHeightsProportionally(
       currentHeights: number[],
       oldCarcassHeight: number,
-      newCarcassHeight: number
+      newCarcassHeight: number,
+      constraints: { min: number; max: number }[] = []
     ): number[] {
       if (currentHeights.length === 0 || oldCarcassHeight <= 0) {
         return currentHeights;
       }
       
       const scaleRatio = newCarcassHeight / oldCarcassHeight;
-      const scaledHeights = currentHeights.map(height =>
+      
+      // Initial proportional scaling
+      let newHeights = currentHeights.map(height =>
         roundToDecimal(height * scaleRatio, this.DECIMAL_PRECISION)
       );
-      
-      // Validate total doesn't exceed new carcass height
-      const totalScaledHeight = scaledHeights.reduce((sum, height) => sum + height, 0);
-      if (totalScaledHeight > newCarcassHeight) {
-        // If scaled heights exceed new carcass height, reset to optimal distribution
-        return this.calculateOptimalHeights(newCarcassHeight, currentHeights.length);
+
+      // If no constraints provided, just return scaled heights (with basic total check)
+      if (constraints.length === 0) {
+          const totalScaledHeight = newHeights.reduce((sum, height) => sum + height, 0);
+          if (totalScaledHeight > newCarcassHeight) {
+            return this.calculateOptimalHeights(newCarcassHeight, currentHeights.length);
+          }
+          return newHeights;
+      }
+
+      // Recursive redistribution to satisfy constraints
+      let iterations = 0;
+      const maxIterations = 10;
+      let solved = false;
+
+      while (!solved && iterations < maxIterations) {
+        iterations++;
+        let deficit = 0;
+        let surplus = 0;
+        const lockedIndices = new Set<number>();
+
+        // 1. Identify violations and clamp
+        for (let i = 0; i < newHeights.length; i++) {
+            const h = newHeights[i];
+            // Use provided constraints or defaults
+            const min = constraints[i]?.min ?? this.MIN_DRAWER_HEIGHT;
+            const max = constraints[i]?.max ?? newCarcassHeight;
+
+            if (h < min) {
+                deficit += (min - h);
+                newHeights[i] = min;
+                lockedIndices.add(i);
+            } else if (h > max) {
+                surplus += (h - max);
+                newHeights[i] = max;
+                lockedIndices.add(i);
+            }
+        }
+
+        // Check if we need to redistribute
+        const totalAdjustmentNeeded = deficit - surplus;
+        
+        if (Math.abs(totalAdjustmentNeeded) < 0.1) {
+            solved = true;
+            break;
+        }
+
+        // 2. Distribute the adjustment among unlocked drawers
+        const amountToDistribute = surplus - deficit;
+        const unlockedIndices = newHeights.map((_, i) => i).filter(i => !lockedIndices.has(i));
+        
+        if (unlockedIndices.length === 0) {
+            console.warn("DrawerHeightManager: Cannot redistribute, all drawers are locked or constrained.");
+            break; 
+        }
+
+        const totalUnlockedHeight = unlockedIndices.reduce((sum, i) => sum + newHeights[i], 0);
+
+        if (totalUnlockedHeight <= 0) {
+             // Fallback to equal distribution if weights are 0
+             const perDrawer = amountToDistribute / unlockedIndices.length;
+             unlockedIndices.forEach(i => {
+                 newHeights[i] += perDrawer;
+             });
+        } else {
+            // Proportional distribution
+            unlockedIndices.forEach(i => {
+                const weight = newHeights[i] / totalUnlockedHeight;
+                const change = amountToDistribute * weight;
+                newHeights[i] += change;
+            });
+        }
+        
+        // Round again
+        newHeights = newHeights.map(h => roundToDecimal(h, this.DECIMAL_PRECISION));
+      }
+
+      // Final check to ensure total matches newCarcassHeight
+      const finalTotal = newHeights.reduce((sum, h) => sum + h, 0);
+      const diff = newCarcassHeight - finalTotal;
+      if (Math.abs(diff) > 0.1) {
+          // Distribute remainder to the largest drawer that isn't locked (or just largest)
+          let maxH = -1;
+          let maxIdx = -1;
+          newHeights.forEach((h, i) => {
+               if (h > maxH) {
+                   maxH = h;
+                   maxIdx = i;
+               }
+          });
+          if (maxIdx !== -1) {
+              newHeights[maxIdx] += diff;
+              newHeights[maxIdx] = roundToDecimal(newHeights[maxIdx], this.DECIMAL_PRECISION);
+          }
       }
       
-      return scaledHeights;
+      return newHeights;
     }
   
     /**

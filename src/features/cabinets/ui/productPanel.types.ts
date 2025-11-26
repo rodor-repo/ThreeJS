@@ -1,5 +1,6 @@
 import type { Group } from "three"
 import type {
+  CarcassAssembly,
   CarcassDimensions,
   CarcassMaterial,
   CarcassMaterialData,
@@ -22,7 +23,7 @@ export interface SelectedCabinetSnapshot {
   drawerEnabled?: boolean
   drawerQuantity?: number
   drawerHeights?: number[]
-  carcass?: any
+  carcass?: CarcassAssembly
   cabinetId: string
   viewId?: string
 }
@@ -38,7 +39,11 @@ export interface ProductPanelCallbacks {
   onOverhangDoorToggle?: (overhang: boolean) => void
   onDrawerToggle?: (enabled: boolean) => void
   onDrawerQuantityChange?: (quantity: number) => void
-  onDrawerHeightChange?: (index: number, height: number) => void
+  onDrawerHeightChange?: (
+    index: number,
+    height: number,
+    changedId?: string
+  ) => void
   onDrawerHeightsBalance?: () => void
   onDrawerHeightsReset?: () => void
   // optional debugging helper used by Debug Balance button

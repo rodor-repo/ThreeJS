@@ -10,12 +10,83 @@ import type { WsProducts } from "@/types/erpTypes"
 import type { CabinetType } from "@/features/carcass"
 import type { CabinetData, WallDimensions as WallDims } from "../types"
 import type { View, ViewId, ViewManager } from "@/features/cabinets/ViewManager"
+import { getClient } from "@/app/QueryProvider"
+import { getProductData } from "@/server/getProductData"
+import _ from "lodash"
+import toast from "react-hot-toast"
 
 type CabinetGroupsMap = Map<
   string,
   Array<{ cabinetId: string; percentage: number }>
 >
 type CabinetSyncsMap = Map<string, string[]>
+
+/**
+ * Prefetch product data for a list of product IDs and add to React Query cache.
+ * This ensures product data is available before cabinet operations that need it.
+ */
+async function prefetchProductData(productIds: string[]): Promise<void> {
+  const queryClient = getClient()
+
+  // Filter out products that are already in the cache or invalid
+  const missingProductIds = _.uniq(
+    productIds.filter((productId) => {
+      if (!productId) return false
+      const cached = queryClient.getQueryData(["productData", productId])
+      return !cached
+    })
+  )
+
+  if (missingProductIds.length === 0) {
+    console.log("[roomPersistence] All product data already cached")
+    return
+  }
+
+  console.log(
+    `[roomPersistence] Prefetching ${missingProductIds.length} products...`
+  )
+
+  // Show loading toast
+  const toastId = toast.loading("Loading products...")
+
+  // Fetch all missing products in parallel
+  const results = await Promise.allSettled(
+    missingProductIds.map(async (productId) => {
+      const data = await getProductData(productId)
+      // Add to cache with infinite gcTime to match ProductPanel behavior
+      queryClient.setQueryData(["productData", productId], data)
+      return productId
+    })
+  )
+
+  const successful = results.filter((r) => r.status === "fulfilled").length
+  const failed = results.filter((r) => r.status === "rejected").length
+
+  console.log(
+    `[roomPersistence] Prefetch complete: ${successful} succeeded, ${failed} failed`
+  )
+
+  // Update toast based on results
+  if (failed === 0) {
+    toast.success(`Loaded ${successful} products`, { id: toastId })
+  } else if (successful === 0) {
+    toast.error("Failed to load products", { id: toastId })
+  } else {
+    toast.success(`Loaded ${successful} products (${failed} failed)`, {
+      id: toastId,
+    })
+  }
+
+  // Log any failures for debugging
+  results.forEach((result, index) => {
+    if (result.status === "rejected") {
+      console.error(
+        `[roomPersistence] Failed to prefetch product ${missingProductIds[index]}:`,
+        result.reason
+      )
+    }
+  })
+}
 
 export type CreateCabinetFn = (
   cabinetType: CabinetType,
@@ -158,7 +229,7 @@ interface RestoreRoomOptions {
   setCabinetSyncs?: (syncs: CabinetSyncsMap) => void
 }
 
-export function restoreRoom({
+export async function restoreRoom({
   savedRoom,
   setNumbersVisible,
   clearCabinets,
@@ -173,30 +244,36 @@ export function restoreRoom({
   updateCabinetLock,
   setCabinetSyncs,
 }: RestoreRoomOptions): Promise<void> {
+  setNumbersVisible(false)
+  clearCabinets()
+  setCabinetGroups(new Map())
+  if (setCabinetSyncs) {
+    setCabinetSyncs(new Map())
+  }
+
+  const backWallLength =
+    savedRoom.wallSettings.backWallLength ?? savedRoom.wallSettings.length
+  const newWallDims: WallDims = {
+    height: savedRoom.wallSettings.height,
+    length: backWallLength,
+    backWallLength: backWallLength,
+    leftWallLength: savedRoom.wallSettings.leftWallLength ?? 600,
+    rightWallLength: savedRoom.wallSettings.rightWallLength ?? 600,
+    leftWallVisible: savedRoom.wallSettings.leftWallVisible ?? true,
+    rightWallVisible: savedRoom.wallSettings.rightWallVisible ?? true,
+    additionalWalls: savedRoom.wallSettings.additionalWalls ?? [],
+  }
+  // Pass true for preserveCamera to prevent camera reset on restore
+  applyDimensions(newWallDims, savedRoom.wallSettings.color, undefined, true)
+  setWallColor(savedRoom.wallSettings.color)
+
+  // Extract all unique product IDs from saved cabinets and prefetch their data
+  const productIds = savedRoom.cabinets
+    .map((c) => c.productId)
+    .filter((id): id is string => !!id)
+  await prefetchProductData(productIds)
+
   return new Promise((resolve) => {
-    setNumbersVisible(false)
-    clearCabinets()
-    setCabinetGroups(new Map())
-    if (setCabinetSyncs) {
-      setCabinetSyncs(new Map())
-    }
-
-    const backWallLength =
-      savedRoom.wallSettings.backWallLength ?? savedRoom.wallSettings.length
-    const newWallDims: WallDims = {
-      height: savedRoom.wallSettings.height,
-      length: backWallLength,
-      backWallLength: backWallLength,
-      leftWallLength: savedRoom.wallSettings.leftWallLength ?? 600,
-      rightWallLength: savedRoom.wallSettings.rightWallLength ?? 600,
-      leftWallVisible: savedRoom.wallSettings.leftWallVisible ?? true,
-      rightWallVisible: savedRoom.wallSettings.rightWallVisible ?? true,
-      additionalWalls: savedRoom.wallSettings.additionalWalls ?? [],
-    }
-    // Pass true for preserveCamera to prevent camera reset on restore
-    applyDimensions(newWallDims, savedRoom.wallSettings.color, undefined, true)
-    setWallColor(savedRoom.wallSettings.color)
-
     setTimeout(() => {
       const viewIdMap = new Map<string, ViewId>()
       const viewIdsToRestore = new Set<string>()
@@ -246,6 +323,9 @@ export function restoreRoom({
         oldIdToNewId.set(savedCabinet.cabinetId, cabinetData.cabinetId)
 
         cabinetData.carcass.updateDimensions(savedCabinet.dimensions)
+
+        // Mark dimensions as applied so ProductPanel doesn't re-apply defaults
+        cabinetData.carcass.defaultDimValuesApplied = true
 
         cabinetData.group.position.set(
           savedCabinet.position.x,

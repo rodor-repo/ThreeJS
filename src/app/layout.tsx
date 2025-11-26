@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import { QueryProvider } from './QueryProvider'
+import { Toaster } from 'react-hot-toast'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -21,6 +22,24 @@ export default function RootLayout({
         <QueryProvider>
           {children}
         </QueryProvider>
+        <Toaster
+          position="top-center"
+          containerStyle={{
+            top: "50%",
+            transform: "translateY(-50%)",
+          }}
+          toastOptions={{
+            style: {
+              fontSize: "1.25rem",
+              padding: "1rem 1.5rem",
+              minWidth: "300px",
+              fontWeight: 500,
+            },
+            loading: {
+              duration: Infinity,
+            },
+          }}
+        />
       </body>
     </html>
   )

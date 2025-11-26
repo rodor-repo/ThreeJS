@@ -284,8 +284,11 @@ export const useSceneInteractions = (
 
         cabinetsInSameView.forEach((cabinetId) => {
           const cabinetInView = cabinets.find((c) => c.cabinetId === cabinetId)
-          // Skip the dragged cabinet itself (already moved)
-          if (cabinetInView && cabinetInView !== draggedCabinet) {
+          // Skip the dragged cabinet itself (already moved) - use ID comparison to avoid stale reference issues
+          if (
+            cabinetInView &&
+            cabinetInView.cabinetId !== draggedCabinet.cabinetId
+          ) {
             const cabinetCurrentX = cabinetInView.group.position.x
             const cabinetCurrentY = cabinetInView.group.position.y
             const cabinetNewX = cabinetCurrentX + actualDeltaX
@@ -375,7 +378,7 @@ export const useSceneInteractions = (
               y: clickStartPositionRef.current.y,
             }
             clickStartPositionRef.current = null
-            clickStartCabinetRef.current = null
+            // Keep clickStartCabinetRef - we need it during drag to avoid stale closure issues
           }
         }
         cameraDrag.move(event.clientX, event.clientY)
@@ -407,9 +410,9 @@ export const useSceneInteractions = (
         ) {
           isDraggingCabinetRef.current = true
           dragStartRef.current = { x: event.clientX, y: event.clientY }
-          // Clear click tracking since we're starting drag immediately
+          // Clear position tracking but keep cabinet ref - we need it during drag
           clickStartPositionRef.current = null
-          clickStartCabinetRef.current = null
+          // Note: clickStartCabinetRef is kept to avoid stale closure issues with selectedCabinets
           return
         }
 

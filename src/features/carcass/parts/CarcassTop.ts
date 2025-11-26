@@ -61,12 +61,13 @@ export class CarcassTop {
   private createGeometry(): THREE.BoxGeometry {
     if (this.cabinetType === "base") {
       if (this.isDrawerBase) {
-        // For Drawer Base cabinets - HORIZONTAL positioning
-        const effectiveDepth = calculateEffectiveDepth(
-          this.depth,
-          this.backThickness
-        )
-        return new THREE.BoxGeometry(this.width, this.thickness, effectiveDepth)
+        // For Drawer Base cabinets - HORIZONTAL positioning, 60mm depth in front
+        // const effectiveDepth = calculateEffectiveDepth(
+        //   this.depth,
+        //   this.backThickness
+        // )
+        const baseRailDepth = 60
+        return new THREE.BoxGeometry(this.width, this.thickness, baseRailDepth)
       } else {
         // For Standard Base cabinets - VERTICAL positioning
         return new THREE.BoxGeometry(
@@ -95,11 +96,14 @@ export class CarcassTop {
     if (this.cabinetType === "base") {
       if (this.isDrawerBase) {
         // For Drawer Base cabinets - HORIZONTAL positioning
+        const baseRailDepth = 60
+
         this.group.position.set(
           xPosition,
           this.height - this.thickness / 2,
           // 0 // Front edge of end panels
-          this.backThickness + effectiveDepth / 2
+          // this.backThickness + effectiveDepth / 2
+          this.depth - baseRailDepth / 2 // Position so front edge aligns with carcass front
         )
       } else {
         // For Standard Base cabinets - VERTICAL positioning

@@ -1,5 +1,6 @@
 import type { Group } from "three"
 import type {
+  CarcassAssembly,
   CarcassDimensions,
   CarcassMaterial,
   CarcassMaterialData,
@@ -7,6 +8,7 @@ import type {
   DoorMaterialData,
 } from "@/features/carcass"
 import type { WsProduct } from "@/types/erpTypes"
+import { CabinetData } from "@/features/scene/types"
 
 export interface SelectedCabinetSnapshot {
   group: Group
@@ -22,7 +24,7 @@ export interface SelectedCabinetSnapshot {
   drawerEnabled?: boolean
   drawerQuantity?: number
   drawerHeights?: number[]
-  carcass?: any
+  carcass?: CarcassAssembly
   cabinetId: string
 }
 
@@ -37,7 +39,11 @@ export interface ProductPanelCallbacks {
   onOverhangDoorToggle?: (overhang: boolean) => void
   onDrawerToggle?: (enabled: boolean) => void
   onDrawerQuantityChange?: (quantity: number) => void
-  onDrawerHeightChange?: (index: number, height: number) => void
+  onDrawerHeightChange?: (
+    index: number,
+    height: number,
+    changedId?: string
+  ) => void
   onDrawerHeightsBalance?: () => void
   onDrawerHeightsReset?: () => void
   // optional debugging helper used by Debug Balance button
@@ -50,6 +56,7 @@ export interface ProductPanelProps extends ProductPanelCallbacks {
   selectedCabinet?: SelectedCabinetSnapshot | null
   /** When provided, ProductPanel will render dynamic dimension controls from this schema */
   wsProduct?: WsProduct
+  cabinets: CabinetData[]
 }
 
 export interface DimensionRange {

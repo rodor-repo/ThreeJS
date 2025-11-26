@@ -25,6 +25,10 @@ export const createCabinet = (
     productId?: string
   }
 ): CabinetData => {
+  const productId = opts?.productId
+  if (!productId)
+    throw new Error("createCabinet was called with productId undefined")
+
   // Defensive fallback if an unsupported type sneaks in
   const hasDefaults = !!defaultDimensions[type]
   if (!hasDefaults) {
@@ -39,43 +43,70 @@ export const createCabinet = (
     depth: opts?.customDimensions?.depth ?? baseDims.depth,
   }
 
+  const cabinetId = `cabinet-${Date.now()}`
+
   let carcass: CarcassAssembly
   switch (type) {
     case "top":
-      carcass = CarcassAssembly.createTopCabinet(dimensions, {
-        shelfCount: 2,
-        shelfSpacing: 300,
-      })
+      carcass = CarcassAssembly.createTopCabinet(
+        dimensions,
+        {
+          shelfCount: 2,
+          shelfSpacing: 300,
+        },
+        productId,
+        cabinetId
+      )
       break
     case "base":
       if (subcategoryId === "drawer") {
         const drawerDimensions = { ...dimensions, height: 730 }
-        carcass = CarcassAssembly.createBaseCabinet(drawerDimensions, {
-          shelfCount: 0,
-          shelfSpacing: 0,
-          doorEnabled: false,
-          drawerEnabled: true,
-          drawerQuantity: 3,
-          drawerHeights: [],
-        })
+        carcass = CarcassAssembly.createBaseCabinet(
+          drawerDimensions,
+          {
+            shelfCount: 0,
+            shelfSpacing: 0,
+            doorEnabled: false,
+            drawerEnabled: true,
+            drawerQuantity: 3,
+            drawerHeights: [],
+          },
+          productId,
+          cabinetId
+        )
       } else {
-        carcass = CarcassAssembly.createBaseCabinet(dimensions, {
-          shelfCount: 2,
-          shelfSpacing: 300,
-        })
+        carcass = CarcassAssembly.createBaseCabinet(
+          dimensions,
+          {
+            shelfCount: 2,
+            shelfSpacing: 300,
+          },
+          productId,
+          cabinetId
+        )
       }
       break
     case "tall":
-      carcass = CarcassAssembly.createTallCabinet(dimensions, {
-        shelfCount: 4,
-        shelfSpacing: 300,
-      })
+      carcass = CarcassAssembly.createTallCabinet(
+        dimensions,
+        {
+          shelfCount: 4,
+          shelfSpacing: 300,
+        },
+        productId,
+        cabinetId
+      )
       break
     default:
-      carcass = CarcassAssembly.createTopCabinet(dimensions, {
-        shelfCount: 2,
-        shelfSpacing: 300,
-      })
+      carcass = CarcassAssembly.createTopCabinet(
+        dimensions,
+        {
+          shelfCount: 2,
+          shelfSpacing: 300,
+        },
+        productId,
+        cabinetId
+      )
   }
 
   // position by index to avoid overlap if desired
@@ -83,9 +114,9 @@ export const createCabinet = (
   const spacing = opts?.spacing ?? 100
   carcass.group.position.x = index * (dimensions.width + spacing)
 
-  const cabinetId = `cabinet-${type}-${subcategoryId}-${
-    opts?.productId || "default"
-  }-${index}`
+  // const cabinetId = `cabinet-${type}-${subcategoryId}-${
+  //   opts?.productId || "default"
+  // }-${index}`
 
   return {
     group: carcass.group,

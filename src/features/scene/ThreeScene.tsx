@@ -170,7 +170,6 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
   // Handle category changes
   useEffect(() => {
     if (selectedCategory) {
-      console.log('Category selected in ThreeScene:', selectedCategory.name);
       // You can add logic here to handle different categories
       // For example, load different 3D models, change materials, etc.
     }
@@ -347,7 +346,6 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
           onClick={(e) => {
             e.stopPropagation()
             // TODO: Implement add to cart functionality
-            console.log('Add to cart clicked', { cabinets, totalPrice })
           }}
           className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg shadow-lg transition-colors duration-200 flex items-center gap-2 w-full"
           title="Add to Cart"
@@ -425,9 +423,8 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         isOpen={showViewsDrawer}
         onClose={closeViewsDrawer}
         activeViews={viewManager.activeViews}
-        onViewClick={(viewId) => {
+        onViewClick={(_viewId) => {
           // Could add view-specific settings here in the future
-          console.log('View clicked:', viewId)
         }}
         onDeleteView={(viewId) => {
           // Get all cabinets in this view
@@ -684,7 +681,6 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         }}
         onDrawerToggle={(enabled) => {
           if (selectedCabinet) {
-            console.log('Toggling drawer enabled:', enabled);
 
             // Toggle drawers on/off directly on the carcass
             selectedCabinet.carcass.updateDrawerEnabled(enabled);
@@ -695,7 +691,6 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         }}
         onDrawerQuantityChange={(quantity) => {
           if (selectedCabinet) {
-            console.log('Updating drawer quantity:', quantity);
 
             // Update drawer quantity directly on the carcass
             selectedCabinet.carcass.updateDrawerQuantity(quantity);
@@ -706,7 +701,6 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         }}
         onDrawerHeightChange={(index, height, changedId) => {
           if (selectedCabinet) {
-            console.log('Updating drawer height:', index, height, changedId);
 
             // Update individual drawer height directly on the carcass
             selectedCabinet.carcass.updateDrawerHeight(index, height, changedId);
@@ -717,7 +711,6 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         }}
         onDrawerHeightsBalance={() => {
           if (selectedCabinet) {
-            console.log('Balancing drawer heights');
 
             // Balance drawer heights directly on the carcass
             selectedCabinet.carcass.balanceDrawerHeights();
@@ -728,7 +721,6 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         }}
         onDrawerHeightsReset={() => {
           if (selectedCabinet) {
-            console.log('Resetting drawer heights to optimal');
 
             // Get optimal drawer heights from the carcass
             const optimalHeights = selectedCabinet.carcass.getOptimalDrawerHeights();

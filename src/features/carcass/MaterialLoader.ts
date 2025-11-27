@@ -107,7 +107,6 @@ export class MaterialLoader {
       // Get leg height from mutable data (runtime changes) or fallback to static data
       const legHeight = 100
       // this.mutableData.legHeight || categoriesData.legSettings?.default || 100
-      console.log("Getting leg height:", legHeight)
       return legHeight
     } catch (error) {
       console.error("Error getting leg height:", error)
@@ -127,8 +126,6 @@ export class MaterialLoader {
   static updateLegHeight(newHeight: number): void {
     try {
       this.mutableData.legHeight = newHeight
-      console.log("Updated leg height in data to:", newHeight)
-      console.log("Current data value:", this.mutableData.legHeight)
     } catch (error) {
       console.error("Error updating leg height:", error)
     }

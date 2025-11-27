@@ -947,7 +947,6 @@ export const useDimensionLines = (
     viewId: ViewId
   }> => {
     if (!viewManager) {
-      console.log('detectEmptySpacesY: viewManager not available')
       return []
     }
 
@@ -961,7 +960,6 @@ export const useDimensionLines = (
 
     // Get all active views
     const activeViews = viewManager.getActiveViews()
-    console.log('detectEmptySpacesY: Active views:', activeViews.length)
 
     activeViews.forEach((view) => {
       const viewId = view.id
@@ -970,7 +968,6 @@ export const useDimensionLines = (
       // Get all cabinets in this view
       const cabinetIds = viewManager.getCabinetsInView(viewId)
       const viewCabinets = cabinets.filter(c => cabinetIds.includes(c.cabinetId))
-      console.log(`detectEmptySpacesY: View ${viewId} has ${viewCabinets.length} cabinets`)
 
       if (viewCabinets.length < 2) return // Need at least 2 cabinets to have a gap
 
@@ -1201,7 +1198,6 @@ export const useDimensionLines = (
     viewId: ViewId
   }> => {
     if (!viewManager) {
-      console.log('detectEmptySpacesXOverhead: viewManager not available')
       return []
     }
 
@@ -1215,7 +1211,6 @@ export const useDimensionLines = (
 
     // Get all active views
     const activeViews = viewManager.getActiveViews()
-    console.log('detectEmptySpacesXOverhead: Active views:', activeViews.length)
 
     activeViews.forEach((view) => {
       const viewId = view.id
@@ -1229,7 +1224,6 @@ export const useDimensionLines = (
       const topCabinets = viewCabinets.filter(c => c.cabinetType === 'top')
       const tallCabinets = viewCabinets.filter(c => c.cabinetType === 'tall')
       const topAndTallCabinets = [...topCabinets, ...tallCabinets]
-      console.log(`detectEmptySpacesXOverhead: View ${viewId} has ${topCabinets.length} top cabinets and ${tallCabinets.length} tall cabinets`)
 
       if (topAndTallCabinets.length < 2) return // Need at least 2 cabinets to have a gap
 
@@ -1336,7 +1330,6 @@ export const useDimensionLines = (
     viewId: ViewId
   }> => {
     if (!viewManager) {
-      console.log('detectEmptySpacesX: viewManager not available')
       return []
     }
 
@@ -1354,7 +1347,6 @@ export const useDimensionLines = (
 
     // Get all active views
     const activeViews = viewManager.getActiveViews()
-    console.log('detectEmptySpacesX: Active views:', activeViews.length)
 
     activeViews.forEach((view) => {
       const viewId = view.id
@@ -1363,7 +1355,6 @@ export const useDimensionLines = (
       // Get all cabinets in this view
       const cabinetIds = viewManager.getCabinetsInView(viewId)
       const viewCabinets = cabinets.filter(c => cabinetIds.includes(c.cabinetId))
-      console.log(`detectEmptySpacesX: View ${viewId} has ${viewCabinets.length} cabinets`)
 
       if (viewCabinets.length < 2) return // Need at least 2 cabinets to have a gap
 
@@ -1999,7 +1990,6 @@ export const useDimensionLines = (
     if (viewManager) {
       // Detect empty spaces in Y-axis (height)
       const emptySpacesY = detectEmptySpacesY(cabinets, viewManager)
-      console.log('Empty spaces Y detected:', emptySpacesY.length, emptySpacesY)
       
       // Group by similar heights (within 1mm tolerance) and only show leftmost for each group
       const heightGroups = new Map<number, Array<typeof emptySpacesY[0]>>()
@@ -2037,11 +2027,6 @@ export const useDimensionLines = (
           // Position at back wall (z = 0) with 30mm offset in positive Z direction
           const zPos = 30
           
-          console.log('Creating Y-axis empty space dimension:', {
-            ...leftmostSpace,
-            zPos,
-            viewCabinetsCount: viewCabinets.length
-          })
           const emptySpaceYDimension = createEmptySpaceYDimension(
             leftmostSpace.bottomY,
             leftmostSpace.topY,
@@ -2051,14 +2036,11 @@ export const useDimensionLines = (
           )
           sceneRef.current!.add(emptySpaceYDimension)
           dimensionLinesRef.current.push(emptySpaceYDimension)
-        } else {
-          console.warn('No cabinets found for view:', leftmostSpace.viewId)
         }
       })
 
       // Detect empty spaces in X-axis (width) between all cabinets
       const emptySpacesX = detectEmptySpacesX(cabinets, viewManager)
-      console.log('Empty spaces X detected:', emptySpacesX.length, emptySpacesX)
       
       // Create dimension lines for all X-axis empty spaces
       // Positioned on the back edge, on top of cabinets, offset 30mm from wall in positive Z
@@ -2066,10 +2048,6 @@ export const useDimensionLines = (
         // Position at back wall (z = 0) with 30mm offset in positive Z direction
         const zPos = 30
         
-        console.log('Creating X-axis empty space dimension:', {
-          ...space,
-          zPos
-        })
         const emptySpaceXDimension = createEmptySpaceXDimension(
           space.leftX,
           space.rightX,
@@ -2084,8 +2062,6 @@ export const useDimensionLines = (
         sceneRef.current!.add(emptySpaceXDimension)
         dimensionLinesRef.current.push(emptySpaceXDimension)
       })
-    } else {
-      console.log('viewManager is not available for empty space detection')
     }
   }, [sceneRef, cabinets, visible, viewManager])
 

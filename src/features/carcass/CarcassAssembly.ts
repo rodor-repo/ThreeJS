@@ -111,9 +111,6 @@ export class CarcassAssembly {
       ...config,
     }
 
-    // Debug logging for config
-    console.log("CarcassAssembly config set to:", this.config)
-
     // Create main group
     this.group = new THREE.Group()
     this.group.name = `${cabinetType}_carcass`
@@ -364,13 +361,6 @@ export class CarcassAssembly {
   private createDoors(): void {
     this.doors = []
 
-    // Debug logging for door creation
-    console.log("Creating doors with config:", {
-      doorEnabled: this.config.doorEnabled,
-      doorCount: this.config.doorCount,
-      overhangDoor: this.config.overhangDoor,
-    })
-
     // Only create doors if they are enabled
     if (this.config.doorEnabled) {
       const doorDepth = this.dimensions.depth
@@ -559,8 +549,6 @@ export class CarcassAssembly {
   }
 
   public updateKickerHeight(kickerHeight: number): void {
-    console.log("Updating kicker height to:", kickerHeight)
-
     // Update the leg height in the data file
     MaterialLoader.updateLegHeight(kickerHeight)
 
@@ -580,11 +568,6 @@ export class CarcassAssembly {
         this.group.position.y = kickerHeight
       }
     }
-
-    console.log(
-      "Kicker height updated, cabinet repositioned. X position preserved:",
-      this.group.position.x
-    )
   }
 
   // Static method to load material from data
@@ -608,32 +591,14 @@ export class CarcassAssembly {
     // Only update legs for base and tall cabinets
     if (this.legs.length > 0) {
       const thickness = this.getThickness()
-      console.log(`Updating ${this.legs.length} legs with new dimensions:`, {
-        width: this.dimensions.width,
-        depth: this.dimensions.depth,
-        thickness: thickness,
-      })
 
-      this.legs.forEach((leg, index) => {
-        console.log(`Updating leg ${index + 1} (${leg.position}) from:`, {
-          width: leg.width,
-          depth: leg.depth,
-          thickness: leg.thickness,
-        })
-
+      this.legs.forEach((leg) => {
         leg.updateDimensions(
           leg.height, // Keep current leg height
           this.dimensions.width,
           this.dimensions.depth,
           thickness
         )
-
-        console.log(`Leg ${index + 1} updated to:`, {
-          width: leg.width,
-          depth: leg.depth,
-          thickness: leg.thickness,
-          position: leg.group.position,
-        })
       })
     }
   }
@@ -726,17 +691,9 @@ export class CarcassAssembly {
   public updateOverhangDoor(overhang: boolean): void {
     // Only allow overhang for Top cabinets
     if (this.cabinetType !== "top") {
-      console.log(
-        "Overhang door setting ignored for non-Top cabinet type:",
-        this.cabinetType
-      )
       return
     }
 
-    console.log(
-      `Updating overhang door setting for ${this.cabinetType} cabinet:`,
-      overhang
-    )
     this.config.overhangDoor = overhang
 
     // Update existing doors with new overhang setting
@@ -758,10 +715,6 @@ export class CarcassAssembly {
 
   // Drawer management methods
   public updateDrawerEnabled(enabled: boolean): void {
-    console.log(
-      `Updating drawer enabled setting for ${this.cabinetType} cabinet:`,
-      enabled
-    )
     this.config.drawerEnabled = enabled
 
     if (enabled) {
@@ -780,11 +733,6 @@ export class CarcassAssembly {
   }
 
   public updateDrawerQuantity(quantity: number): void {
-    console.log(
-      `Updating drawer quantity for ${this.cabinetType} cabinet:`,
-      quantity
-    )
-
     // Store existing drawer heights to preserve user input
     const existingHeights = [...(this.config.drawerHeights || [])]
 
@@ -869,11 +817,6 @@ export class CarcassAssembly {
     height: number,
     changedId?: string
   ): void {
-    console.log(
-      `Updating drawer ${index} height for ${this.cabinetType} cabinet:`,
-      height
-    )
-
     const productData = getClient().getQueryData([
       "productData",
       this.productId,
@@ -1062,10 +1005,6 @@ export class CarcassAssembly {
 
     this.config.drawerHeights[lastDrawerIndex] = newLastDrawerHeight
 
-    console.log(
-      `Redistributed height. Diff: ${diff}, Last Drawer (${lastDrawerIndex}) adjusted to ${newLastDrawerHeight}`
-    )
-
     // Dispatch event for the last drawer update
     if (drawerHeightsConfig && drawerHeightsConfig[lastDrawerIndex]) {
       const dimId = drawerHeightsConfig[lastDrawerIndex].dimId
@@ -1091,10 +1030,6 @@ export class CarcassAssembly {
       this.dimensions.height,
       this.config.drawerQuantity
     )
-
-    console.log(
-      `Reset drawer heights to default: ${this.config.drawerHeights[0]}mm each`
-    )
   }
 
   /**
@@ -1106,17 +1041,11 @@ export class CarcassAssembly {
     const totalHeight = this.getTotalDrawerHeight()
 
     if (totalHeight > this.dimensions.height) {
-      console.log(
-        `Balancing drawer heights. Total: ${totalHeight}mm, Carcass: ${this.dimensions.height}mm`
-      )
-
       // Reset to equal distribution
       this.resetDrawerHeightsToDefault()
 
       // Update drawer positions
       this.updateDrawerPositions()
-
-      console.log("Drawer heights balanced and reset to equal distribution")
     }
   }
 
@@ -1190,10 +1119,6 @@ export class CarcassAssembly {
 
         // Recalculate proportionally if height changed (removed 1% threshold for smoother updates)
         if (!approximatelyEqual(heightRatio, 1, 0.0001)) {
-          console.log(
-            `Cabinet height changed. Recalculating drawer heights proportionally. Ratio: ${heightRatio}`
-          )
-
           // Fetch product data to get constraints
           let constraints: { min: number; max: number; dimId?: string }[] = []
           try {

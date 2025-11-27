@@ -363,8 +363,10 @@ function checkOverlap(
     const otherTop = otherY + otherHeight
 
     // Check for bounding box overlap using AABB collision detection
-    const xOverlap = draggedLeft < otherRight && draggedRight > otherLeft
-    const yOverlap = draggedBottom < otherTop && draggedTop > otherBottom
+    // Use a small epsilon to handle floating point precision issues
+    const EPSILON = 0.01
+    const xOverlap = draggedLeft < otherRight - EPSILON && draggedRight > otherLeft + EPSILON
+    const yOverlap = draggedBottom < otherTop - EPSILON && draggedTop > otherBottom + EPSILON
 
     if (xOverlap && yOverlap) {
       return true // Overlap detected

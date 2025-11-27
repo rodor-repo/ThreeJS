@@ -685,8 +685,8 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
             // Toggle drawers on/off directly on the carcass
             selectedCabinet.carcass.updateDrawerEnabled(enabled);
 
-            // Trigger re-render without extending type
-            setSelectedCabinet({ ...selectedCabinet })
+            // Trigger re-render while preserving multi-selection
+            setSelectedCabinets(prev => prev.map(cab => ({ ...cab })))
           }
         }}
         onDrawerQuantityChange={(quantity) => {
@@ -695,8 +695,8 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
             // Update drawer quantity directly on the carcass
             selectedCabinet.carcass.updateDrawerQuantity(quantity);
 
-            // Trigger re-render
-            setSelectedCabinet({ ...selectedCabinet })
+            // Trigger re-render while preserving multi-selection
+            setSelectedCabinets(prev => prev.map(cab => ({ ...cab })))
           }
         }}
         onDrawerHeightChange={(index, height, changedId) => {
@@ -705,8 +705,8 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
             // Update individual drawer height directly on the carcass
             selectedCabinet.carcass.updateDrawerHeight(index, height, changedId);
 
-            // Trigger re-render
-            setSelectedCabinet({ ...selectedCabinet })
+            // Trigger re-render while preserving multi-selection
+            setSelectedCabinets(prev => prev.map(cab => ({ ...cab })))
           }
         }}
         onDrawerHeightsBalance={() => {
@@ -715,8 +715,8 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
             // Balance drawer heights directly on the carcass
             selectedCabinet.carcass.balanceDrawerHeights();
 
-            // Trigger re-render
-            setSelectedCabinet({ ...selectedCabinet })
+            // Trigger re-render while preserving multi-selection
+            setSelectedCabinets(prev => prev.map(cab => ({ ...cab })))
           }
         }}
         onDrawerHeightsReset={() => {
@@ -730,8 +730,8 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
             const qty = selectedCabinet.carcass.config.drawerQuantity || optimalHeights.length
             selectedCabinet.carcass.updateDrawerQuantity(qty)
 
-            // Trigger re-render
-            setSelectedCabinet({ ...selectedCabinet })
+            // Trigger re-render while preserving multi-selection
+            setSelectedCabinets(prev => prev.map(cab => ({ ...cab })))
           }
         }}
       />

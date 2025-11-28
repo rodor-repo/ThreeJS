@@ -4,7 +4,7 @@ import { GDThreeJsType } from '@/types/erpTypes'
 import { useQuery } from '@tanstack/react-query'
 import _ from 'lodash'
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { Plus, X, RefreshCw, RotateCcw } from 'lucide-react'
+import { X, RefreshCw, RotateCcw } from 'lucide-react'
 import type { ProductPanelProps } from './productPanel.types'
 import { ViewSelector } from './ViewSelector'
 import type { ViewId } from '../ViewManager'
@@ -124,9 +124,7 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
   const [materialSelections, setMaterialSelections] = useState<Record<string, { priceRangeId: string, colorId: string, finishId?: string }>>({})
   const [openMaterialId, setOpenMaterialId] = useState<string | null>(null)
   const [groupCabinets, setGroupCabinets] = useState<Array<{ cabinetId: string; percentage: number }>>([])
-  const [selectedCabinetToAdd, setSelectedCabinetToAdd] = useState<string>('')
   const [syncCabinets, setSyncCabinets] = useState<string[]>([])
-  const [selectedCabinetToAddSync, setSelectedCabinetToAddSync] = useState<string>('')
   
   // Load group data when selected cabinet changes
   useEffect(() => {
@@ -574,58 +572,48 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
                   <h3>Pair</h3>
                 </div>
                 <div className="space-y-3">
-                  {/* Dropdown and Add Button */}
-                  <div className="flex items-center gap-2">
-                    <select
-                      className="flex-1 text-sm px-2 py-1.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      value={selectedCabinetToAdd}
-                      onChange={(e) => setSelectedCabinetToAdd(e.target.value)}
-                    >
-                      <option value="">Select a cabinet...</option>
-                      {(() => {
-                        const cabinetsInView = viewManager.getCabinetsInView(selectedCabinet.viewId as ViewId)
-                        const availableCabinets = (allCabinets || [])
-                          .filter(c => 
-                            c.cabinetId !== selectedCabinet.cabinetId && 
-                            cabinetsInView.includes(c.cabinetId) &&
-                            !groupCabinets.find(g => g.cabinetId === c.cabinetId)
-                          )
-                        return availableCabinets.map(cabinet => (
-                          <option key={cabinet.cabinetId} value={cabinet.cabinetId}>
-                            {cabinet.sortNumber ? `#${cabinet.sortNumber}` : `Cabinet ${cabinet.cabinetId.slice(0, 8)}...`}
-                          </option>
-                        ))
-                      })()}
-                    </select>
-                    <button
-                      onClick={() => {
-                        if (selectedCabinetToAdd && !groupCabinets.find(g => g.cabinetId === selectedCabinetToAdd)) {
-                          const newGroup = [...groupCabinets, { cabinetId: selectedCabinetToAdd, percentage: 0 }]
-                          // Distribute percentages evenly
-                          const totalCabinets = newGroup.length
-                          const equalPercentage = 100 / totalCabinets
-                          const adjustedGroup = newGroup.map(g => ({ ...g, percentage: Math.round(equalPercentage * 100) / 100 }))
-                          // Ensure total is exactly 100%
-                          const total = adjustedGroup.reduce((sum, g) => sum + g.percentage, 0)
-                          if (total !== 100) {
-                            const diff = 100 - total
-                            adjustedGroup[0].percentage += diff
-                          }
-                          setGroupCabinets(adjustedGroup)
-                          setSelectedCabinetToAdd('')
-                          // Notify parent about group change
-                          if (selectedCabinet?.cabinetId && onGroupChange) {
-                            onGroupChange(selectedCabinet.cabinetId, adjustedGroup)
-                          }
+                  {/* Dropdown - auto-adds on selection */}
+                  <select
+                    className="w-full text-sm px-2 py-1.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    value=""
+                    onChange={(e) => {
+                      const cabinetToAdd = e.target.value
+                      if (cabinetToAdd && !groupCabinets.find(g => g.cabinetId === cabinetToAdd)) {
+                        const newGroup = [...groupCabinets, { cabinetId: cabinetToAdd, percentage: 0 }]
+                        // Distribute percentages evenly
+                        const totalCabinets = newGroup.length
+                        const equalPercentage = 100 / totalCabinets
+                        const adjustedGroup = newGroup.map(g => ({ ...g, percentage: Math.round(equalPercentage * 100) / 100 }))
+                        // Ensure total is exactly 100%
+                        const total = adjustedGroup.reduce((sum, g) => sum + g.percentage, 0)
+                        if (total !== 100) {
+                          const diff = 100 - total
+                          adjustedGroup[0].percentage += diff
                         }
-                      }}
-                      disabled={!selectedCabinetToAdd || groupCabinets.find(g => g.cabinetId === selectedCabinetToAdd) !== undefined}
-                      className="flex items-center justify-center w-8 h-8 rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                      title="Add cabinet to pair"
-                    >
-                      <Plus size={16} />
-                    </button>
-                  </div>
+                        setGroupCabinets(adjustedGroup)
+                        // Notify parent about group change
+                        if (selectedCabinet?.cabinetId && onGroupChange) {
+                          onGroupChange(selectedCabinet.cabinetId, adjustedGroup)
+                        }
+                      }
+                    }}
+                  >
+                    <option value="">Select a cabinet to add...</option>
+                    {(() => {
+                      const cabinetsInView = viewManager.getCabinetsInView(selectedCabinet.viewId as ViewId)
+                      const availableCabinets = (allCabinets || [])
+                        .filter(c => 
+                          c.cabinetId !== selectedCabinet.cabinetId && 
+                          cabinetsInView.includes(c.cabinetId) &&
+                          !groupCabinets.find(g => g.cabinetId === c.cabinetId)
+                        )
+                      return availableCabinets.map(cabinet => (
+                        <option key={cabinet.cabinetId} value={cabinet.cabinetId}>
+                          {cabinet.sortNumber ? `#${cabinet.sortNumber}` : `Cabinet ${cabinet.cabinetId.slice(0, 8)}...`}
+                        </option>
+                      ))
+                    })()}
+                  </select>
 
                   {/* Pair List */}
                   {groupCabinets.length > 0 && (
@@ -730,79 +718,56 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
                   <RefreshCw size={20} />
                   <h3>Sync</h3>
                 </div>
-                <div className="space-y-3">
-                  {/* Dropdown and Add Button */}
-                  <div className="flex items-center gap-2">
-                    <select
-                      className="flex-1 text-sm px-2 py-1.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      value={selectedCabinetToAddSync}
-                      onChange={(e) => setSelectedCabinetToAddSync(e.target.value)}
-                    >
-                      <option value="">Select a cabinet...</option>
-                      {(() => {
-                        const cabinetsInView = viewManager.getCabinetsInView(selectedCabinet.viewId as ViewId)
-                        const availableCabinets = (allCabinets || [])
-                          .filter(c => 
-                            c.cabinetId !== selectedCabinet.cabinetId && 
-                            cabinetsInView.includes(c.cabinetId) &&
-                            !syncCabinets.includes(c.cabinetId)
-                          )
-                        return availableCabinets.map(cabinet => (
-                          <option key={cabinet.cabinetId} value={cabinet.cabinetId}>
-                            {cabinet.sortNumber ? `#${cabinet.sortNumber}` : `Cabinet ${cabinet.cabinetId.slice(0, 8)}...`}
-                          </option>
-                        ))
-                      })()}
-                    </select>
-                    <button
-                      onClick={() => {
-                        if (selectedCabinetToAddSync && !syncCabinets.includes(selectedCabinetToAddSync)) {
-                          const newSyncList = [...syncCabinets, selectedCabinetToAddSync]
-                          setSyncCabinets(newSyncList)
-                          setSelectedCabinetToAddSync('')
-                          // Notify parent about sync change
-                          if (selectedCabinet?.cabinetId && onSyncChange) {
-                            onSyncChange(selectedCabinet.cabinetId, newSyncList)
-                          }
-                        }
-                      }}
-                      disabled={!selectedCabinetToAddSync || syncCabinets.includes(selectedCabinetToAddSync)}
-                      className="flex items-center justify-center w-8 h-8 rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                      title="Add cabinet to sync"
-                    >
-                      <Plus size={16} />
-                    </button>
-                  </div>
-
-                  {/* Sync List */}
-                  {syncCabinets.length > 0 && (
-                    <div className="space-y-2">
-                      {syncCabinets.map((syncCabinetId) => {
-                        const cabinet = (allCabinets || []).find(c => c.cabinetId === syncCabinetId)
-                        return (
-                          <div key={syncCabinetId} className="flex items-center gap-2 p-2 bg-gray-50 rounded-md">
-                            <span className="flex-1 text-sm text-gray-700 truncate">
-                              {cabinet?.sortNumber ? `#${cabinet.sortNumber}` : (cabinet ? `Cabinet ${cabinet.cabinetId.slice(0, 8)}...` : `Cabinet ${syncCabinetId.slice(0, 8)}...`)}
-                            </span>
-                            <button
-                              onClick={() => {
-                                const newSyncList = syncCabinets.filter(id => id !== syncCabinetId)
-                                setSyncCabinets(newSyncList)
-                                // Notify parent about sync change
-                                if (selectedCabinet?.cabinetId && onSyncChange) {
-                                  onSyncChange(selectedCabinet.cabinetId, newSyncList)
-                                }
-                              }}
-                              className="text-gray-400 hover:text-red-600 transition-colors"
-                              title="Remove from sync"
-                            >
-                              <X size={16} />
-                            </button>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
+                <div className="max-h-48 overflow-y-auto space-y-2">
+                  {(() => {
+                    const cabinetsInView = viewManager.getCabinetsInView(selectedCabinet.viewId as ViewId)
+                    const availableCabinets = (allCabinets || [])
+                      .filter(c => 
+                        c.cabinetId !== selectedCabinet.cabinetId && 
+                        cabinetsInView.includes(c.cabinetId)
+                      )
+                    
+                    if (availableCabinets.length === 0) {
+                      return (
+                        <p className="text-sm text-gray-500 italic">No other cabinets in this view</p>
+                      )
+                    }
+                    
+                    return availableCabinets.map(cabinet => {
+                      const isSynced = syncCabinets.includes(cabinet.cabinetId)
+                      const displayName = cabinet.sortNumber 
+                        ? `#${cabinet.sortNumber}` 
+                        : `Cabinet ${cabinet.cabinetId.slice(0, 8)}...`
+                      
+                      return (
+                        <label
+                          key={cabinet.cabinetId}
+                          className={`flex items-center gap-2 p-2 rounded-md cursor-pointer transition-colors ${
+                            isSynced ? 'bg-blue-50 border border-blue-200' : 'bg-gray-50 hover:bg-gray-100 border border-transparent'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSynced}
+                            onChange={(e) => {
+                              const newSyncList = e.target.checked
+                                ? [...syncCabinets, cabinet.cabinetId]
+                                : syncCabinets.filter(id => id !== cabinet.cabinetId)
+                              setSyncCabinets(newSyncList)
+                              if (selectedCabinet?.cabinetId && onSyncChange) {
+                                onSyncChange(selectedCabinet.cabinetId, newSyncList)
+                              }
+                            }}
+                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                          />
+                          <span className={`flex-1 text-sm truncate ${isSynced ? 'text-blue-700 font-medium' : 'text-gray-700'}`}>
+                            {displayName}
+                          </span>
+                          {isSynced && <RefreshCw size={14} className="text-blue-500" />}
+                        </label>
+                      )
+                    })
+                  })()}
                 </div>
               </div>
             )}

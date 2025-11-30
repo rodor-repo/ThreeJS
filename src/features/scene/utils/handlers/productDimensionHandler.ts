@@ -316,13 +316,8 @@ export const handleProductDimensionChange = (
           // Check if other cabinet's left edge is to the right of changing cabinet's left edge
           if (otherCabinet.group.position.x > changingLeftEdge) {
             const newX = otherCabinet.group.position.x + widthDelta
-            const clampedX = Math.max(
-              0,
-              Math.min(
-                wallDimensions.length - otherCabinet.carcass.dimensions.width,
-                newX
-              )
-            )
+            // Only clamp left boundary - right wall can be penetrated (auto-adjusts)
+            const clampedX = Math.max(0, newX)
             otherCabinet.group.position.set(
               clampedX,
               otherCabinet.group.position.y,
@@ -458,13 +453,8 @@ export const handleProductDimensionChange = (
             changingRightEdge
           ) {
             const newX = otherCabinet.group.position.x - widthDelta
-            const clampedX = Math.max(
-              0,
-              Math.min(
-                wallDimensions.length - otherCabinet.carcass.dimensions.width,
-                newX
-              )
-            )
+            // Only clamp left boundary - right wall can be penetrated (auto-adjusts)
+            const clampedX = Math.max(0, newX)
             otherCabinet.group.position.set(
               clampedX,
               otherCabinet.group.position.y,
@@ -607,13 +597,8 @@ export const handleProductDimensionChange = (
           // Cabinet is on the LEFT if it extends even 1mm toward negative X
           if (otherRight < changingRightEdge) {
             const newX = otherCabinet.group.position.x - halfDelta
-            const clampedX = Math.max(
-              0,
-              Math.min(
-                wallDimensions.length - otherCabinet.carcass.dimensions.width,
-                newX
-              )
-            )
+            // Only clamp left boundary - right wall can be penetrated (auto-adjusts)
+            const clampedX = Math.max(0, newX)
             otherCabinet.group.position.set(
               clampedX,
               otherCabinet.group.position.y,
@@ -624,13 +609,8 @@ export const handleProductDimensionChange = (
           // Cabinet is on the RIGHT if it extends even 1mm toward positive X
           else if (otherX > changingLeftEdge) {
             const newX = otherCabinet.group.position.x + halfDelta
-            const clampedX = Math.max(
-              0,
-              Math.min(
-                wallDimensions.length - otherCabinet.carcass.dimensions.width,
-                newX
-              )
-            )
+            // Only clamp left boundary - right wall can be penetrated (auto-adjusts)
+            const clampedX = Math.max(0, newX)
             otherCabinet.group.position.set(
               clampedX,
               otherCabinet.group.position.y,

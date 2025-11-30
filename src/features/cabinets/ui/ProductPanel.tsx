@@ -8,6 +8,14 @@ import { X, RefreshCw, RotateCcw } from 'lucide-react'
 import type { ProductPanelProps } from './productPanel.types'
 import { ViewSelector } from './ViewSelector'
 import type { ViewId } from '../ViewManager'
+import toast from 'react-hot-toast'
+
+// Throttled toast to prevent spam when user drags sliders rapidly
+export const toastThrottled = _.throttle(
+  (message: string) => toast.error(message),
+  1000,
+  { leading: true, trailing: false }
+)
 
 interface LocalProductPanelProps extends ProductPanelProps { }
 
@@ -922,11 +930,11 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
                                       const lastMax = typeof lastDimObj.max === 'number' ? lastDimObj.max : 2000
 
                                       if (projectedLastVal < lastMin) {
-                                        alert(`Cannot increase height: Last drawer would be too small (min ${lastMin}mm).`)
+                                        toastThrottled(`Cannot increase height: Last drawer would be too small (min ${lastMin}mm).`)
                                         return
                                       }
                                       if (projectedLastVal > lastMax) {
-                                        alert(`Cannot decrease height: Last drawer would be too large (max ${lastMax}mm).`)
+                                        toastThrottled(`Cannot decrease height: Last drawer would be too large (max ${lastMax}mm).`)
                                         return
                                       }
                                     }
@@ -990,11 +998,11 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
                                     const lastMax = typeof lastDimObj.max === 'number' ? lastDimObj.max : 2000
 
                                     if (projectedLastVal < lastMin) {
-                                      alert(`Cannot increase height: Last drawer would be too small (min ${lastMin}mm).`)
+                                      toastThrottled(`Cannot increase height: Last drawer would be too small (min ${lastMin}mm).`)
                                       return
                                     }
                                     if (projectedLastVal > lastMax) {
-                                      alert(`Cannot decrease height: Last drawer would be too large (max ${lastMax}mm).`)
+                                      toastThrottled(`Cannot decrease height: Last drawer would be too large (max ${lastMax}mm).`)
                                       return
                                     }
                                   }

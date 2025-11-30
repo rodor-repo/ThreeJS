@@ -1,5 +1,6 @@
 import { CabinetData, WallDimensions } from "../../types"
 import { ViewId } from "../../../cabinets/ViewManager"
+import { toastThrottled } from "@/features/cabinets/ui/ProductPanel";
 
 interface ViewManagerResult {
   getCabinetsInView: (viewId: ViewId) => string[]
@@ -241,7 +242,9 @@ export const handleProductDimensionChange = (
     // Note: We're still inside the widthDelta !== 0 check from line 1560
     if (leftLock && rightLock) {
       // Both locks are active - cannot resize width
-      alert("Cannot resize width when both left and right edges are locked")
+      toastThrottled(
+        "Cannot resize width when both left and right edges are locked"
+      )
       return
     } else if (leftLock) {
       // Left edge is locked - keep left edge fixed, move right edge
@@ -382,11 +385,10 @@ export const handleProductDimensionChange = (
           selectedCabinet.viewId as ViewId
         )
         if (overflow !== null) {
-          alert(
+          toastThrottled(
             `Cannot expand width: a cabinet would be pushed ${overflow.toFixed(
               0
-            )}mm past the left wall. ` +
-              `Please reduce the width or move cabinets first.`
+            )}mm past the left wall. Please reduce the width or move cabinets first.`
           )
           // Emit event to sync ProductPanel UI with actual dimensions
           if (typeof window !== "undefined") {
@@ -550,11 +552,10 @@ export const handleProductDimensionChange = (
           selectedCabinet.viewId as ViewId
         )
         if (overflow !== null) {
-          alert(
+          toastThrottled(
             `Cannot expand width: a cabinet would be pushed ${overflow.toFixed(
               0
-            )}mm past the left wall. ` +
-              `Please reduce the width or move cabinets first.`
+            )}mm past the left wall. Please reduce the width or move cabinets first.`
           )
           // Emit event to sync ProductPanel UI with actual dimensions
           if (typeof window !== "undefined") {

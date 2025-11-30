@@ -24,17 +24,17 @@ export default function RootLayout({
         </QueryProvider>
         <Toaster
           position="top-center"
-          containerStyle={{
-            top: "50%",
-            transform: "translateY(-50%)",
-          }}
+          // containerStyle={{
+          //   top: "50%",
+          //   transform: "translateY(-50%)",
+          // }}
           toastOptions={{
-            style: {
-              fontSize: "1.25rem",
-              padding: "1rem 1.5rem",
-              minWidth: "300px",
-              fontWeight: 500,
-            },
+            // style: {
+            //   fontSize: "1.25rem",
+            //   padding: "1rem 1.5rem",
+            //   minWidth: "300px",
+            //   fontWeight: 500,
+            // },
             loading: {
               duration: Infinity,
             },

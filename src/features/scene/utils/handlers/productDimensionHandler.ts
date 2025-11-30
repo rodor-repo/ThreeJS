@@ -1,9 +1,44 @@
 import { CabinetData, WallDimensions } from "../../types"
 import { ViewId } from "../../../cabinets/ViewManager"
-import { toastThrottled } from "@/features/cabinets/ui/ProductPanel";
+import { toastThrottled } from "@/features/cabinets/ui/ProductPanel"
+import { getClient } from "@/app/QueryProvider"
+import { getProductData } from "@/server/getProductData"
 
 interface ViewManagerResult {
   getCabinetsInView: (viewId: ViewId) => string[]
+}
+
+// Helper to get width constraints from React Query cache
+const getWidthConstraints = (
+  productId: string | undefined
+): { min: number; max: number } | null => {
+  if (!productId) return null
+
+  const productData = getClient().getQueryData(["productData", productId]) as
+    | Awaited<ReturnType<typeof getProductData>>
+    | undefined
+
+  if (!productData) return null
+
+  const { product: wsProduct, threeJsGDs } = productData
+  const widthGDIds = threeJsGDs?.["width"] || []
+
+  for (const [, dimObj] of Object.entries(wsProduct?.dims || {})) {
+    if (dimObj.GDId && widthGDIds.includes(dimObj.GDId)) {
+      if (typeof dimObj.min === "number" && typeof dimObj.max === "number") {
+        return { min: dimObj.min, max: dimObj.max }
+      }
+    }
+  }
+
+  return null
+}
+
+// Helper to dispatch dimension rejected event
+const dispatchDimensionRejected = () => {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("productPanel:dimensionRejected"))
+  }
 }
 
 export const handleProductDimensionChange = (
@@ -117,6 +152,34 @@ export const handleProductDimensionChange = (
       // If we have multiple selected synced cabinets, apply sync logic
       // (ignore cabinets that are selected but not in sync list)
       if (selectedSyncCabinets.length > 1) {
+        // Calculate how many other cabinets need to absorb the delta
+        const otherSyncCabinets = selectedSyncCabinets.filter(
+          (c) => c.cabinetId !== selectedCabinet.cabinetId
+        )
+        const deltaPerCabinet = -widthDelta / otherSyncCabinets.length
+
+        // Validate width constraints for all synced cabinets BEFORE applying changes
+        for (const cab of otherSyncCabinets) {
+          const newWidth = cab.carcass.dimensions.width + deltaPerCabinet
+          const constraints = getWidthConstraints(cab.productId)
+          if (constraints) {
+            if (newWidth < constraints.min) {
+              toastThrottled(
+                `Cannot resize: synced cabinet would be below minimum width (${constraints.min}mm)`
+              )
+              dispatchDimensionRejected()
+              return
+            }
+            if (newWidth > constraints.max) {
+              toastThrottled(
+                `Cannot resize: synced cabinet would exceed maximum width (${constraints.max}mm)`
+              )
+              dispatchDimensionRejected()
+              return
+            }
+          }
+        }
+
         console.log(
           `[Sync] Sync logic triggered! Selected sync cabinets: ${selectedSyncCabinets.length}, widthDelta: ${widthDelta}`
         )
@@ -184,18 +247,17 @@ export const handleProductDimensionChange = (
         // 2. Reposition all cabinets left-to-right, maintaining edge-to-edge contact
         // This ensures: leftmost left edge fixed, rightmost right edge fixed (total width preserved)
 
-        // Calculate how many other cabinets need to absorb the delta
-        const otherSyncCabinets = sortedSyncCabinets.filter(
+        // otherSyncCabinets and deltaPerCabinet were already calculated above for validation
+        const sortedOtherSyncCabinets = sortedSyncCabinets.filter(
           (c) => c.cabinetId !== selectedCabinet.cabinetId
         )
-        const deltaPerCabinet = -widthDelta / otherSyncCabinets.length
 
         console.log(
-          `[Sync] Distributing delta: widthDelta=${widthDelta}, otherCabinets=${otherSyncCabinets.length}, deltaPerCabinet=${deltaPerCabinet}`
+          `[Sync] Distributing delta: widthDelta=${widthDelta}, otherCabinets=${sortedOtherSyncCabinets.length}, deltaPerCabinet=${deltaPerCabinet}`
         )
 
         // Update widths for all other synced cabinets
-        otherSyncCabinets.forEach((cab) => {
+        sortedOtherSyncCabinets.forEach((cab) => {
           const newWidth = cab.carcass.dimensions.width + deltaPerCabinet
           cab.carcass.updateDimensions({
             width: newWidth,
@@ -236,6 +298,39 @@ export const handleProductDimensionChange = (
         return
       }
       // If sync didn't apply (not enough synced cabinets selected), continue to normal logic
+    }
+
+    // Validate pair constraints BEFORE applying any changes
+    const groupData = cabinetGroups.get(selectedCabinet.cabinetId)
+    if (groupData && groupData.length > 0) {
+      for (const groupCabinet of groupData) {
+        const groupedCabinet = cabinets.find(
+          (c) => c.cabinetId === groupCabinet.cabinetId
+        )
+        if (!groupedCabinet) continue
+
+        const proportionalDelta = (widthDelta * groupCabinet.percentage) / 100
+        const newGroupedWidth =
+          groupedCabinet.carcass.dimensions.width + proportionalDelta
+
+        const constraints = getWidthConstraints(groupedCabinet.productId)
+        if (constraints) {
+          if (newGroupedWidth < constraints.min) {
+            toastThrottled(
+              `Cannot resize: paired cabinet would be below minimum width (${constraints.min}mm)`
+            )
+            dispatchDimensionRejected()
+            return
+          }
+          if (newGroupedWidth > constraints.max) {
+            toastThrottled(
+              `Cannot resize: paired cabinet would exceed maximum width (${constraints.max}mm)`
+            )
+            dispatchDimensionRejected()
+            return
+          }
+        }
+      }
     }
 
     // Handle lock states and pair system (only if sync logic didn't apply)

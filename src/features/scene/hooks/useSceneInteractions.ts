@@ -84,6 +84,10 @@ export const useSceneInteractions = (
   /**
    * Check if a cabinet at the given position would overlap in Y-axis with any other cabinet
    * Returns true if there's Y-axis overlap, false otherwise
+   *
+   * Note: Top cabinets only check overlap against other top cabinets,
+   * and base/tall cabinets only check against other base/tall cabinets.
+   * This allows top cabinets to move vertically without being blocked by base cabinets below.
    */
   const hasYAxisOverlap = useCallback(
     (
@@ -100,9 +104,13 @@ export const useSceneInteractions = (
       const cabinetBottom = newY
       const cabinetTop = newY + cabinetHeight
 
+
       // Check against all other cabinets
       for (const otherCabinet of allCabinets) {
-        if (otherCabinet === cabinet) continue
+        // Use cabinetId comparison instead of reference comparison
+        // to handle stale references from clickStartCabinetRef
+        if (otherCabinet.cabinetId === cabinet.cabinetId) continue
+
 
         const otherX = otherCabinet.group.position.x
         const otherWidth = otherCabinet.carcass.dimensions.width

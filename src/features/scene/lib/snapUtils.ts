@@ -69,8 +69,9 @@ export function calculateSnapPosition(
   config: SnapConfig = DEFAULT_SNAP_CONFIG,
   additionalWalls?: Array<{ id: string; length: number; distanceFromLeft: number; thickness?: number }>
 ): SnapResult {
-  // Filter out the dragged cabinet from others
-  const others = otherCabinets.filter((cab) => cab !== draggedCabinet)
+  // Filter out the dragged cabinet from others using cabinetId
+  // to handle stale references
+  const others = otherCabinets.filter((cab) => cab.cabinetId !== draggedCabinet.cabinetId)
 
   // Detect all potential snap points from cabinets
   const snapPoints = detectSnapPoints(

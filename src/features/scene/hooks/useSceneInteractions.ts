@@ -18,6 +18,11 @@ type CameraDragAPI = {
   movePan: (x: number, y: number) => void
 }
 
+type OrthoRefs = {
+  orthoCameraRef: React.MutableRefObject<THREE.OrthographicCamera | null>
+  isOrthoActiveRef: React.MutableRefObject<boolean>
+}
+
 export const useSceneInteractions = (
   cameraRef: React.MutableRefObject<THREE.PerspectiveCamera | null>,
   wallDimensions: WallDimensions,
@@ -37,7 +42,8 @@ export const useSceneInteractions = (
   wallRef?: React.MutableRefObject<THREE.Group | null>,
   leftWallRef?: React.MutableRefObject<THREE.Group | null>,
   rightWallRef?: React.MutableRefObject<THREE.Group | null>,
-  onOpenWallDrawer?: () => void
+  onOpenWallDrawer?: () => void,
+  orthoRefs?: OrthoRefs
 ) => {
   const isDraggingCabinetRef = useRef(false)
   const dragStartRef = useRef({ x: 0, y: 0 })
@@ -46,6 +52,14 @@ export const useSceneInteractions = (
     useState<CabinetData | null>(null)
   const clickStartPositionRef = useRef<{ x: number; y: number } | null>(null)
   const clickStartCabinetRef = useRef<CabinetData | null>(null)
+
+  // Helper to get the active camera (ortho when in ortho mode, perspective otherwise)
+  const getActiveCamera = useCallback((): THREE.Camera | null => {
+    if (orthoRefs?.isOrthoActiveRef.current && orthoRefs?.orthoCameraRef.current) {
+      return orthoRefs.orthoCameraRef.current
+    }
+    return cameraRef.current
+  }, [cameraRef, orthoRefs])
 
   const isEventOnProductPanel = useCallback((target: EventTarget | null) => {
     if (!target) return false
@@ -66,19 +80,21 @@ export const useSceneInteractions = (
 
   const isMouseOverSelectedCabinet = useCallback(
     (mouseX: number, mouseY: number) => {
-      if (selectedCabinets.length === 0 || !cameraRef.current) return false
+      if (selectedCabinets.length === 0) return false
+      const camera = getActiveCamera()
+      if (!camera) return false
       const mouse = new THREE.Vector2()
       mouse.x = (mouseX / window.innerWidth) * 2 - 1
       mouse.y = -(mouseY / window.innerHeight) * 2 + 1
       const raycaster = new THREE.Raycaster()
-      raycaster.setFromCamera(mouse, cameraRef.current)
+      raycaster.setFromCamera(mouse, camera)
       // Check if mouse is over any selected cabinet
       return selectedCabinets.some((cab) => {
         const intersects = raycaster.intersectObject(cab.group, true)
         return intersects.length > 0
       })
     },
-    [cameraRef, selectedCabinets]
+    [getActiveCamera, selectedCabinets]
   )
 
   /**
@@ -393,8 +409,9 @@ export const useSceneInteractions = (
       if (isEventOnProductPanel(event.target)) return
 
       const hasModifier = event.shiftKey || event.ctrlKey
+      const activeCamera = getActiveCamera()
 
-      if (event.button === 0 && cameraRef.current) {
+      if (event.button === 0 && activeCamera) {
         // Left click
         if (cameraMode === "free" && !hasModifier) {
           // Free mode without modifier: start orbit rotation
@@ -420,7 +437,7 @@ export const useSceneInteractions = (
         mouse.x = (event.clientX / window.innerWidth) * 2 - 1
         mouse.y = -(event.clientY / window.innerHeight) * 2 + 1
         const raycaster = new THREE.Raycaster()
-        raycaster.setFromCamera(mouse, cameraRef.current)
+        raycaster.setFromCamera(mouse, activeCamera)
         const cabinetMeshes: THREE.Object3D[] = []
         cabinets.forEach((cabinet) => {
           cabinet.group.traverse((child) => {
@@ -542,7 +559,7 @@ export const useSceneInteractions = (
         if (cameraMode === "constrained") {
           cameraDrag.startDrag(event.clientX, event.clientY)
         }
-      } else if (event.button === 2 && cameraRef.current) {
+      } else if (event.button === 2 && activeCamera) {
         // Right click
         event.preventDefault()
 
@@ -558,7 +575,7 @@ export const useSceneInteractions = (
         mouse.x = (event.clientX / window.innerWidth) * 2 - 1
         mouse.y = -(event.clientY / window.innerHeight) * 2 + 1
         const raycaster = new THREE.Raycaster()
-        raycaster.setFromCamera(mouse, cameraRef.current)
+        raycaster.setFromCamera(mouse, activeCamera)
         const cabinetMeshes: THREE.Object3D[] = []
         cabinets.forEach((cabinet) => {
           cabinet.group.traverse((child) => {
@@ -612,13 +629,14 @@ export const useSceneInteractions = (
     const handleDoubleClick = (event: MouseEvent) => {
       if (isMenuOpen) return
       if (isEventOnProductPanel(event.target)) return
-      if (!cameraRef.current) return
+      const activeCamera = getActiveCamera()
+      if (!activeCamera) return
 
       const mouse = new THREE.Vector2()
       mouse.x = (event.clientX / window.innerWidth) * 2 - 1
       mouse.y = -(event.clientY / window.innerHeight) * 2 + 1
       const raycaster = new THREE.Raycaster()
-      raycaster.setFromCamera(mouse, cameraRef.current)
+      raycaster.setFromCamera(mouse, activeCamera)
 
       // Collect all meshes: cabinets and walls
       const cabinetMeshes: THREE.Object3D[] = []
@@ -735,6 +753,7 @@ export const useSceneInteractions = (
     cameraDrag,
     cameraMode,
     cabinets,
+    getActiveCamera,
     isMenuOpen,
     isPanningCamera,
     isMouseOverSelectedCabinet,
@@ -748,6 +767,10 @@ export const useSceneInteractions = (
     showProductPanel,
     clearSnapGuides,
     cabinetWithLockIcons,
+    leftWallRef,
+    rightWallRef,
+    wallRef,
+    onOpenWallDrawer,
   ])
 
   return {

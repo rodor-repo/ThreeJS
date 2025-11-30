@@ -19,11 +19,18 @@ export type DragState = {
 
 export type WallDims = { height: number; length: number }
 
+export type OrthoControls = {
+  isOrthoActiveRef: MutableRefObject<boolean>
+  zoomOrthoCamera: (delta: number) => void
+  panOrthoCamera: (deltaX: number, deltaY: number) => void
+}
+
 export const useCameraDrag = (
   cameraRef: MutableRefObject<THREE.PerspectiveCamera | null>,
   wallDimensions: WallDims,
   isMenuOpen: boolean,
-  cameraMode: "constrained" | "free"
+  cameraMode: "constrained" | "free",
+  orthoControls?: OrthoControls
 ) => {
   const movementSensitivity = 1.5
   const [state, setState] = useState<DragState>(() => ({
@@ -81,13 +88,15 @@ export const useCameraDrag = (
       if (!cameraRef.current) return
       if (isMenuOpen) return
 
-      if (cameraMode === "free") {
+      // In ortho mode or free mode, store raw pixel coordinates
+      if (cameraMode === "free" || orthoControls?.isOrthoActiveRef.current) {
         setState((prev) => ({
           ...prev,
           isDragging: true,
           dragStart: { x: clientX, y: clientY },
         }))
       } else {
+        // In constrained mode with perspective camera, store normalized coordinates
         setState((prev) => ({
           ...prev,
           isDragging: true,
@@ -102,14 +111,27 @@ export const useCameraDrag = (
         }))
       }
     },
-    [cameraRef, cameraMode, isMenuOpen]
+    [cameraRef, cameraMode, isMenuOpen, orthoControls?.isOrthoActiveRef]
   )
 
   const move = useCallback(
     (clientX: number, clientY: number) => {
+      if (isMenuOpen || !state.isDragging) return
+
+      // Handle ortho camera pan
+      if (orthoControls?.isOrthoActiveRef.current) {
+        const deltaX = clientX - state.dragStart.x
+        const deltaY = clientY - state.dragStart.y
+        orthoControls.panOrthoCamera(deltaX, deltaY)
+        setState((prev) => ({
+          ...prev,
+          dragStart: { x: clientX, y: clientY },
+        }))
+        return
+      }
+
       const camera = cameraRef.current
       if (!camera) return
-      if (isMenuOpen || !state.isDragging) return
 
       if (cameraMode === "free") {
         const deltaX = clientX - state.dragStart.x
@@ -174,6 +196,7 @@ export const useCameraDrag = (
       cameraMode,
       isMenuOpen,
       movementSensitivity,
+      orthoControls,
       state.cameraStart.x,
       state.cameraStart.y,
       state.dragStart.x,
@@ -195,12 +218,19 @@ export const useCameraDrag = (
 
   const wheel = useCallback(
     (deltaY: number) => {
-      const camera = cameraRef.current
-      if (!camera) return
       if (isMenuOpen) {
         setState((prev) => ({ ...prev, isDragging: false }))
         return
       }
+
+      // Handle ortho camera zoom
+      if (orthoControls?.isOrthoActiveRef.current) {
+        orthoControls.zoomOrthoCamera(deltaY)
+        return
+      }
+
+      const camera = cameraRef.current
+      if (!camera) return
 
       if (cameraMode === "free") {
         const zoomSpeed = wallDimensions.length * 0.1
@@ -242,6 +272,7 @@ export const useCameraDrag = (
       cameraRef,
       cameraMode,
       isMenuOpen,
+      orthoControls,
       state.isDragging,
       state.orbitPhi,
       state.orbitRadius,

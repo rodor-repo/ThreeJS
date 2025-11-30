@@ -53,6 +53,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
   const [dimensionsVisible, setDimensionsVisible] = useState(true)
   const [numbersVisible, setNumbersVisible] = useState(false)
   const [selectedMode, setSelectedMode] = useState<'admin' | 'user'>('user') // Radio button selection
+  const [isOrthoView, setIsOrthoView] = useState(false) // Track ortho view state for UI
   // Cabinet groups: Map of cabinetId -> array of { cabinetId, percentage }
   const [cabinetGroups, setCabinetGroups] = useState<Map<string, Array<{ cabinetId: string; percentage: number }>>>(new Map())
   // Cabinet sync relationships: Map of cabinetId -> array of synced cabinetIds
@@ -61,10 +62,15 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
   const {
     sceneRef,
     cameraRef,
+    orthoCameraRef,
     wallRef,
     leftWallRef,
     rightWallRef,
     resetCamera,
+    resetToPerspective,
+    isOrthoActiveRef,
+    zoomOrthoCamera,
+    panOrthoCamera,
     setCameraXView,
     setCameraYView,
     setCameraZView,
@@ -102,7 +108,8 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     cameraRef,
     wallDimensions,
     isMenuOpen || false,
-    cameraMode
+    cameraMode,
+    { isOrthoActiveRef, zoomOrthoCamera, panOrthoCamera }
   )
   const { isDragging, zoomLevel } = cameraDrag
 
@@ -163,7 +170,8 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     wallRef,
     leftWallRef,
     rightWallRef,
-    handleWallClick
+    handleWallClick,
+    { orthoCameraRef, isOrthoActiveRef }
   )
 
 
@@ -482,9 +490,9 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         onToggleMode={() => setCameraMode(prev => prev === 'constrained' ? 'free' : 'constrained')}
         onReset={resetCameraPosition}
         onClear={clearCabinets}
-        onX={() => { setCameraMode('constrained'); setCameraXView(); }}
-        onY={() => { setCameraMode('constrained'); setCameraYView(); }}
-        onZ={() => { setCameraMode('constrained'); setCameraZView(); }}
+        onX={() => { setCameraMode('constrained'); setCameraXView(); setIsOrthoView(true); }}
+        onY={() => { setCameraMode('constrained'); setCameraYView(); setIsOrthoView(true); }}
+        onZ={() => { setCameraMode('constrained'); setCameraZView(); setIsOrthoView(true); }}
         onToggleDimensions={() => setDimensionsVisible(prev => !prev)}
         onToggleNumbers={() => setNumbersVisible(prev => !prev)}
         numbersVisible={numbersVisible}
@@ -495,6 +503,8 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         }}
         canDelete={!!selectedCabinet}
         isMenuOpen={isMenuOpen}
+        isOrthoView={isOrthoView}
+        onResetTo3D={() => { resetToPerspective(zoomLevel); setIsOrthoView(false); }}
       />
 
       {/* Camera Movement Instructions moved to CameraControls component - appears on hover */}

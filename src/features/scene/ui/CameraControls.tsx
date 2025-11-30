@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { Move, Focus, Trash2 } from 'lucide-react'
+import { Move, Focus, Trash2, Box } from 'lucide-react'
 
 type Props = {
   isDragging: boolean
@@ -16,9 +16,11 @@ type Props = {
   onDelete?: () => void
   canDelete?: boolean
   isMenuOpen?: boolean
+  isOrthoView?: boolean
+  onResetTo3D?: () => void
 }
 
-export const CameraControls: React.FC<Props> = ({ isDragging, cameraMode, onToggleMode, onReset, onClear, onX, onY, onZ, onToggleDimensions, onToggleNumbers, numbersVisible = false, onDelete, canDelete = false, isMenuOpen = false }) => {
+export const CameraControls: React.FC<Props> = ({ isDragging, cameraMode, onToggleMode, onReset, onClear, onX, onY, onZ, onToggleDimensions, onToggleNumbers, numbersVisible = false, onDelete, canDelete = false, isMenuOpen = false, isOrthoView = false, onResetTo3D }) => {
   const [isHovered, setIsHovered] = useState(false)
   const [showXYZButtons, setShowXYZButtons] = useState(false)
   const xyzContainerRef = useRef<HTMLDivElement>(null)
@@ -51,8 +53,10 @@ export const CameraControls: React.FC<Props> = ({ isDragging, cameraMode, onTogg
     >
       {/* Camera Movement Instructions - Shown on hover */}
       {isHovered && !isMenuOpen && (
-        <div className={`${cameraMode === 'constrained' ? 'bg-gray-600' : 'bg-purple-600'} text-white px-4 py-2 rounded-lg shadow-lg text-sm mb-2 whitespace-nowrap`}>
-          {cameraMode === 'constrained'
+        <div className={`${isOrthoView ? 'bg-green-600' : cameraMode === 'constrained' ? 'bg-gray-600' : 'bg-purple-600'} text-white px-4 py-2 rounded-lg shadow-lg text-sm mb-2 whitespace-nowrap`}>
+          {isOrthoView
+            ? '2D Ortho View • Drag to pan • Wheel to zoom • Click 3D to return'
+            : cameraMode === 'constrained'
             ? 'Constrained Mode • Drag to pan • Wheel to zoom • Right-click cabinet to select'
             : 'Free Mode • Drag to rotate • Right-drag to pan • Shift+click cabinets'
           }
@@ -65,6 +69,20 @@ export const CameraControls: React.FC<Props> = ({ isDragging, cameraMode, onTogg
       )}
 
       <div className="flex gap-2">
+      {/* 3D View button - appears prominently when in ortho mode */}
+      {isOrthoView && onResetTo3D && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            onResetTo3D()
+          }}
+          className="bg-green-600 hover:bg-green-700 text-white p-3 rounded-full shadow-lg transition-colors duration-200 animate-pulse"
+          title="Return to 3D perspective view"
+        >
+          <Box size={24} />
+        </button>
+      )}
+
       <button
         onClick={onToggleMode}
         className={`${cameraMode === 'free' ? 'bg-purple-600 hover:bg-purple-700' : 'bg-teal-600 hover:bg-teal-700'} text-white p-3 rounded-full shadow-lg transition-colors duration-200`}

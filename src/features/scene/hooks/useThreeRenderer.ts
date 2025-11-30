@@ -22,6 +22,8 @@ export const useThreeRenderer = (
   const sceneRef = useRef<THREE.Scene | null>(null)
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null)
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null)
+  const orthoCameraRef = useRef<THREE.OrthographicCamera | null>(null)
+  const isOrthoActiveRef = useRef<boolean>(false)
   const wallRef = useRef<THREE.Group | null>(null)
   const leftWallRef = useRef<THREE.Group | null>(null)
   const rightWallRef = useRef<THREE.Group | null>(null)
@@ -180,48 +182,166 @@ export const useThreeRenderer = (
   const resetCamera = useCallback(
     (zoomLevel: number) => {
       if (!cameraRef.current) return
+      // Switch back to perspective camera
+      isOrthoActiveRef.current = false
       positionCamera(cameraRef.current, wallDimensions, zoomLevel)
     },
     [wallDimensions]
   )
 
+  // Helper to set up orthographic camera for a specific view
+  const setupOrthoCamera = useCallback(
+    (viewAxis: 'x' | 'y' | 'z') => {
+      const orthoCamera = orthoCameraRef.current
+      if (!orthoCamera) return
+
+      const aspect = window.innerWidth / window.innerHeight
+      const wallCenterX = wallDimensions.length / 2
+      const wallCenterY = wallDimensions.height / 2
+      const wallCenterZ = -WALL_THICKNESS / 2
+      const padding = 1.2 // 20% padding
+
+      let frustumHeight: number
+      let frustumWidth: number
+
+      if (viewAxis === 'y') {
+        // Front view: looking at X-Y plane (wall face)
+        frustumWidth = wallDimensions.length * padding
+        frustumHeight = frustumWidth / aspect
+        // Make sure we can see the full height
+        if (frustumHeight < wallDimensions.height * padding) {
+          frustumHeight = wallDimensions.height * padding
+          frustumWidth = frustumHeight * aspect
+        }
+      } else if (viewAxis === 'x') {
+        // Side view: looking at Y-Z plane
+        const leftWallLength = wallDimensions.leftWallLength ?? 600
+        frustumWidth = Math.max(leftWallLength, wallDimensions.height) * padding
+        frustumHeight = frustumWidth / aspect
+        if (frustumHeight < wallDimensions.height * padding) {
+          frustumHeight = wallDimensions.height * padding
+          frustumWidth = frustumHeight * aspect
+        }
+      } else {
+        // Top view: looking at X-Z plane
+        const leftWallLength = wallDimensions.leftWallLength ?? 600
+        frustumWidth = wallDimensions.length * padding
+        frustumHeight = frustumWidth / aspect
+        if (frustumHeight < leftWallLength * padding) {
+          frustumHeight = leftWallLength * padding
+          frustumWidth = frustumHeight * aspect
+        }
+      }
+
+      orthoCamera.left = -frustumWidth / 2
+      orthoCamera.right = frustumWidth / 2
+      orthoCamera.top = frustumHeight / 2
+      orthoCamera.bottom = -frustumHeight / 2
+      orthoCamera.near = 0.1
+      orthoCamera.far = 50000
+      orthoCamera.updateProjectionMatrix()
+
+      // Position camera at a far distance along the view axis
+      const distance = 10000
+
+      if (viewAxis === 'x') {
+        // Side view from the right
+        orthoCamera.position.set(wallCenterX + distance, wallCenterY, wallCenterZ)
+        orthoCamera.lookAt(wallCenterX, wallCenterY, wallCenterZ)
+      } else if (viewAxis === 'y') {
+        // Front view
+        orthoCamera.position.set(wallCenterX, wallCenterY, wallCenterZ + distance)
+        orthoCamera.lookAt(wallCenterX, wallCenterY, wallCenterZ)
+      } else {
+        // Top view
+        orthoCamera.position.set(wallCenterX, wallCenterY + distance, wallCenterZ)
+        orthoCamera.lookAt(wallCenterX, wallCenterY, wallCenterZ)
+      }
+
+      isOrthoActiveRef.current = true
+    },
+    [wallDimensions]
+  )
+
   const setCameraXView = useCallback(() => {
-    const camera = cameraRef.current
-    if (!camera) return
-    const wallCenterX = wallDimensions.length / 2
-    const wallCenterY = wallDimensions.height / 2
-    const wallCenterZ = -WALL_THICKNESS / 2
-    const distance = wallDimensions.length * 1.5
-    camera.position.set(
-      wallDimensions.length + distance,
-      wallCenterY,
-      wallCenterZ
-    )
-    camera.lookAt(wallCenterX, wallCenterY, wallCenterZ)
-  }, [wallDimensions])
+    setupOrthoCamera('x')
+  }, [setupOrthoCamera])
 
   const setCameraYView = useCallback(() => {
-    const camera = cameraRef.current
-    if (!camera) return
-    const wallCenterX = wallDimensions.length / 2
-    const wallCenterY = wallDimensions.height / 2
-    const wallCenterZ = -WALL_THICKNESS / 2
-    const distance = wallDimensions.length * 1.5
-    camera.position.set(wallCenterX, wallCenterY, wallCenterZ + distance)
-    camera.lookAt(wallCenterX, wallCenterY, wallCenterZ)
-  }, [wallDimensions])
+    setupOrthoCamera('y')
+  }, [setupOrthoCamera])
 
   const setCameraZView = useCallback(() => {
-    const camera = cameraRef.current
-    if (!camera) return
-    const wallCenterX = wallDimensions.length / 2
-    const wallCenterY = wallDimensions.height / 2
-    const wallCenterZ = -WALL_THICKNESS / 2
-    const distance =
-      Math.max(wallDimensions.length, wallDimensions.height) * 1.5
-    camera.position.set(wallCenterX, wallCenterY + distance, wallCenterZ)
-    camera.lookAt(wallCenterX, wallCenterY, wallCenterZ)
+    setupOrthoCamera('z')
+  }, [setupOrthoCamera])
+
+  // Zoom orthographic camera by adjusting frustum size
+  const zoomOrthoCamera = useCallback((delta: number) => {
+    const orthoCamera = orthoCameraRef.current
+    if (!orthoCamera || !isOrthoActiveRef.current) return
+
+    const zoomSpeed = 0.1
+    const zoomFactor = delta > 0 ? (1 + zoomSpeed) : (1 - zoomSpeed)
+    
+    // Scale the frustum
+    const currentWidth = orthoCamera.right - orthoCamera.left
+    const currentHeight = orthoCamera.top - orthoCamera.bottom
+    
+    // Limit zoom range
+    const minSize = 100
+    const maxSize = Math.max(wallDimensions.length, wallDimensions.height) * 3
+    
+    const newWidth = currentWidth * zoomFactor
+    const newHeight = currentHeight * zoomFactor
+    
+    if (newWidth < minSize || newHeight < minSize) return
+    if (newWidth > maxSize || newHeight > maxSize) return
+    
+    const centerX = (orthoCamera.left + orthoCamera.right) / 2
+    const centerY = (orthoCamera.top + orthoCamera.bottom) / 2
+    
+    orthoCamera.left = centerX - newWidth / 2
+    orthoCamera.right = centerX + newWidth / 2
+    orthoCamera.top = centerY + newHeight / 2
+    orthoCamera.bottom = centerY - newHeight / 2
+    orthoCamera.updateProjectionMatrix()
   }, [wallDimensions])
+
+  // Pan orthographic camera by moving its position
+  const panOrthoCamera = useCallback((deltaX: number, deltaY: number) => {
+    const orthoCamera = orthoCameraRef.current
+    if (!orthoCamera || !isOrthoActiveRef.current) return
+
+    // Calculate pan speed based on current frustum size
+    const frustumWidth = orthoCamera.right - orthoCamera.left
+    const panSpeed = frustumWidth * 0.001
+
+    // Get camera's right and up vectors for proper panning
+    const right = new THREE.Vector3()
+    const up = new THREE.Vector3()
+    right.setFromMatrixColumn(orthoCamera.matrix, 0)
+    up.setFromMatrixColumn(orthoCamera.matrix, 1)
+
+    // Calculate offset
+    const offsetX = -deltaX * panSpeed
+    const offsetY = deltaY * panSpeed
+
+    // Apply offset to camera position
+    orthoCamera.position.x += offsetX * right.x + offsetY * up.x
+    orthoCamera.position.y += offsetX * right.y + offsetY * up.y
+    orthoCamera.position.z += offsetX * right.z + offsetY * up.z
+  }, [])
+
+  // Reset to perspective view
+  const resetToPerspective = useCallback(
+    (zoomLevel: number) => {
+      isOrthoActiveRef.current = false
+      if (cameraRef.current) {
+        positionCamera(cameraRef.current, wallDimensions, zoomLevel)
+      }
+    },
+    [wallDimensions]
+  )
 
   useEffect(() => {
     wallColorRef.current = wallColor
@@ -299,6 +419,19 @@ export const useThreeRenderer = (
     )
     cameraRef.current = camera
 
+    // Create orthographic camera for flat X/Y/Z views (optical infinity)
+    const aspect = window.innerWidth / window.innerHeight
+    const frustumSize = wallDimensions.length * 1.2
+    const orthoCamera = new THREE.OrthographicCamera(
+      -frustumSize / 2 * aspect,
+      frustumSize / 2 * aspect,
+      frustumSize / 2,
+      -frustumSize / 2,
+      0.1,
+      50000
+    )
+    orthoCameraRef.current = orthoCamera
+
     const renderer = new THREE.WebGLRenderer({ antialias: true })
     renderer.setSize(window.innerWidth, window.innerHeight)
     renderer.shadowMap.enabled = true
@@ -355,17 +488,36 @@ export const useThreeRenderer = (
 
     const handleResize = () => {
       if (!cameraRef.current || !rendererRef.current) return
-      cameraRef.current.aspect = window.innerWidth / window.innerHeight
+      const newAspect = window.innerWidth / window.innerHeight
+      
+      // Update perspective camera
+      cameraRef.current.aspect = newAspect
       cameraRef.current.updateProjectionMatrix()
+      
+      // Update orthographic camera if it exists
+      if (orthoCameraRef.current) {
+        const ortho = orthoCameraRef.current
+        const currentFrustumHeight = ortho.top - ortho.bottom
+        ortho.left = -currentFrustumHeight / 2 * newAspect
+        ortho.right = currentFrustumHeight / 2 * newAspect
+        ortho.updateProjectionMatrix()
+      }
+      
       rendererRef.current.setSize(window.innerWidth, window.innerHeight)
     }
 
     window.addEventListener("resize", handleResize)
 
-    // Animation loop via Three.js
+    // Animation loop via Three.js - uses active camera (ortho or perspective)
     const renderLoop = () => {
-      if (rendererRef.current && sceneRef.current && cameraRef.current)
-        rendererRef.current.render(sceneRef.current, cameraRef.current)
+      if (rendererRef.current && sceneRef.current) {
+        const activeCamera = isOrthoActiveRef.current 
+          ? orthoCameraRef.current 
+          : cameraRef.current
+        if (activeCamera) {
+          rendererRef.current.render(sceneRef.current, activeCamera)
+        }
+      }
     }
     renderer.setAnimationLoop(renderLoop)
 
@@ -399,6 +551,8 @@ export const useThreeRenderer = (
     sceneRef,
     rendererRef,
     cameraRef,
+    orthoCameraRef,
+    isOrthoActiveRef,
     wallRef,
     leftWallRef,
     rightWallRef,
@@ -412,6 +566,9 @@ export const useThreeRenderer = (
     createFloor,
     updateCameraPosition,
     resetCamera,
+    resetToPerspective,
+    zoomOrthoCamera,
+    panOrthoCamera,
     setCameraXView,
     setCameraYView,
     setCameraZView,

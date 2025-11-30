@@ -238,8 +238,11 @@ export function createOverallWidthDimension(
   })
 
   const overallWidth = maxX - minX
-  // Position near back wall (Z=0) with small offset
-  const zPos = DIMENSION_CONSTANTS.defaults.overallZOffset
+  // Position at front of cabinets
+  const zPos =
+    Math.max(
+      ...cabinets.map((c) => c.group.position.z + c.carcass.dimensions.depth)
+    ) + offset
 
   // Short extension lines (fixed length)
   const dimensionLineY = maxY + offset
@@ -345,8 +348,13 @@ export function createOverallHeightDimension(
     if (!tallestCabinet) return
 
     const overallHeight = maxTopY
-    // Position near back wall (Z=0) with small offset
-    const zPos = DIMENSION_CONSTANTS.defaults.overallZOffset
+    // Position at front of cabinets
+    const zPos =
+      Math.max(
+        ...viewCabinets.map(
+          (c) => c.group.position.z + c.carcass.dimensions.depth
+        )
+      ) + 50
     const extensionLength = DIMENSION_CONSTANTS.defaults.overallExtensionLength
 
     // Count Tall cabinets on left vs right side
@@ -471,8 +479,13 @@ export function createBaseTallOverallWidthDimension(
   })
 
   const overallWidth = maxX - minX
-  // Position near back wall (Z=0) with small offset
-  const zPos = DIMENSION_CONSTANTS.defaults.overallZOffset
+  // Position at front of cabinets
+  const zPos =
+    Math.max(
+      ...baseTallCabinets.map(
+        (c) => c.group.position.z + c.carcass.dimensions.depth
+      )
+    ) + offset
   const extensionLength = DIMENSION_CONSTANTS.defaults.overallExtensionLength
 
   // Short extension lines (fixed length)

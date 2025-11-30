@@ -133,6 +133,8 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
   const [openMaterialId, setOpenMaterialId] = useState<string | null>(null)
   const [groupCabinets, setGroupCabinets] = useState<Array<{ cabinetId: string; percentage: number }>>([])
   const [syncCabinets, setSyncCabinets] = useState<string[]>([])
+  // Temporary raw editing buffer for number inputs so user can type full value before clamping/validation
+  const [editingValues, setEditingValues] = useState<Record<string, string>>({})
   
   // Load group data when selected cabinet changes
   useEffect(() => {
@@ -905,17 +907,32 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
                                 type="number"
                                 disabled={isDependentDrawer}
                                 className="w-20 text-center text-sm px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent leading-tight"
-                                value={Number(((values[id] ?? dimObj.defaultValue ?? dimObj.min) as any))}
+                                value={editingValues[id] !== undefined ? editingValues[id] : String(values[id] ?? dimObj.defaultValue ?? dimObj.min)}
                                 min={dimObj.min}
                                 max={dimObj.max}
                                 onChange={e => {
-                                  let val = Number(e.target.value)
-                                  if (isNaN(val)) return
-                                  // Clamp to min/max
+                                  // Allow free typing (including temporarily out-of-range) until blur
+                                  setEditingValues(prev => ({ ...prev, [id]: e.target.value }))
+                                }}
+                                onBlur={() => {
+                                  const raw = editingValues[id]
+                                  if (raw === undefined) return
+                                  if (raw.trim() === '') {
+                                    // Empty input -> revert to previous stored value
+                                    setEditingValues(prev => { const { [id]: _, ...rest } = prev; return rest })
+                                    return
+                                  }
+                                  let val = Number(raw)
+                                  if (isNaN(val)) {
+                                    // Invalid number -> revert
+                                    setEditingValues(prev => { const { [id]: _, ...rest } = prev; return rest })
+                                    return
+                                  }
+                                  // Clamp to min/max only now (after full entry)
                                   if (typeof dimObj.min === 'number') val = Math.max(dimObj.min, val)
                                   if (typeof dimObj.max === 'number') val = Math.min(dimObj.max, val)
 
-                                  // Validation for drawer heights
+                                  // Validation for drawer heights (same logic as before)
                                   if (drawerHeightIndex !== null && !isDependentDrawer) {
                                     const lastDrawerIdx = drawerQty - 1
                                     const lastDrawerDimEntry = dimsList.find(([_, d]) => d.GDId && drawerHeightGDMap[lastDrawerIdx]?.includes(d.GDId))
@@ -931,10 +948,12 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
 
                                       if (projectedLastVal < lastMin) {
                                         toastThrottled(`Cannot increase height: Last drawer would be too small (min ${lastMin}mm).`)
+                                        setEditingValues(prev => { const { [id]: _, ...rest } = prev; return rest })
                                         return
                                       }
                                       if (projectedLastVal > lastMax) {
                                         toastThrottled(`Cannot decrease height: Last drawer would be too large (max ${lastMax}mm).`)
+                                        setEditingValues(prev => { const { [id]: _, ...rest } = prev; return rest })
                                         return
                                       }
                                     }
@@ -942,11 +961,12 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
 
                                   const next = { ...values, [id]: val }
                                   setValues(next)
+                                  // Clear editing buffer for this field
+                                  setEditingValues(prev => { const { [id]: _, ...rest } = prev; return rest })
                                   if (cabinetId) {
                                     const persisted = cabinetPanelState.get(cabinetId)
                                     cabinetPanelState.set(cabinetId, { ...(persisted || {} as any), values: next, materialColor, materialSelections, price: priceData || persisted?.price })
                                   }
-                                  // Number dim changed
                                   applyPrimaryDimsTo3D(next, id)
                                 }}
                               />

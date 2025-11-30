@@ -22,6 +22,8 @@ export const DIMENSION_CONSTANTS = {
     arrowHeadLength: 30,
     overallArrowHeadLength: 45,
     extensionOffset: 100, // Extension line offset
+    overallExtensionLength: 100, // Short extension line length for overall dimensions
+    overallZOffset: 100, // Z offset from back wall for overall dimensions
   },
   text: {
     fontSize: 32,

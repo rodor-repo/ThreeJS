@@ -219,6 +219,7 @@ export function createOverallWidthDimension(
   const lineWidth = 3
   const offset = DIMENSION_CONSTANTS.defaults.overallOffset
   const arrowHeadLength = DIMENSION_CONSTANTS.defaults.overallArrowHeadLength
+  const extensionLength = DIMENSION_CONSTANTS.defaults.overallExtensionLength
 
   // Find min and max X positions, and max Y (top) position
   let minX = Infinity
@@ -237,61 +238,31 @@ export function createOverallWidthDimension(
   })
 
   const overallWidth = maxX - minX
-  const zPos =
-    Math.max(
-      ...cabinets.map((c) => c.group.position.z + c.carcass.dimensions.depth)
-    ) + offset
+  // Position near back wall (Z=0) with small offset
+  const zPos = DIMENSION_CONSTANTS.defaults.overallZOffset
 
-  // Find the leftmost and rightmost cabinets for extension lines
-  let leftmostCabinet: CabinetData | undefined
-  let rightmostCabinet: CabinetData | undefined
-  let leftmostX = Infinity
-  let rightmostX = -Infinity
+  // Short extension lines (fixed length)
+  const dimensionLineY = maxY + offset
+  const extensionLeft = createLine(
+    new THREE.Vector3(minX, dimensionLineY - extensionLength, zPos),
+    new THREE.Vector3(minX, dimensionLineY, zPos),
+    color,
+    lineWidth
+  )
+  group.add(extensionLeft)
 
-  cabinets.forEach((cabinet) => {
-    const x = cabinet.group.position.x
-    const width = cabinet.carcass.dimensions.width
-
-    if (x < leftmostX) {
-      leftmostX = x
-      leftmostCabinet = cabinet
-    }
-
-    if (x + width > rightmostX) {
-      rightmostX = x + width
-      rightmostCabinet = cabinet
-    }
-  })
-
-  // Extension lines
-  if (leftmostCabinet) {
-    const leftCabHeight = leftmostCabinet.carcass.dimensions.height
-    const leftCabY = leftmostCabinet.group.position.y
-    const extensionLeft = createLine(
-      new THREE.Vector3(minX, leftCabY + leftCabHeight, zPos),
-      new THREE.Vector3(minX, maxY + offset, zPos),
-      color,
-      lineWidth
-    )
-    group.add(extensionLeft)
-  }
-
-  if (rightmostCabinet) {
-    const rightCabHeight = rightmostCabinet.carcass.dimensions.height
-    const rightCabY = rightmostCabinet.group.position.y
-    const extensionRight = createLine(
-      new THREE.Vector3(maxX, rightCabY + rightCabHeight, zPos),
-      new THREE.Vector3(maxX, maxY + offset, zPos),
-      color,
-      lineWidth
-    )
-    group.add(extensionRight)
-  }
+  const extensionRight = createLine(
+    new THREE.Vector3(maxX, dimensionLineY - extensionLength, zPos),
+    new THREE.Vector3(maxX, dimensionLineY, zPos),
+    color,
+    lineWidth
+  )
+  group.add(extensionRight)
 
   // Main dimension line
   const mainLine = createLine(
-    new THREE.Vector3(minX, maxY + offset, zPos),
-    new THREE.Vector3(maxX, maxY + offset, zPos),
+    new THREE.Vector3(minX, dimensionLineY, zPos),
+    new THREE.Vector3(maxX, dimensionLineY, zPos),
     color,
     lineWidth
   )
@@ -300,13 +271,13 @@ export function createOverallWidthDimension(
   // Arrows
   const arrowLeft = createArrow(
     new THREE.Vector3(-1, 0, 0),
-    new THREE.Vector3(minX, maxY + offset, zPos),
+    new THREE.Vector3(minX, dimensionLineY, zPos),
     arrowColor,
     arrowHeadLength
   )
   const arrowRight = createArrow(
     new THREE.Vector3(1, 0, 0),
-    new THREE.Vector3(maxX, maxY + offset, zPos),
+    new THREE.Vector3(maxX, dimensionLineY, zPos),
     arrowColor,
     arrowHeadLength
   )
@@ -316,7 +287,7 @@ export function createOverallWidthDimension(
   // Text label
   const textSprite = createTextSprite({
     text: `Overall: ${overallWidth.toFixed(0)}mm`,
-    position: new THREE.Vector3((minX + maxX) / 2, maxY + offset + 40, zPos),
+    position: new THREE.Vector3((minX + maxX) / 2, dimensionLineY + 40, zPos),
     color: DIMENSION_CONSTANTS.colorStrings.overall,
     scale: DIMENSION_CONSTANTS.text.wideScale,
   })
@@ -374,21 +345,9 @@ export function createOverallHeightDimension(
     if (!tallestCabinet) return
 
     const overallHeight = maxTopY
-    const zPos =
-      Math.max(
-        ...viewCabinets.map(
-          (c) => c.group.position.z + c.carcass.dimensions.depth
-        )
-      ) + 50
-    const tallestCabinetX =
-      tallestCabinet.group.position.x +
-      tallestCabinet.carcass.dimensions.width / 2
-
-    // Find leftmost X for extension line
-    let leftmostX = Infinity
-    viewCabinets.forEach((cabinet) => {
-      leftmostX = Math.min(leftmostX, cabinet.group.position.x)
-    })
+    // Position near back wall (Z=0) with small offset
+    const zPos = DIMENSION_CONSTANTS.defaults.overallZOffset
+    const extensionLength = DIMENSION_CONSTANTS.defaults.overallExtensionLength
 
     // Count Tall cabinets on left vs right side
     const sceneCenterX = backWallLength / 2
@@ -415,18 +374,18 @@ export function createOverallHeightDimension(
 
     const group = new THREE.Group()
 
-    // Extension lines
+    // Short extension lines (fixed length) - horizontal from dimension line toward cabinets
     const extensionBottom = createLine(
-      new THREE.Vector3(leftmostX, 0, zPos),
       new THREE.Vector3(dimensionX, 0, zPos),
+      new THREE.Vector3(isRightWall ? dimensionX - extensionLength : dimensionX + extensionLength, 0, zPos),
       color,
       lineWidth
     )
     group.add(extensionBottom)
 
     const extensionTop = createLine(
-      new THREE.Vector3(tallestCabinetX, overallHeight, zPos),
       new THREE.Vector3(dimensionX, overallHeight, zPos),
+      new THREE.Vector3(isRightWall ? dimensionX - extensionLength : dimensionX + extensionLength, overallHeight, zPos),
       color,
       lineWidth
     )
@@ -512,59 +471,32 @@ export function createBaseTallOverallWidthDimension(
   })
 
   const overallWidth = maxX - minX
-  const zPos =
-    Math.max(
-      ...baseTallCabinets.map(
-        (c) => c.group.position.z + c.carcass.dimensions.depth
-      )
-    ) + offset
+  // Position near back wall (Z=0) with small offset
+  const zPos = DIMENSION_CONSTANTS.defaults.overallZOffset
+  const extensionLength = DIMENSION_CONSTANTS.defaults.overallExtensionLength
 
-  // Find leftmost and rightmost cabinets
-  let leftmostCabinet: CabinetData | undefined
-  let rightmostCabinet: CabinetData | undefined
-  let leftmostX = Infinity
-  let rightmostX = -Infinity
+  // Short extension lines (fixed length)
+  const dimensionLineY = minY - offset
+  const extensionLeft = createLine(
+    new THREE.Vector3(minX, dimensionLineY + extensionLength, zPos),
+    new THREE.Vector3(minX, dimensionLineY, zPos),
+    color,
+    lineWidth
+  )
+  group.add(extensionLeft)
 
-  baseTallCabinets.forEach((cabinet) => {
-    const x = cabinet.group.position.x
-    const width = cabinet.carcass.dimensions.width
-
-    if (x < leftmostX) {
-      leftmostX = x
-      leftmostCabinet = cabinet
-    }
-
-    if (x + width > rightmostX) {
-      rightmostX = x + width
-      rightmostCabinet = cabinet
-    }
-  })
-
-  // Extension lines
-  if (leftmostCabinet) {
-    const extensionLeft = createLine(
-      new THREE.Vector3(minX, leftmostCabinet.group.position.y, zPos),
-      new THREE.Vector3(minX, minY - offset, zPos),
-      color,
-      lineWidth
-    )
-    group.add(extensionLeft)
-  }
-
-  if (rightmostCabinet) {
-    const extensionRight = createLine(
-      new THREE.Vector3(maxX, rightmostCabinet.group.position.y, zPos),
-      new THREE.Vector3(maxX, minY - offset, zPos),
-      color,
-      lineWidth
-    )
-    group.add(extensionRight)
-  }
+  const extensionRight = createLine(
+    new THREE.Vector3(maxX, dimensionLineY + extensionLength, zPos),
+    new THREE.Vector3(maxX, dimensionLineY, zPos),
+    color,
+    lineWidth
+  )
+  group.add(extensionRight)
 
   // Main dimension line
   const mainLine = createLine(
-    new THREE.Vector3(minX, minY - offset, zPos),
-    new THREE.Vector3(maxX, minY - offset, zPos),
+    new THREE.Vector3(minX, dimensionLineY, zPos),
+    new THREE.Vector3(maxX, dimensionLineY, zPos),
     color,
     lineWidth
   )
@@ -573,13 +505,13 @@ export function createBaseTallOverallWidthDimension(
   // Arrows
   const arrowLeft = createArrow(
     new THREE.Vector3(-1, 0, 0),
-    new THREE.Vector3(minX, minY - offset, zPos),
+    new THREE.Vector3(minX, dimensionLineY, zPos),
     arrowColor,
     arrowHeadLength
   )
   const arrowRight = createArrow(
     new THREE.Vector3(1, 0, 0),
-    new THREE.Vector3(maxX, minY - offset, zPos),
+    new THREE.Vector3(maxX, dimensionLineY, zPos),
     arrowColor,
     arrowHeadLength
   )
@@ -589,7 +521,7 @@ export function createBaseTallOverallWidthDimension(
   // Text label
   const textSprite = createTextSprite({
     text: `Overall: ${overallWidth.toFixed(0)}mm`,
-    position: new THREE.Vector3((minX + maxX) / 2, minY - offset + 40, zPos),
+    position: new THREE.Vector3((minX + maxX) / 2, dimensionLineY + 40, zPos),
     color: DIMENSION_CONSTANTS.colorStrings.overall,
     scale: DIMENSION_CONSTANTS.text.extraWideScale,
     canvasWidth: DIMENSION_CONSTANTS.text.wideCanvasWidth,

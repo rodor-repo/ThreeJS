@@ -220,8 +220,38 @@ export const useSceneInteractions = (
       }
 
       // Calculate the actual movement delta
-      const actualDeltaX = newX - currentX
+      let actualDeltaX = newX - currentX
       const actualDeltaY = newY - currentY
+
+      // For cabinets in a view, check left wall constraint BEFORE moving anything
+      // This prevents the dragged cabinet from moving while others are blocked
+      if (
+        draggedCabinet.viewId &&
+        draggedCabinet.viewId !== "none" &&
+        viewManager &&
+        actualDeltaX < 0 // Only check when moving left
+      ) {
+        const cabinetsInSameView = viewManager.getCabinetsInView(
+          draggedCabinet.viewId as ViewId
+        )
+
+        // Find the leftmost X position in the view (BEFORE any movement)
+        let viewMinX = Infinity
+        for (const cabinetId of cabinetsInSameView) {
+          const cab = cabinets.find((c) => c.cabinetId === cabinetId)
+          if (cab) {
+            viewMinX = Math.min(viewMinX, cab.group.position.x)
+          }
+        }
+
+        // If moving left would push the leftmost cabinet past x=0, limit the delta
+        if (viewMinX + actualDeltaX < 0) {
+          // Limit the delta so leftmost cabinet reaches exactly x=0
+          actualDeltaX = -viewMinX
+          // Recalculate newX for the dragged cabinet based on the limited delta
+          newX = currentX + actualDeltaX
+        }
+      }
 
       // Move only the dragged cabinet (not all selected cabinets)
       draggedCabinet.group.position.set(
@@ -230,48 +260,9 @@ export const useSceneInteractions = (
         draggedCabinet.group.position.z
       )
 
-      // If dragged cabinet belongs to a view (not "none"), check view boundary and move view cabinets
-      // Note: Right wall can be penetrated - cabinets will push behind the right wall
-      if (
-        draggedCabinet.viewId &&
-        draggedCabinet.viewId !== "none" &&
-        viewManager
-      ) {
-        const cabinetsInSameView = viewManager.getCabinetsInView(
-          draggedCabinet.viewId as ViewId
-        )
-
-        // Calculate current min and max X positions in the view
-        let minX = Infinity
-        let maxX = -Infinity
-
-        for (const cabinetId of cabinetsInSameView) {
-          const cabinetInView = cabinets.find((c) => c.cabinetId === cabinetId)
-          if (cabinetInView) {
-            const cabinetX = cabinetInView.group.position.x
-            const cabinetWidth = cabinetInView.carcass.dimensions.width
-            const cabinetRight = cabinetX + cabinetWidth
-
-            minX = Math.min(minX, cabinetX)
-            maxX = Math.max(maxX, cabinetRight)
-          }
-        }
-
-        // Calculate what the new min and max X would be after movement
-        const newMinX = minX + actualDeltaX
-
-        // Only check left boundary - right wall can be penetrated
-        // If minimum X would be 0 or less, stop all movement (left boundary reached)
-        if (newMinX <= 0) {
-          // Don't move any cabinets - stop movement but allow resize
-          return
-        }
-
-        // Note: Right wall boundary check removed - cabinets can penetrate and push the right wall
-        // The right wall position will be adjusted automatically if it's linked to this view
-      }
-
       // If dragged cabinet belongs to a view (not "none"), move ALL cabinets in that view together
+      // Note: Left wall boundary is already checked above before moving the dragged cabinet
+      // Right wall can be penetrated - cabinets will push behind the right wall
       // This maintains relative positions because they all move by the same delta
       if (
         draggedCabinet.viewId &&

@@ -45,6 +45,44 @@ export const handleProductDimensionChange = (
     return false
   }
 
+  // Helper function to check if pushing left cabinets would exceed the left wall
+  // Returns the overflow amount (how much it would go past x=0) or null if OK
+  const checkLeftWallOverflow = (
+    pushAmount: number,
+    changingCabinetId: string,
+    changingRightEdge: number,
+    viewId: ViewId
+  ): number | null => {
+    if (!viewManager || pushAmount <= 0) return null
+
+    const cabinetsInView = viewManager.getCabinetsInView(viewId)
+    let maxOverflow: number | null = null
+
+    for (const cabId of cabinetsInView) {
+      if (cabId === changingCabinetId) continue
+
+      const cab = cabinets.find((c) => c.cabinetId === cabId)
+      if (!cab) continue
+
+      // Skip paired cabinets
+      if (areCabinetsPaired(changingCabinetId, cab.cabinetId)) continue
+
+      // Check if this cabinet is to the LEFT of the changing cabinet
+      const cabRightEdge = cab.group.position.x + cab.carcass.dimensions.width
+      if (cabRightEdge < changingRightEdge) {
+        const newX = cab.group.position.x - pushAmount
+        if (newX < 0) {
+          const overflow = Math.abs(newX)
+          if (maxOverflow === null || overflow > maxOverflow) {
+            maxOverflow = overflow
+          }
+        }
+      }
+    }
+
+    return maxOverflow
+  }
+
   // Store old width and position before updating
   const oldWidth = selectedCabinet.carcass.dimensions.width
   const oldX = selectedCabinet.group.position.x
@@ -331,6 +369,35 @@ export const handleProductDimensionChange = (
       const rightEdge = oldX + oldWidth
       const newX = rightEdge - newDimensions.width
 
+      // Validate: check if pushing left cabinets would exceed the left wall
+      if (
+        selectedCabinet.viewId &&
+        selectedCabinet.viewId !== "none" &&
+        widthDelta > 0 // Only check when expanding (pushing left cabinets further left)
+      ) {
+        const overflow = checkLeftWallOverflow(
+          widthDelta,
+          selectedCabinet.cabinetId,
+          rightEdge,
+          selectedCabinet.viewId as ViewId
+        )
+        if (overflow !== null) {
+          alert(
+            `Cannot expand width: a cabinet would be pushed ${overflow.toFixed(
+              0
+            )}mm past the left wall. ` +
+              `Please reduce the width or move cabinets first.`
+          )
+          // Emit event to sync ProductPanel UI with actual dimensions
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(
+              new CustomEvent("productPanel:dimensionRejected")
+            )
+          }
+          return
+        }
+      }
+
       // Update dimensions first
       selectedCabinet.carcass.updateDimensions(newDimensions)
 
@@ -466,6 +533,39 @@ export const handleProductDimensionChange = (
     } else {
       // Neither lock is active - cabinet can extend/shrink by half widthDelta in both directions
       // Center position stays fixed, extends equally in both positive and negative X directions
+
+      // Validate: check if pushing left cabinets would exceed the left wall
+      // In neither lock mode, left cabinets get pushed by halfDelta
+      if (
+        selectedCabinet.viewId &&
+        selectedCabinet.viewId !== "none" &&
+        widthDelta > 0 // Only check when expanding (pushing left cabinets further left)
+      ) {
+        const halfDelta = widthDelta / 2
+        const changingRightEdge = oldX + oldWidth
+        const overflow = checkLeftWallOverflow(
+          halfDelta,
+          selectedCabinet.cabinetId,
+          changingRightEdge,
+          selectedCabinet.viewId as ViewId
+        )
+        if (overflow !== null) {
+          alert(
+            `Cannot expand width: a cabinet would be pushed ${overflow.toFixed(
+              0
+            )}mm past the left wall. ` +
+              `Please reduce the width or move cabinets first.`
+          )
+          // Emit event to sync ProductPanel UI with actual dimensions
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(
+              new CustomEvent("productPanel:dimensionRejected")
+            )
+          }
+          return
+        }
+      }
+
       // Calculate center position
       const centerX = oldX + oldWidth / 2
       // Calculate new left edge position (center - half of new width)

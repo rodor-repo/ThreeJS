@@ -191,6 +191,48 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
     }
   }, [cabinetId])
 
+  // Listen for dimension rejection events to sync UI with actual cabinet dimensions
+  useEffect(() => {
+    if (!cabinetId || !selectedCabinet || !wsProduct?.dims) return
+
+    const handler = () => {
+      // We can't simply do setValues(prev => ({ ...prev })) because by the time this
+      // event fires, the local `values` state has already been updated with the rejected
+      // value (e.g., 501). We need to read from selectedCabinet.dimensions (the source
+      // of truth, still at 500) and explicitly overwrite the incorrect local state.
+      // The complexity of iterating through dims comes from the data structure - `values`
+      // is keyed by dimension IDs (e.g., "dim_abc123"), not semantic names like "width".
+      const widthGDIds = threeJsGDs?.["width"] || []
+      const heightGDIds = threeJsGDs?.["height"] || []
+      const depthGDIds = threeJsGDs?.["depth"] || []
+
+      setValues(prev => {
+        const next = { ...prev }
+        for (const [dimId, dimObj] of Object.entries(wsProduct!.dims)) {
+          if (!dimObj.GDId) continue
+          if (widthGDIds.includes(dimObj.GDId)) {
+            next[dimId] = selectedCabinet!.dimensions.width
+          } else if (heightGDIds.includes(dimObj.GDId)) {
+            next[dimId] = selectedCabinet!.dimensions.height
+          } else if (depthGDIds.includes(dimObj.GDId)) {
+            next[dimId] = selectedCabinet!.dimensions.depth
+          }
+        }
+        // Also update persisted state
+        const persisted = cabinetPanelState.get(cabinetId!)
+        if (persisted) {
+          cabinetPanelState.set(cabinetId!, { ...persisted, values: next })
+        }
+        return next
+      })
+    }
+
+    window.addEventListener('productPanel:dimensionRejected', handler)
+    return () => {
+      window.removeEventListener('productPanel:dimensionRejected', handler)
+    }
+  }, [cabinetId, selectedCabinet, wsProduct?.dims, threeJsGDs])
+
 
   // const envWidthGDIds = process.env.NEXT_PUBLIC_WIDTH_GDID?.split(',') || []
   // const envHeightGDIds = process.env.NEXT_PUBLIC_HEIGHT_GDID?.split(',') || []

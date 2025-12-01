@@ -310,6 +310,18 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
   const [historyTab, setHistoryTab] = useState<'manual' | 'auto'>('manual')
   const [isCheckpointed, setIsCheckpointed] = useState(false)
 
+  const propagateLockToPairedCabinets = useCallback(
+    (sourceCabinetId: string, leftLock: boolean, rightLock: boolean) => {
+      const group = cabinetGroups.get(sourceCabinetId)
+      if (!group || group.length === 0) return
+
+      group.forEach(pair => {
+        updateCabinetLock(pair.cabinetId, leftLock, rightLock)
+      })
+    },
+    [cabinetGroups, updateCabinetLock]
+  )
+
   const handleCreateCheckpoint = () => {
     createCheckpoint()
     setIsCheckpointed(true)
@@ -529,6 +541,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
           onLockChange={(cabinetId, leftLock, rightLock) => {
             // Update the cabinet's lock state
             updateCabinetLock(cabinetId, leftLock, rightLock)
+            propagateLockToPairedCabinets(cabinetId, leftLock, rightLock)
             // Update cabinetWithLockIcons if it's the one being changed
             if (cabinetWithLockIcons?.cabinetId === cabinetId) {
               setCabinetWithLockIcons(prev => prev ? { ...prev, leftLock, rightLock } : null)
@@ -691,6 +704,13 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
               if (!otherGroupList.find(g => g.cabinetId === cabinetId)) {
                 const updatedGroup = recalculatePercentages([...otherGroupList, { cabinetId, percentage: 0 }])
                 newMap.set(addedId, updatedGroup)
+              }
+
+              const sourceCabinet = cabinets.find(c => c.cabinetId === cabinetId)
+              if (sourceCabinet) {
+                const sourceLeftLock = !!sourceCabinet.leftLock
+                const sourceRightLock = !!sourceCabinet.rightLock
+                updateCabinetLock(addedId, sourceLeftLock, sourceRightLock)
               }
             }
 

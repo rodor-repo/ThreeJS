@@ -556,20 +556,39 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
       <div className={`h-full transition-all duration-300 ease-in-out ${isExpanded ? 'w-80 sm:w-96 max-w-[90vw]' : 'w-0'} overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100`}>
         {/* Header */}
         <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-gray-800">Product Panel</h2>
-            <div className="ml-2 flex items-center gap-2 text-sm text-gray-700">
-              {isPriceFetching ? (
-                <span className="text-gray-500">Updating…</span>
-              ) : isPriceError ? (
-                <span className="text-red-600">Price N/A</span>
-              ) : priceData ? (
-                <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700">{`$${priceData.amount.toFixed(2)}`}</span>
-              ) : null}
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              {selectedCabinet?.sortNumber && (
+                <div className="flex items-center justify-center w-12 h-12 rounded-full bg-amber-100 border-2 border-amber-400 shadow-sm flex-shrink-0">
+                  <span className="text-xl font-extrabold text-amber-700">#{selectedCabinet.sortNumber}</span>
+                </div>
+              )}
+              <div className="min-w-0">
+                <h2 className="text-lg font-semibold text-gray-800">Product Panel</h2>
+                {wsProduct && <p className="text-sm text-gray-600 mt-0.5 truncate">{wsProduct.product}</p>}
+              </div>
             </div>
-            <button onClick={e => { e.stopPropagation(); onClose() }} className="text-gray-500 hover:text-gray-700 transition-colors">×</button>
+            <div className="flex items-center gap-3 flex-shrink-0">
+              <div className="flex items-center gap-2 text-sm text-gray-700">
+                {isPriceFetching ? (
+                  <span className="text-gray-500">Updating…</span>
+                ) : isPriceError ? (
+                  <span className="text-red-600">Price N/A</span>
+                ) : priceData ? (
+                  <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700">{`$${priceData.amount.toFixed(2)}`}</span>
+                ) : null}
+              </div>
+              <button
+                onClick={e => {
+                  e.stopPropagation()
+                  onClose()
+                }}
+                className="text-gray-500 hover:text-gray-700 transition-colors text-lg leading-none px-2"
+              >
+                ×
+              </button>
+            </div>
           </div>
-          {wsProduct && <p className="text-sm text-gray-600 mt-1 truncate">{wsProduct.product}</p>}
         </div>
 
         {/* Loading / Error */}

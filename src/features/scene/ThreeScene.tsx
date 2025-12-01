@@ -557,6 +557,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
           cabinetType: selectedCabinet.cabinetType,
           subcategoryId: selectedCabinet.subcategoryId,
           productId: selectedCabinet.productId,
+          sortNumber: selectedCabinet.sortNumber,
           doorEnabled: selectedCabinet.carcass.config.doorEnabled,
           doorCount: selectedCabinet.carcass.config.doorCount,
           doorMaterial: selectedCabinet.carcass.config.doorMaterial,

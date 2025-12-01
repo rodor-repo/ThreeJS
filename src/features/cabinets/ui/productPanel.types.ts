@@ -16,6 +16,7 @@ export interface SelectedCabinetSnapshot {
   cabinetType: string
   subcategoryId?: string
   productId?: string
+  sortNumber?: number
   doorEnabled?: boolean
   doorCount?: number
   doorMaterial?: DoorMaterial

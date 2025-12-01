@@ -353,8 +353,11 @@ export const useCameraDrag = (
       right.setFromMatrixColumn(camera.matrix, 0)
       up.setFromMatrixColumn(camera.matrix, 1)
 
-      const panX = deltaX * panSpeed
-      const panY = -deltaY * panSpeed
+      // In free roam, dragging left should move the scene left (camera right),
+      // and dragging down should move the scene down (camera up),
+      // so we invert both deltas to match intuitive canvas movement.
+      const panX = -deltaX * panSpeed
+      const panY = deltaY * panSpeed
 
       const offsetX = panX * right.x + panY * up.x
       const offsetY = panX * right.y + panY * up.y

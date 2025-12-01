@@ -68,6 +68,8 @@ export const useWallsAutoAdjust = ({
 
     const currentBackWallLength =
       wallDimensions.backWallLength ?? wallDimensions.length
+    // When wall is linked to a view, follow the view's rightmost edge (expand AND shrink)
+    // Cabinets outside the view are allowed to go beyond the wall boundary
     if (
       rightmostX > currentBackWallLength ||
       Math.abs(rightmostX - currentBackWallLength) > 1
@@ -93,24 +95,63 @@ export const useWallsAutoAdjust = ({
     let needsUpdate = false
     const newDimensions: WallDimensions = { ...wallDimensions }
 
-    let rightmostCabinetEdge = 0
-    cabinets.forEach((cabinet) => {
-      const cabinetRightEdge =
-        cabinet.group.position.x + cabinet.carcass.dimensions.width
-      if (cabinetRightEdge > rightmostCabinetEdge) {
-        rightmostCabinetEdge = cabinetRightEdge
-      }
-    })
+    // Only auto-expand for all cabinets if the right wall is NOT linked to a view
+    // When linked to a view, cabinets outside the view are allowed to go beyond the wall
+    const isWallLinkedToView = wallDimensions.rightWallViewId && wallDimensions.rightWallViewId !== "none"
+    
+    if (!isWallLinkedToView) {
+      let rightmostCabinetEdge = 0
+      cabinets.forEach((cabinet) => {
+        const cabinetRightEdge =
+          cabinet.group.position.x + cabinet.carcass.dimensions.width
+        if (cabinetRightEdge > rightmostCabinetEdge) {
+          rightmostCabinetEdge = cabinetRightEdge
+        }
+      })
 
-    if (rightmostCabinetEdge > currentBackWallLength) {
-      newDimensions.backWallLength = Math.max(100, rightmostCabinetEdge)
-      newDimensions.length = Math.max(100, rightmostCabinetEdge)
-      needsUpdate = true
+      if (rightmostCabinetEdge > currentBackWallLength) {
+        newDimensions.backWallLength = Math.max(100, rightmostCabinetEdge)
+        newDimensions.length = Math.max(100, rightmostCabinetEdge)
+        needsUpdate = true
+      }
     }
 
     if (wallDimensions.additionalWalls && wallDimensions.additionalWalls.length > 0) {
       const updatedAdditionalWalls = wallDimensions.additionalWalls.map((wall) => {
         const wallThickness = wall.thickness ?? WALL_THICKNESS
+        
+        // Check if this additional wall is linked to a view
+        if (wall.viewId && wall.viewId !== "none") {
+          // Wall is linked to a view - follow the view's rightmost edge (like constant right wall)
+          const cabinetIds = viewManager.getCabinetsInView(wall.viewId as ViewId)
+          const viewCabinets = cabinets.filter((c) =>
+            cabinetIds.includes(c.cabinetId)
+          )
+
+          if (viewCabinets.length === 0) return wall
+
+          // Find rightmost edge of cabinets in the linked view
+          let rightmostX = 0
+          viewCabinets.forEach((cabinet) => {
+            const cabinetRightEdge =
+              cabinet.group.position.x + cabinet.carcass.dimensions.width
+            if (cabinetRightEdge > rightmostX) {
+              rightmostX = cabinetRightEdge
+            }
+          })
+
+          // Position wall at the rightmost edge (expand AND shrink to follow the view)
+          if (Math.abs(wall.distanceFromLeft - rightmostX) > 1) {
+            return {
+              ...wall,
+              distanceFromLeft: Math.max(0, rightmostX),
+            }
+          }
+
+          return wall
+        }
+
+        // Wall is NOT linked to a view - only expand when cabinets penetrate
         const wallLeft = wall.distanceFromLeft
         const wallRight = wall.distanceFromLeft + wallThickness
 
@@ -160,5 +201,6 @@ export const useWallsAutoAdjust = ({
     cabinets,
     zoomLevel,
     wallDimensions,
+    viewManager
   ])
 }

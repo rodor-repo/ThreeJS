@@ -18,7 +18,7 @@ export const DIMENSION_CONSTANTS = {
   defaults: {
     lineWidth: 2,
     offset: 50, // Offset from cabinet edges
-    overallOffset: 100, // Offset for overall dimensions
+    overallOffset: 200, // Offset for overall dimensions
     arrowHeadLength: 30,
     overallArrowHeadLength: 45,
     extensionOffset: 100, // Extension line offset

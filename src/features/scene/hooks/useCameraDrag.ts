@@ -367,11 +367,26 @@ export const useCameraDrag = (
       let newCameraY = camera.position.y + offsetY
       let newCameraZ = camera.position.z + offsetZ
 
-      const minZ = -500
-      const minY = -200
+      // Clamp camera within a reasonable region around the wall so the scene
+      // cannot be panned completely out of view.
+      const wallCenterX = wallDimensions.length / 2
+      const wallCenterY = wallDimensions.height / 2
+      const wallCenterZ = -WALL_THICKNESS / 2
 
-      newCameraZ = Math.max(minZ, newCameraZ)
-      newCameraY = Math.max(minY, newCameraY)
+      const maxHorizontalOffset = wallDimensions.length * 1.5
+      const maxVerticalOffset = wallDimensions.height * 1.5
+      const minZ = wallCenterZ - wallDimensions.length * 3
+      const maxZ = wallCenterZ + wallDimensions.length * 3
+
+      newCameraX = Math.max(
+        wallCenterX - maxHorizontalOffset,
+        Math.min(wallCenterX + maxHorizontalOffset, newCameraX)
+      )
+      newCameraY = Math.max(
+        wallCenterY - maxVerticalOffset,
+        Math.min(wallCenterY + maxVerticalOffset, newCameraY)
+      )
+      newCameraZ = Math.max(minZ, Math.min(maxZ, newCameraZ))
 
       const actualOffsetX = newCameraX - camera.position.x
       const actualOffsetY = newCameraY - camera.position.y
@@ -387,13 +402,27 @@ export const useCameraDrag = (
         z: state.orbitTarget.z + actualOffsetZ,
       }
 
+      // Also keep orbit target within a similar region so subsequent orbit
+      // rotations remain centered around the main canvas.
+      const clampedTarget = {
+        x: Math.max(
+          wallCenterX - maxHorizontalOffset,
+          Math.min(wallCenterX + maxHorizontalOffset, newTarget.x)
+        ),
+        y: Math.max(
+          wallCenterY - maxVerticalOffset,
+          Math.min(wallCenterY + maxVerticalOffset, newTarget.y)
+        ),
+        z: Math.max(minZ, Math.min(maxZ, newTarget.z)),
+      }
+
       setState((prev) => ({
         ...prev,
         dragStart: { x: clientX, y: clientY },
-        orbitTarget: newTarget,
+        orbitTarget: clampedTarget,
       }))
 
-      camera.lookAt(newTarget.x, newTarget.y, newTarget.z)
+      camera.lookAt(clampedTarget.x, clampedTarget.y, clampedTarget.z)
     },
     [
       cameraRef,
@@ -403,6 +432,8 @@ export const useCameraDrag = (
       state.isDragging,
       state.orbitRadius,
       state.orbitTarget,
+      wallDimensions.height,
+      wallDimensions.length,
     ]
   )
 

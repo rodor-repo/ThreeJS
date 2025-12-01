@@ -111,7 +111,7 @@ export function createCabinetDimensionLines(
       y + height + offset,
       z + depth + offset
     ),
-    labelText: `${width}mm`,
+    labelText: `${Math.ceil(width)}mm`,
     labelPosition: new THREE.Vector3(
       (xCabinetLeft + xRight) / 2,
       y + height + offset + 30,
@@ -134,7 +134,7 @@ export function createCabinetDimensionLines(
       ),
       dimensionPoint1: new THREE.Vector3(xLeft, y, z + depth + offset),
       dimensionPoint2: new THREE.Vector3(xLeft, y + height, z + depth + offset),
-      labelText: `${height}mm`,
+      labelText: `${Math.ceil(height)}mm`,
       labelPosition: new THREE.Vector3(
         xLeft - 30,
         y + height / 2,
@@ -168,7 +168,7 @@ export function createCabinetDimensionLines(
         kickerHeight,
         z + depth + offset
       ),
-      labelText: `${kickerHeight.toFixed(0)}mm`,
+      labelText: `${Math.ceil(kickerHeight)}mm`,
       labelPosition: new THREE.Vector3(
         xLeft - 30,
         kickerHeight / 2,
@@ -189,7 +189,7 @@ export function createCabinetDimensionLines(
       extensionStart2: new THREE.Vector3(xLeft, y + height, z + depth),
       dimensionPoint1: new THREE.Vector3(xLeft, y + height + offset, z),
       dimensionPoint2: new THREE.Vector3(xLeft, y + height + offset, z + depth),
-      labelText: `${depth}mm`,
+      labelText: `${Math.ceil(depth)}mm`,
       labelPosition: new THREE.Vector3(
         xLeft - 30,
         y + height + offset,
@@ -289,7 +289,7 @@ export function createOverallWidthDimension(
 
   // Text label
   const textSprite = createTextSprite({
-    text: `Overall: ${overallWidth.toFixed(0)}mm`,
+    text: `Overall: ${Math.ceil(overallWidth)}mm`,
     position: new THREE.Vector3((minX + maxX) / 2, dimensionLineY + 40, zPos),
     color: DIMENSION_CONSTANTS.colorStrings.overall,
     scale: DIMENSION_CONSTANTS.text.wideScale,
@@ -427,7 +427,7 @@ export function createOverallHeightDimension(
     // Text label
     const textOffset = isRightWall ? 30 : -30
     const textSprite = createTextSprite({
-      text: `Overall: ${overallHeight.toFixed(0)}mm`,
+      text: `Overall: ${Math.ceil(overallHeight)}mm`,
       position: new THREE.Vector3(
         dimensionX + textOffset,
         overallHeight / 2,
@@ -533,7 +533,7 @@ export function createBaseTallOverallWidthDimension(
 
   // Text label
   const textSprite = createTextSprite({
-    text: `Overall: ${overallWidth.toFixed(0)}mm`,
+    text: `Overall: ${Math.ceil(overallWidth)}mm`,
     position: new THREE.Vector3((minX + maxX) / 2, dimensionLineY + 40, zPos),
     color: DIMENSION_CONSTANTS.colorStrings.overall,
     scale: DIMENSION_CONSTANTS.text.extraWideScale,
@@ -1046,7 +1046,7 @@ export function createEmptySpaceYDimension(
     extensionStart2: new THREE.Vector3(x, topY, z),
     dimensionPoint1: new THREE.Vector3(dimensionLineX, bottomY, z),
     dimensionPoint2: new THREE.Vector3(dimensionLineX, topY, z),
-    labelText: `${height.toFixed(0)}mm`,
+    labelText: `${Math.ceil(height)}mm`,
     labelPosition: new THREE.Vector3(
       dimensionLineX - 30,
       bottomY + height / 2,
@@ -1086,7 +1086,7 @@ export function createEmptySpaceXOverheadDimension(
     extensionStart2: new THREE.Vector3(rightXOffset, topY, z),
     dimensionPoint1: new THREE.Vector3(leftXOffset, topY + extensionOffset, z),
     dimensionPoint2: new THREE.Vector3(rightXOffset, topY + extensionOffset, z),
-    labelText: `${width.toFixed(0)}mm`,
+    labelText: `${Math.ceil(width)}mm`,
     labelPosition: new THREE.Vector3(
       (leftXOffset + rightXOffset) / 2,
       topY + extensionOffset + 30,
@@ -1148,7 +1148,7 @@ export function createEmptySpaceXDimension(
     extensionStart2: new THREE.Vector3(rightXOffset, extensionStartY, z),
     dimensionPoint1: new THREE.Vector3(leftXOffset, dimensionLineY, z),
     dimensionPoint2: new THREE.Vector3(rightXOffset, dimensionLineY, z),
-    labelText: `${width.toFixed(0)}mm`,
+    labelText: `${Math.ceil(width)}mm`,
     labelPosition: new THREE.Vector3(
       (leftXOffset + rightXOffset) / 2,
       dimensionLineY + 30,

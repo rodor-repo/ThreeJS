@@ -52,6 +52,8 @@ export const useSceneInteractions = (
     useState<CabinetData | null>(null)
   const clickStartPositionRef = useRef<{ x: number; y: number } | null>(null)
   const clickStartCabinetRef = useRef<CabinetData | null>(null)
+  // Version counter that increments when cabinet drag ends to trigger wall adjustments
+  const [dragEndVersion, setDragEndVersion] = useState(0)
 
   // Helper to get the active camera (ortho when in ortho mode, perspective otherwise)
   const getActiveCamera = useCallback((): THREE.Camera | null => {
@@ -613,6 +615,8 @@ export const useSceneInteractions = (
 
     const handleMouseUp = (event: MouseEvent) => {
       if (event.button === 0) {
+        // Check if we were dragging a cabinet before clearing the flag
+        const wasDraggingCabinet = isDraggingCabinetRef.current
         cameraDrag.end()
         isDraggingCabinetRef.current = false
         // Clear snap guides when drag ends
@@ -620,6 +624,10 @@ export const useSceneInteractions = (
         // Clear click start tracking
         clickStartPositionRef.current = null
         clickStartCabinetRef.current = null
+        // Increment version to trigger wall adjustments after cabinet drag
+        if (wasDraggingCabinet) {
+          setDragEndVersion(v => v + 1)
+        }
       } else if (event.button === 2) {
         cameraDrag.end()
         setIsPanningCamera(false)
@@ -777,5 +785,6 @@ export const useSceneInteractions = (
     isDraggingCabinet: isDraggingCabinetRef.current,
     cabinetWithLockIcons,
     setCabinetWithLockIcons,
+    dragEndVersion,
   }
 }

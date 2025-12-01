@@ -9,6 +9,8 @@ type UseWallsAutoAdjustOptions = {
   viewManager: ViewManager
   applyDimensions: (dimensions: WallDimensions, color?: string, zoomLevel?: number) => void
   zoomLevel?: number
+  /** Version counter that triggers recalculation when cabinet positions change via dragging */
+  positionVersion?: number
 }
 
 export const useWallsAutoAdjust = ({
@@ -17,6 +19,7 @@ export const useWallsAutoAdjust = ({
   viewManager,
   applyDimensions,
   zoomLevel = 1.5,
+  positionVersion = 0,
 }: UseWallsAutoAdjustOptions) => {
   const cabinetPositionsKey = useMemo(
     () =>
@@ -26,7 +29,10 @@ export const useWallsAutoAdjust = ({
             `${c.cabinetId}-${c.group.position.x}-${c.carcass.dimensions.width}`
         )
         .join(","),
-    [cabinets]
+    // positionVersion forces recalculation when cabinets are dragged
+    // (since cabinet.group.position is mutated, cabinets array ref doesn't change)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [cabinets, positionVersion]
   )
 
   const additionalWallsKey = useMemo(

@@ -1,6 +1,7 @@
 import { DoorMaterial } from '@/features/carcass'
 import { Subcategory } from '@/components/categoriesData'
 import { Settings, ShoppingCart, Undo, Redo, Flag, History, Clock, Trash2 } from 'lucide-react'
+import { debounce } from 'lodash'
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useCabinets } from '../cabinets/hooks/useCabinets'
 import { useViewManager } from '../cabinets/hooks/useViewManager'
@@ -58,6 +59,13 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
   const [cabinetGroups, setCabinetGroups] = useState<Map<string, Array<{ cabinetId: string; percentage: number }>>>(new Map())
   // Cabinet sync relationships: Map of cabinetId -> array of synced cabinetIds
   const [cabinetSyncs, setCabinetSyncs] = useState<Map<string, string[]>>(new Map())
+  // Version counter that increments when cabinet dimensions change to trigger wall adjustments
+  const [dimensionVersion, setDimensionVersion] = useState(0)
+  // Debounced increment to avoid excessive updates when slider is being dragged
+  const debouncedIncrementDimensionVersion = useMemo(
+    () => debounce(() => setDimensionVersion(v => v + 1), 300),
+    []
+  )
 
   const {
     sceneRef,
@@ -150,7 +158,8 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
 
   const {
     cabinetWithLockIcons,
-    setCabinetWithLockIcons
+    setCabinetWithLockIcons,
+    dragEndVersion
   } = useSceneInteractions(
     cameraRef,
     wallDimensions,
@@ -279,6 +288,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     viewManager: viewManager.viewManager,
     applyDimensions,
     zoomLevel,
+    positionVersion: dragEndVersion + dimensionVersion,
   })
 
   const handleSettingsClick = () => {
@@ -714,6 +724,8 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
                 wallDimensions
               }
             )
+            // Debounced increment to trigger wall adjustments after dimension change
+            debouncedIncrementDimensionVersion()
           }
         }}
         onMaterialChange={(materialChanges) => {

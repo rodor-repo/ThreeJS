@@ -110,11 +110,11 @@ export const buildLeftWall = (height: number, length: number, color: string = "#
   const group = new THREE.Group()
   
   // Left wall extends in Z direction, positioned so it ends at X=0
-  // The wall starts at Z=0 (where back wall ends) and extends forward by 'length' in positive Z
+  // The wall starts at Z=-WALL_THICKNESS (aligned with back of back wall) and extends forward by 'length' in positive Z
   const geometry = new THREE.BoxGeometry(
     WALL_THICKNESS,
     height,
-    length
+    length + WALL_THICKNESS
   )
   const material = new THREE.MeshLambertMaterial({
     color: _.defaultTo(color, "#dcbfa0"),
@@ -123,8 +123,8 @@ export const buildLeftWall = (height: number, length: number, color: string = "#
   })
   
   const wall = new THREE.Mesh(geometry, material)
-  // Position: X center at -WALL_THICKNESS/2 (so right edge is at X=0), Y at center, Z center at length/2 (starts at Z=0, extends to Z=length)
-  wall.position.set(-WALL_THICKNESS / 2, height / 2, length / 2)
+  // Position: X center at -WALL_THICKNESS/2 (so right edge is at X=0), Y at center, Z center at (length - WALL_THICKNESS)/2
+  wall.position.set(-WALL_THICKNESS / 2, height / 2, (length - WALL_THICKNESS) / 2)
   wall.castShadow = true
   wall.receiveShadow = true
   group.add(wall)
@@ -132,7 +132,7 @@ export const buildLeftWall = (height: number, length: number, color: string = "#
   const edges = new THREE.EdgesGeometry(geometry)
   const lineMaterial = new THREE.LineBasicMaterial({ color: 0x666666 })
   const wireframe = new THREE.LineSegments(edges, lineMaterial)
-  wireframe.position.set(-WALL_THICKNESS / 2, height / 2, length / 2)
+  wireframe.position.set(-WALL_THICKNESS / 2, height / 2, (length - WALL_THICKNESS) / 2)
   group.add(wireframe)
   
   return group
@@ -152,11 +152,11 @@ export const buildRightWall = (height: number, length: number, backWallLength: n
   const group = new THREE.Group()
   
   // Right wall extends in Z direction, positioned so it starts at X=backWallLength
-  // The wall starts at Z=0 (where back wall ends) and extends forward by 'length' in positive Z
+  // The wall starts at Z=-WALL_THICKNESS (aligned with back of back wall) and extends forward by 'length' in positive Z
   const geometry = new THREE.BoxGeometry(
     WALL_THICKNESS,
     height,
-    length
+    length + WALL_THICKNESS
   )
   const material = new THREE.MeshLambertMaterial({
     color: _.defaultTo(color, "#dcbfa0"),
@@ -165,8 +165,8 @@ export const buildRightWall = (height: number, length: number, backWallLength: n
   })
   
   const wall = new THREE.Mesh(geometry, material)
-  // Position: X center at backWallLength + WALL_THICKNESS/2 (so left edge is at X=backWallLength), Y at center, Z center at length/2 (starts at Z=0, extends to Z=length)
-  wall.position.set(backWallLength + WALL_THICKNESS / 2, height / 2, length / 2)
+  // Position: X center at backWallLength + WALL_THICKNESS/2 (so left edge is at X=backWallLength), Y at center, Z center at (length - WALL_THICKNESS)/2
+  wall.position.set(backWallLength + WALL_THICKNESS / 2, height / 2, (length - WALL_THICKNESS) / 2)
   wall.castShadow = true
   wall.receiveShadow = true
   group.add(wall)
@@ -174,7 +174,7 @@ export const buildRightWall = (height: number, length: number, backWallLength: n
   const edges = new THREE.EdgesGeometry(geometry)
   const lineMaterial = new THREE.LineBasicMaterial({ color: 0x666666 })
   const wireframe = new THREE.LineSegments(edges, lineMaterial)
-  wireframe.position.set(backWallLength + WALL_THICKNESS / 2, height / 2, length / 2)
+  wireframe.position.set(backWallLength + WALL_THICKNESS / 2, height / 2, (length - WALL_THICKNESS) / 2)
   group.add(wireframe)
   
   return group
@@ -196,7 +196,7 @@ export const buildAdditionalWall = (height: number, length: number, distanceFrom
   const geometry = new THREE.BoxGeometry(
     thickness,
     height,
-    length
+    length + WALL_THICKNESS
   )
   const material = new THREE.MeshLambertMaterial({
     color: _.defaultTo(color, "#dcbfa0"),
@@ -206,7 +206,7 @@ export const buildAdditionalWall = (height: number, length: number, distanceFrom
   
   const wall = new THREE.Mesh(geometry, material)
   // Position: X at distanceFromLeft + thickness/2, Y at center, Z extends forward
-  wall.position.set(distanceFromLeft + thickness / 2, height / 2, length / 2)
+  wall.position.set(distanceFromLeft + thickness / 2, height / 2, (length - WALL_THICKNESS) / 2)
   wall.castShadow = true
   wall.receiveShadow = true
   group.add(wall)
@@ -214,7 +214,7 @@ export const buildAdditionalWall = (height: number, length: number, distanceFrom
   const edges = new THREE.EdgesGeometry(geometry)
   const lineMaterial = new THREE.LineBasicMaterial({ color: 0x666666 })
   const wireframe = new THREE.LineSegments(edges, lineMaterial)
-  wireframe.position.set(distanceFromLeft + thickness / 2, height / 2, length / 2)
+  wireframe.position.set(distanceFromLeft + thickness / 2, height / 2, (length - WALL_THICKNESS) / 2)
   group.add(wireframe)
   
   return group

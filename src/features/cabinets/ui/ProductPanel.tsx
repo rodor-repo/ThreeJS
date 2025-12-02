@@ -581,7 +581,7 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
               )}
               <div className="min-w-0">
                 <h2 className="text-lg font-semibold text-gray-800">Product Panel</h2>
-                {wsProduct && <p className="text-sm text-gray-600 mt-0.5 truncate">{wsProduct.product}</p>}
+                {wsProduct && <p className="text-sm text-gray-600 mt-0.5 truncate" title={wsProduct.product}>{wsProduct.product}</p>}
               </div>
             </div>
             <div className="flex items-center gap-3 flex-shrink-0">

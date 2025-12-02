@@ -19,6 +19,7 @@ export const clearHighlight = (group: THREE.Group) => {
       const material = child.material as any
       if (material && material.color && material.originalColor) {
         material.color.copy(material.originalColor)
+        material.isHighlighted = false
       }
     }
   })
@@ -36,10 +37,12 @@ export const highlightSelected = (group: THREE.Group) => {
     }
     if (child instanceof THREE.Mesh && child.material) {
       const material = child.material as any
-      if (material && material.color) {
+      // Guard against multiple applications when meshes share the same material instance
+      if (material && material.color && !material.isHighlighted) {
         material.originalColor =
           material.originalColor || material.color.clone()
-        material.color.multiplyScalar(1.2)
+        material.color.multiplyScalar(1.5)
+        material.isHighlighted = true
       }
     }
   })

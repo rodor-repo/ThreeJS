@@ -36,7 +36,7 @@ const ProductPanel: React.FC<LocalProductPanelProps> = props => {
 export default ProductPanel
 
 // -------- Fetcher wrapper + Dynamic Dims-only variant driven by WsProduct --------
-const DynamicPanelWithQuery: React.FC<LocalProductPanelProps> = ({ isVisible, onClose, selectedCabinet, onDimensionsChange, onMaterialChange, onOverhangDoorToggle, onShelfCountChange, onDrawerHeightChange, onDrawerQuantityChange, viewManager, onViewChange, allCabinets, onGroupChange, initialGroupData, onSyncChange, initialSyncData }) => {
+const DynamicPanelWithQuery: React.FC<LocalProductPanelProps> = ({ isVisible, onClose, selectedCabinet, onDimensionsChange, onMaterialChange, onOverhangDoorToggle, onShelfCountChange, onDrawerHeightChange, onDrawerQuantityChange, onDoorCountChange, viewManager, onViewChange, allCabinets, onGroupChange, initialGroupData, onSyncChange, initialSyncData }) => {
   const productId = selectedCabinet?.productId
   const { data, isLoading, isError } = useQuery({
     queryKey: ['productData', productId],
@@ -45,22 +45,26 @@ const DynamicPanelWithQuery: React.FC<LocalProductPanelProps> = ({ isVisible, on
       // Call Next.js Server Action directly for type-safe data
       const data = await getProductData(productId)
 
-      // apply drawer qty to all products of this productId in the cabinets state
+      // apply drawer qty and door qty to all products of this productId in the cabinets state
       if (allCabinets) {
         for (const cabinet of allCabinets) {
           const cabProductId = cabinet.carcass?.productId
           if (cabProductId !== data.product.productId) continue
 
           const drawerQtyGDIds = data.threeJsGDs?.["drawerQty"] || []
+          const doorQtyGDIds = data.threeJsGDs?.["doorQty"] || []
           const wsProduct = data.product
           const dimsList = _.sortBy(Object.entries(wsProduct?.dims || {}), ([, dimObj]) => Number(dimObj.sortNum))
 
           let drawerQty: number | undefined = selectedCabinet?.carcass?.config?.drawerQuantity
-          dimsList.forEach(([id, dimObj]) => {
+          let doorQty: number | undefined = selectedCabinet?.carcass?.config?.doorCount
+          dimsList.forEach(([_id, dimObj]) => {
             const gdId = dimObj.GDId
             if (!gdId) return
             if (drawerQtyGDIds.includes(gdId)) drawerQty = toNum(dimObj.defaultValue) || drawerQty
             if (drawerQty) cabinet.carcass?.updateDrawerQuantity?.(drawerQty)
+            if (doorQtyGDIds.includes(gdId)) doorQty = toNum(dimObj.defaultValue) || doorQty
+            if (doorQty) cabinet.carcass?.updateDoorConfiguration?.(doorQty)
           })
         }
       }
@@ -101,6 +105,7 @@ const DynamicPanelWithQuery: React.FC<LocalProductPanelProps> = ({ isVisible, on
       onMaterialChange={onMaterialChange}
       onDrawerHeightChange={onDrawerHeightChange}
       onDrawerQuantityChange={onDrawerQuantityChange}
+      onDoorCountChange={onDoorCountChange}
       viewManager={viewManager}
       onViewChange={onViewChange}
       allCabinets={allCabinets}
@@ -118,7 +123,7 @@ export const toNum = (v: number | string | undefined) => typeof v === 'number' ?
 
 type DynamicPanelProps = LocalProductPanelProps & { loading?: boolean, error?: boolean, materialOptions?: MaterialOptionsResponse, defaultMaterialSelections?: DefaultMaterialSelections, threeJsGDs: Record<GDThreeJsType, string[]> | undefined, onGroupChange?: (cabinetId: string, groupCabinets: Array<{ cabinetId: string; percentage: number }>) => void, initialGroupData?: Array<{ cabinetId: string; percentage: number }>, onSyncChange?: (cabinetId: string, syncCabinets: string[]) => void, initialSyncData?: string[] }
 
-const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProduct, materialOptions, defaultMaterialSelections, selectedCabinet, onDimensionsChange, onMaterialChange, loading, error, threeJsGDs, onOverhangDoorToggle, onShelfCountChange, onDrawerHeightChange, onDrawerQuantityChange, viewManager, onViewChange, allCabinets, onGroupChange, initialGroupData, onSyncChange, initialSyncData }) => {
+const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProduct, materialOptions, defaultMaterialSelections, selectedCabinet, onDimensionsChange, onMaterialChange, loading, error, threeJsGDs, onOverhangDoorToggle, onShelfCountChange, onDrawerHeightChange, onDrawerQuantityChange, onDoorCountChange, viewManager, onViewChange, allCabinets, onGroupChange, initialGroupData, onSyncChange, initialSyncData }) => {
 
 
   const [isExpanded, setIsExpanded] = useState(true)
@@ -253,6 +258,7 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
   const doorOverhangGDIds = threeJsGDs?.["doorOverhang"] || []
   const shelfQtyGDIds = threeJsGDs?.["shelfQty"] || []
   const drawerQtyGDIds = threeJsGDs?.["drawerQty"] || []
+  const doorQtyGDIds = threeJsGDs?.["doorQty"] || []
   // Drawer height GD mappings (index based)
   const drawerHeightGDMap: Record<number, string[]> = {
     0: threeJsGDs?.drawerH1 || [],
@@ -269,11 +275,14 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
 
   useEffect(() => {
     let drawerQty: number | undefined = selectedCabinet?.carcass?.config?.drawerQuantity
+    let doorQty: number | undefined = selectedCabinet?.carcass?.config?.doorCount
     dimsList.forEach(([_id, dimObj]) => {
       const gdId = dimObj.GDId
       if (!gdId) return
       if (drawerQtyGDIds.includes(gdId)) drawerQty = toNum(dimObj.defaultValue) || drawerQty
       if (drawerQty) onDrawerQuantityChange?.(drawerQty)
+      if (doorQtyGDIds.includes(gdId)) doorQty = toNum(dimObj.defaultValue) || doorQty
+      if (doorQty) onDoorCountChange?.(doorQty)
     })
   }, [dimsList, threeJsGDs])
 
@@ -482,6 +491,7 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
     let overhangDoor = selectedCabinet.overhangDoor
     let shelfCount: number | undefined = selectedCabinet.carcass?.config?.shelfCount
     let drawerQty: number | undefined = selectedCabinet.carcass?.config?.drawerQuantity
+    let doorQty: number | undefined = selectedCabinet.carcass?.config?.doorCount
     // Collect drawer heights by index from GDIds
     const pendingDrawerHeights: Record<number, number> = {}
 
@@ -495,6 +505,7 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
       if (doorOverhangGDIds.includes(gdId)) overhangDoor = v.toString().toLowerCase() === 'yes' || v === 1 || v === '1'
       if (shelfQtyGDIds.includes(gdId)) shelfCount = toNum(v) || shelfCount
       if (drawerQtyGDIds.includes(gdId)) drawerQty = toNum(v) || drawerQty
+      if (doorQtyGDIds.includes(gdId)) doorQty = toNum(v) || doorQty
       // Drawer heights
       Object.entries(drawerHeightGDMap).forEach(([drawerIndexStr, gdList]) => {
         const drawerIndex = Number(drawerIndexStr)
@@ -518,6 +529,11 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
     // Apply drawer quantity before heights so drawers exist
     if (drawerQty !== undefined && onDrawerQuantityChange && drawerQty > 0) {
       onDrawerQuantityChange(drawerQty)
+    }
+
+    // Apply door count if defined
+    if (doorQty !== undefined && onDoorCountChange && doorQty > 0) {
+      onDoorCountChange(doorQty)
     }
 
     // Apply drawer heights only if enabled and callback present

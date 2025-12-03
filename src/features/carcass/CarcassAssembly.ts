@@ -191,55 +191,84 @@ export class CarcassAssembly {
 
   /**
    * Build a filler cabinet - linear or L-shape filler
-   * Linear: single front panel at back (z=0)
-   * L-shape: front panel + return panel (40mm depth)
+   *
+   * Linear Filler: Same structure as panel type (CarcassPanel, YZ plane)
+   * - dimensions.width = panel thickness (16mm, X axis)
+   * - dimensions.height = panel height (Y axis)
+   * - dimensions.depth = panel face width (100mm default, Z axis)
+   *
+   * L-Shape Filler: Front panel + return panel
+   * - dimensions.width = face panel width (the gap to fill, X axis)
+   * - dimensions.height = panel height (Y axis)
+   * - dimensions.depth = ignored (return is always 40mm total depth)
+   *
+   * Both types positioned at z=400mm temporarily
    */
   private buildFillerCabinet(): void {
     const thickness = this.getThickness()
     const isLShape = this.config.fillerType === "l-shape"
+    const fillerZPosition = 400 // Temporary fixed position until linking logic is added
 
-    // Main front panel
-    // For linear filler: positioned at z=0 (back)
-    // For L-shape filler: also at z=0 (back)
-    this.frontPanel = new CarcassFront({
-      width: this.dimensions.width,
-      height: this.dimensions.height,
-      thickness: thickness,
-      material: this.config.material.getMaterial(),
-      zPosition: 0, // At back
-    })
-
-    this.group.add(this.frontPanel.group)
-
-    // For L-shape filler, add return panel
     if (isLShape) {
-      const returnDepth = 40 // Always 40mm for return panel
+      // L-Shape Filler:
+      // - Face panel: CarcassFront (XY plane), positioned at z=0 in local coords
+      // - Return panel: CarcassPanel (YZ plane), positioned behind face panel
+      // - Return length = 40mm - thickness (so face thickness + return = 40mm)
+
+      const returnLength = 40 - thickness // e.g., 40 - 16 = 24mm
       const returnPosition = this.config.fillerReturnPosition || "left"
 
-      // Return panel is a CarcassPanel oriented parallel to YZ plane
-      // positioned at the left or right back corner of the main panel
+      // Main face panel - back at z=0 in local coords
+      this.frontPanel = new CarcassFront({
+        width: this.dimensions.width,
+        height: this.dimensions.height,
+        thickness: thickness,
+        material: this.config.material.getMaterial(),
+        zPosition: 0, // Back of face panel at z=0 in local coords
+      })
+      this.group.add(this.frontPanel.group)
+
+      // Return panel - positioned behind the face panel (negative z direction)
+      // CarcassPanel has its back at z=0 and front at z=panelWidth
+      // We want the return's front edge to meet the face panel's back (z=0)
+      // So return's center.z = 0 - panelWidth/2 = -returnLength/2
       this.fillerReturn = new CarcassPanel({
         height: this.dimensions.height,
-        panelWidth: returnDepth, // 40mm depth
+        panelWidth: returnLength, // 40mm - thickness
         thickness: thickness,
         material: this.config.material.getMaterial(),
       })
 
-      // Position return panel
-      // For "left": at x=0, behind the front panel
-      // For "right": at x=width-thickness, behind the front panel
+      // Override the default position to place return behind the face
+      // CarcassPanel puts center at (thickness/2, height/2, panelWidth/2)
+      // We need center.z = -returnLength/2 so front edge is at z=0
+      this.fillerReturn.group.position.z = -returnLength / 2
+
+      // Position return at left or right edge
       if (returnPosition === "right") {
+        // Right edge: x = width - thickness
         this.fillerReturn.group.position.x =
           this.dimensions.width - thickness / 2
       }
-      // For left position, the default position (0) works since CarcassPanel
-      // positions itself with back-bottom corner at origin
+      // For left position, default x = thickness/2 is correct
 
       this.group.add(this.fillerReturn.group)
+    } else {
+      // Linear Filler: Same structure as panel type (CarcassPanel, YZ plane)
+      // Uses same dimension mapping as panel cabinet:
+      // - dimensions.width = panel thickness (X axis, typically 16mm)
+      // - dimensions.depth = panel face width (Z axis, typically 100mm for filler)
+      this.panel = new CarcassPanel({
+        height: this.dimensions.height,
+        panelWidth: this.dimensions.depth, // depth of cabinet = width of panel face
+        thickness: this.dimensions.width, // width of cabinet = thickness of panel
+        material: this.config.material.getMaterial(),
+      })
+      this.group.add(this.panel.group)
     }
 
-    // Position filler cabinet (no legs for filler type)
-    this.group.position.set(0, 0, 0)
+    // Position entire filler assembly at z=400mm
+    this.group.position.set(0, 0, fillerZPosition)
   }
 
   private createEndPanels(): void {
@@ -641,30 +670,46 @@ export class CarcassAssembly {
    */
   private updateFillerDimensions(): void {
     const thickness = this.getThickness()
+    const isLShape = this.config.fillerType === "l-shape"
 
-    if (this.frontPanel) {
-      this.frontPanel.updateDimensions(
-        this.dimensions.width,
-        this.dimensions.height,
-        thickness
-      )
-    }
+    if (isLShape) {
+      // L-Shape filler: update frontPanel and fillerReturn
+      if (this.frontPanel) {
+        this.frontPanel.updateDimensions(
+          this.dimensions.width,
+          this.dimensions.height,
+          thickness
+        )
+      }
 
-    if (this.fillerReturn) {
-      const returnDepth = 40 // Always 40mm
-      this.fillerReturn.updateDimensions(
-        this.dimensions.height,
-        returnDepth,
-        thickness
-      )
+      if (this.fillerReturn) {
+        const returnLength = 40 - thickness // Return length = 40mm - face thickness
+        this.fillerReturn.updateDimensions(
+          this.dimensions.height,
+          returnLength,
+          thickness
+        )
 
-      // Update position based on return position
-      const returnPosition = this.config.fillerReturnPosition || "left"
-      if (returnPosition === "right") {
-        this.fillerReturn.group.position.x =
-          this.dimensions.width - thickness / 2
-      } else {
-        this.fillerReturn.group.position.x = thickness / 2
+        // Position return behind the face panel
+        this.fillerReturn.group.position.z = -returnLength / 2
+
+        // Update x position based on return position
+        const returnPosition = this.config.fillerReturnPosition || "left"
+        if (returnPosition === "right") {
+          this.fillerReturn.group.position.x =
+            this.dimensions.width - thickness / 2
+        } else {
+          this.fillerReturn.group.position.x = thickness / 2
+        }
+      }
+    } else {
+      // Linear filler: update panel (same as panel cabinet)
+      if (this.panel) {
+        this.panel.updateDimensions(
+          this.dimensions.height,
+          this.dimensions.depth, // panel face width
+          this.dimensions.width // panel thickness (filler width)
+        )
       }
     }
   }

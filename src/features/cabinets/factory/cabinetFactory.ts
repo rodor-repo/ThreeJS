@@ -15,8 +15,10 @@ const defaultDimensions: Defaults = {
   tall: { width: 600, height: 2400, depth: 600 },
   // Panel: width = thickness (16mm), height = panel height, depth = panel face width
   panel: { width: 16, height: 720, depth: 600 },
-  // Filler: width = filler width, height = filler height, depth = return depth (for L-shape, 40mm)
-  filler: { width: 100, height: 720, depth: 40 },
+  // Filler defaults (for linear filler - same structure as panel, just smaller depth):
+  // width = panel thickness (16mm), height = panel height, depth = panel face width (100mm)
+  // For L-shape filler: width = face panel width (the gap), depth is ignored (return is always 40mm total)
+  filler: { width: 16, height: 720, depth: 100 },
 }
 
 export const createCabinet = (

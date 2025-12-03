@@ -31,7 +31,13 @@ export type Category = {
   color: string
 }
 
-export type CabinetType = "base" | "top" | "tall" | "panel" | "filler"
+export type CabinetType =
+  | "base"
+  | "top"
+  | "tall"
+  | "panel"
+  | "filler"
+  | "wardrobe"
 
 export type CabinetData = {
   group: THREE.Group

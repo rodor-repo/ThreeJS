@@ -13,6 +13,7 @@ const defaultDimensions: Defaults = {
   top: { width: 600, height: 600, depth: 300 },
   base: { width: 600, height: 720, depth: 600 },
   tall: { width: 600, height: 2400, depth: 600 },
+  wardrobe: { width: 600, height: 2400, depth: 600 }, // Same as tall cabinet
   // Panel: width = thickness (16mm), height = panel height, depth = panel face width
   panel: { width: 16, height: 720, depth: 600 },
   // Filler defaults (for linear filler - same structure as panel, just smaller depth):
@@ -31,6 +32,10 @@ export const createCabinet = (
     productId?: string
     fillerType?: "linear" | "l-shape"
     fillerReturnPosition?: "left" | "right"
+    // Wardrobe-specific options
+    wardrobeDrawerQuantity?: number // Number of drawers at bottom (0 or more)
+    wardrobeDrawerHeight?: number // Fixed drawer height (default 220mm)
+    wardrobeDrawerBuffer?: number // Buffer between drawers and shelves (default 50mm)
   }
 ): CabinetData => {
   const productId = opts?.productId
@@ -146,6 +151,22 @@ export const createCabinet = (
           cabinetId
         )
       }
+      break
+    case "wardrobe":
+      carcass = CarcassAssembly.createWardrobeCabinet(
+        dimensions,
+        {
+          shelfCount: 4, // Default 4 shelves above drawers
+          shelfSpacing: 300,
+          doorEnabled: false, // Wardrobes never have doors
+          drawerEnabled: true, // Always has drawers
+          drawerQuantity: opts?.wardrobeDrawerQuantity ?? 0, // Default 2 drawers
+          wardrobeDrawerHeight: opts?.wardrobeDrawerHeight ?? 220, // Fixed 220mm drawer height
+          wardrobeDrawerBuffer: opts?.wardrobeDrawerBuffer ?? 50, // 50mm buffer
+        },
+        productId,
+        cabinetId
+      )
       break
     default:
       carcass = CarcassAssembly.createTopCabinet(

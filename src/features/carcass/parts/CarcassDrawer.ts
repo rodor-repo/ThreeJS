@@ -10,6 +10,7 @@ export interface DrawerFrontProps {
   position: number // Position index (0 = top drawer, 1 = second drawer, etc.)
   totalDrawers: number // Total number of drawers for positioning
   carcassHeight: number // Full height of the carcass
+  positionFromBottom?: boolean // If true, position drawers from bottom (for wardrobe)
 }
 
 export interface DrawerConfiguration {
@@ -29,6 +30,7 @@ export class CarcassDrawer {
   public position: number
   public totalDrawers: number
   public carcassHeight: number
+  public positionFromBottom: boolean
 
   constructor(props: DrawerFrontProps) {
     this.width = props.width
@@ -38,6 +40,7 @@ export class CarcassDrawer {
     this.position = props.position
     this.totalDrawers = props.totalDrawers
     this.carcassHeight = props.carcassHeight
+    this.positionFromBottom = props.positionFromBottom ?? false
 
     // Create geometry for the drawer front
     // X-axis: width, Y-axis: height, Z-axis: depth (material thickness)
@@ -87,7 +90,7 @@ export class CarcassDrawer {
     // Drawer width is reduced by end panel thicknesses
     // So drawer should be centered in the remaining space
     // Position = endPanelThickness + (drawerWidth / 2)
-    const endPanelThickness = this.material.getPanelThickness()
+    const _endPanelThickness = this.material.getPanelThickness()
     const xPosition = DRAWER_GAP + this.width / 2
 
     // Y position: adjust for carcass position in scene
@@ -105,17 +108,36 @@ export class CarcassDrawer {
 
   // Method to update position with all drawer heights for accurate positioning
   public updatePositionWithAllHeights(allDrawerHeights: number[]): void {
-    let yPosition = this.carcassHeight / 2 // Start at top center
+    let yPosition: number
 
-    // Subtract heights of all drawers above this one
-    for (let i = 0; i < this.position; i++) {
-      if (allDrawerHeights[i]) {
-        yPosition -= allDrawerHeights[i]
+    if (this.positionFromBottom) {
+      // Position drawers from bottom (for wardrobe)
+      // Drawer 0 at bottom, drawer 1 above it, etc.
+      yPosition = -this.carcassHeight / 2 // Start at bottom center
+
+      // Add heights of all drawers below this one
+      for (let i = 0; i < this.position; i++) {
+        if (allDrawerHeights[i]) {
+          yPosition += allDrawerHeights[i]
+        }
       }
-    }
 
-    // Move down by half the height of this drawer
-    yPosition -= this.height / 2
+      // Move up by half the height of this drawer
+      yPosition += this.height / 2
+    } else {
+      // Position drawers from top (default behavior)
+      yPosition = this.carcassHeight / 2 // Start at top center
+
+      // Subtract heights of all drawers above this one
+      for (let i = 0; i < this.position; i++) {
+        if (allDrawerHeights[i]) {
+          yPosition -= allDrawerHeights[i]
+        }
+      }
+
+      // Move down by half the height of this drawer
+      yPosition -= this.height / 2
+    }
 
     // X position: centered on carcass width
     // The carcass extends from x=0 to x=width
@@ -123,7 +145,7 @@ export class CarcassDrawer {
     // Drawer width is reduced by end panel thicknesses
     // So drawer should be centered in the remaining space
     // Position = endPanelThickness + (drawerWidth / 2)
-    const endPanelThickness = this.material.getPanelThickness()
+    const _endPanelThickness = this.material.getPanelThickness()
     const xPosition = DRAWER_GAP + this.width / 2
 
     // Y position: adjust for carcass position in scene

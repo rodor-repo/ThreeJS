@@ -58,6 +58,9 @@ export interface CarcassConfig {
   drawerHeights?: number[] // Individual drawer heights
   fillerType?: "linear" | "l-shape" // For filler cabinets: linear or L-shaped
   fillerReturnPosition?: "left" | "right" // For L-shape filler: position of return panel
+  // Wardrobe-specific options
+  wardrobeDrawerHeight?: number // Fixed drawer height for wardrobe (default 220mm)
+  wardrobeDrawerBuffer?: number // Buffer space between drawers and shelves (default 50mm)
 }
 
 export { type CabinetType } from "../scene/types"
@@ -118,6 +121,9 @@ export class CarcassAssembly {
         config?.drawerEnabled !== undefined ? config.drawerEnabled : false, // Drawers disabled by default
       drawerQuantity: config?.drawerQuantity || 3, // Default 3 drawers
       drawerHeights: config?.drawerHeights || [], // Will be calculated based on quantity
+      // Wardrobe-specific defaults
+      wardrobeDrawerHeight: config?.wardrobeDrawerHeight || 220, // Fixed 220mm drawer height for wardrobe
+      wardrobeDrawerBuffer: config?.wardrobeDrawerBuffer || 50, // 50mm buffer between drawers and shelves
       ...config,
     }
 
@@ -141,14 +147,21 @@ export class CarcassAssembly {
       return
     }
 
-    // Create all carcass parts for traditional cabinet types
+    // Create all carcass parts for traditional cabinet types (base, top, tall, wardrobe)
     this.createEndPanels()
     this.createBackPanel()
     this.createBottomPanel()
     this.createTopPanel()
     this.createShelves()
     this.createLegs()
-    this.createDrawers()
+
+    // For wardrobe, create drawers at the bottom with fixed heights
+    if (this.cabinetType === "wardrobe") {
+      this.createWardrobeDrawers()
+    } else {
+      this.createDrawers()
+    }
+
     this.createDoors()
 
     // Add all parts to the main group
@@ -361,7 +374,21 @@ export class CarcassAssembly {
 
     if (this.config.shelfCount > 0) {
       const thickness = this.getThickness()
-      const startHeight = thickness + 100 // Start above bottom panel
+
+      // Calculate start height based on cabinet type
+      let startHeight: number
+      if (this.cabinetType === "wardrobe") {
+        // For wardrobe: start above the drawers + buffer
+        const drawerQuantity = this.config.drawerQuantity || 0
+        const drawerHeight = this.config.wardrobeDrawerHeight || 220
+        const buffer = this.config.wardrobeDrawerBuffer || 50
+        const totalDrawerHeight = drawerQuantity * drawerHeight
+        startHeight = totalDrawerHeight + buffer + thickness
+      } else {
+        // Default: start above bottom panel
+        startHeight = thickness + 100
+      }
+
       const endHeight = this.dimensions.height - thickness - 100 // End below top panel
 
       // Calculate shelf positions using utility function
@@ -396,8 +423,12 @@ export class CarcassAssembly {
   private createLegs(): void {
     this.legs = []
 
-    // Only create legs for base and tall cabinets
-    if (this.cabinetType === "base" || this.cabinetType === "tall") {
+    // Only create legs for base, tall, and wardrobe cabinets
+    if (
+      this.cabinetType === "base" ||
+      this.cabinetType === "tall" ||
+      this.cabinetType === "wardrobe"
+    ) {
       // Get leg height from data.js via MaterialLoader
       const legHeight = MaterialLoader.getLegHeight()
 
@@ -483,6 +514,76 @@ export class CarcassAssembly {
       // Update positions after creating all drawers
       this.updateDrawerPositions()
     }
+  }
+
+  /**
+   * Create wardrobe drawers - positioned at the bottom with fixed height
+   * Drawers are created from bottom to top with positionFromBottom=true
+   */
+  private createWardrobeDrawers(): void {
+    this.drawers = []
+
+    const drawerQuantity = this.config.drawerQuantity || 0
+
+    // Only create drawers if quantity > 0
+    if (drawerQuantity > 0) {
+      // Calculate drawer width using utility function
+      const endPanelThickness = this.config.material.getPanelThickness()
+      const drawerWidth = calculateDrawerWidth(
+        this.dimensions.width,
+        endPanelThickness
+      )
+
+      // Fixed drawer height for wardrobe
+      const drawerHeight = this.config.wardrobeDrawerHeight || 220
+
+      // Set up drawer heights (all fixed at wardrobeDrawerHeight)
+      const drawerHeights = Array(drawerQuantity).fill(drawerHeight)
+      this.config.drawerHeights = [...drawerHeights]
+
+      // Create drawer fronts positioned from bottom
+      for (let i = 0; i < drawerQuantity; i++) {
+        const drawer = new CarcassDrawer({
+          width: drawerWidth,
+          height: drawerHeight,
+          depth: this.dimensions.depth,
+          material: this.config.material,
+          position: i,
+          totalDrawers: drawerQuantity,
+          carcassHeight: this.dimensions.height,
+          positionFromBottom: true, // Position from bottom for wardrobe
+        })
+        this.drawers.push(drawer)
+      }
+
+      // Update positions after creating all drawers
+      this.updateWardrobeDrawerPositions()
+    }
+  }
+
+  /**
+   * Update wardrobe drawer positions - all drawers have same fixed height
+   * Also updates drawer dimensions to ensure consistency
+   */
+  private updateWardrobeDrawerPositions(): void {
+    if (this.drawers.length === 0) return
+
+    const drawerHeight = this.config.wardrobeDrawerHeight || 220
+    const allDrawerHeights = this.drawers.map(() => drawerHeight)
+
+    // Calculate drawer width
+    const endPanelThickness = this.config.material.getPanelThickness()
+    const drawerWidth = calculateDrawerWidth(
+      this.dimensions.width,
+      endPanelThickness
+    )
+
+    this.drawers.forEach((drawer) => {
+      // Update dimensions with fixed wardrobe drawer height
+      drawer.updateDimensions(drawerWidth, drawerHeight, this.dimensions.depth)
+      // Update position (drawer already has positionFromBottom=true)
+      drawer.updatePositionWithAllHeights(allDrawerHeights)
+    })
   }
 
   private createDoors(): void {
@@ -764,7 +865,11 @@ export class CarcassAssembly {
       })
 
       // Update the cabinet's Y position to account for the new leg height
-      if (this.cabinetType === "base" || this.cabinetType === "tall") {
+      if (
+        this.cabinetType === "base" ||
+        this.cabinetType === "tall" ||
+        this.cabinetType === "wardrobe"
+      ) {
         this.group.position.y = kickerHeight
       }
     }
@@ -951,6 +1056,27 @@ export class CarcassAssembly {
     const existingHeights = [...(this.config.drawerHeights || [])]
 
     this.config.drawerQuantity = quantity
+
+    // Handle wardrobe cabinets differently - fixed drawer heights
+    if (this.cabinetType === "wardrobe") {
+      const fixedHeight = this.config.wardrobeDrawerHeight || 220
+      this.config.drawerHeights = Array(quantity).fill(fixedHeight)
+
+      // Remove existing drawers
+      this.removePartsFromGroup(this.drawers)
+      this.drawers.forEach((drawer) => drawer.dispose())
+      this.drawers = []
+
+      // Create new wardrobe drawers
+      if (this.config.drawerEnabled && quantity > 0) {
+        this.createWardrobeDrawers()
+        this.addPartsToGroup(this.drawers)
+      }
+
+      // Update shelves to account for new drawer space
+      this.updateShelves()
+      return
+    }
 
     // Calculate new drawer heights ensuring they fit within carcass height
     if (quantity > 0) {
@@ -1281,6 +1407,12 @@ export class CarcassAssembly {
   private updateDrawerPositions(): void {
     if (!this.config.drawerEnabled || this.drawers.length === 0) return
 
+    // For wardrobe cabinets, use the dedicated method
+    if (this.cabinetType === "wardrobe") {
+      this.updateWardrobeDrawerPositions()
+      return
+    }
+
     // Get all drawer heights (use config heights if available, otherwise calculate defaults)
     const allDrawerHeights = this.drawers.map(
       (drawer, index) =>
@@ -1311,6 +1443,12 @@ export class CarcassAssembly {
 
   private updateDrawers(): void {
     if (this.config.drawerEnabled && this.drawers.length > 0) {
+      // For wardrobe cabinets, use fixed drawer heights and bottom positioning
+      if (this.cabinetType === "wardrobe") {
+        this.updateWardrobeDrawerPositions()
+        return
+      }
+
       // Calculate drawer width using utility function
       const endPanelThickness = this.config.material.getPanelThickness()
       const drawerWidth = calculateDrawerWidth(
@@ -1566,6 +1704,29 @@ export class CarcassAssembly {
     cabinetId: string
   ): CarcassAssembly {
     return new CarcassAssembly("tall", dimensions, config, productId, cabinetId)
+  }
+
+  /**
+   * Create a wardrobe cabinet - tall cabinet with drawers at bottom and shelves above
+   * @param dimensions - standard cabinet dimensions
+   * @param config - includes drawerQuantity for number of drawers, wardrobeDrawerHeight (default 220mm)
+   */
+  static createWardrobeCabinet(
+    dimensions: CarcassDimensions,
+    config: Partial<CarcassConfig>,
+    productId: string,
+    cabinetId: string
+  ): CarcassAssembly {
+    return new CarcassAssembly(
+      "wardrobe",
+      dimensions,
+      {
+        ...config,
+        drawerEnabled: true, // Always enable drawers for wardrobe
+      },
+      productId,
+      cabinetId
+    )
   }
 
   /**

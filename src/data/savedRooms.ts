@@ -10,7 +10,7 @@ export interface SavedCabinet {
   cabinetId: string
   productId?: string
   productName?: string
-  cabinetType: 'base' | 'top' | 'tall'
+  cabinetType: 'base' | 'top' | 'tall' | 'panel' | 'filler'
   subcategoryId: string
   dimensions: {
     width: number

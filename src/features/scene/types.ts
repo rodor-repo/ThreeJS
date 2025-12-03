@@ -34,7 +34,7 @@ export type Category = {
 export type CabinetData = {
   group: THREE.Group
   carcass: CarcassAssembly
-  cabinetType: "base" | "top" | "tall"
+  cabinetType: "base" | "top" | "tall" | "panel" | "filler"
   subcategoryId: string
   /** Optional webshop productId associated with this 3D object */
   productId?: string
@@ -47,4 +47,3 @@ export type CabinetData = {
   /** Sort number based on order cabinets were added to the scene */
   sortNumber?: number
 }
-

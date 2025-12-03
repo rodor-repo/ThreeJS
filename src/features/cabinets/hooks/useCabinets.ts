@@ -33,12 +33,20 @@ export const useCabinets = (
     (
       categoryType: CabinetType,
       subcategoryType: string,
-      productId?: string
+      productId?: string,
+      productName?: string
     ) => {
       if (!sceneRef.current) return
+
+      const fillerType =
+        categoryType === "filler"
+          ? productName?.toLowerCase().includes("l shape") ? "l-shape" : "linear"
+          : undefined
+
       const data = createCabinetEntry(categoryType, subcategoryType, {
         indexOffset: cabinetCounter,
         productId,
+        fillerType
       })
       // Add sortNumber based on order added to scene
       const cabinetWithSortNumber = { ...data, sortNumber: sortNumberCounter }

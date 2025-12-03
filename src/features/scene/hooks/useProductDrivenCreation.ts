@@ -6,14 +6,18 @@ import type { CabinetData } from "../types"
 import type * as THREE from "three"
 
 type UseProductDrivenCreationOptions = {
-  selectedSubcategory: { category: { id: string; name: string }; subcategory: Subcategory } | null | undefined
+  selectedSubcategory:
+    | { category: { id: string; name: string }; subcategory: Subcategory }
+    | null
+    | undefined
   selectedProductId?: string
   wsProducts?: WsProducts | null
   sceneRef: MutableRefObject<THREE.Scene | null>
   createCabinet: (
     cabinetType: CabinetType,
     subcategoryId: string,
-    productId?: string
+    productId?: string,
+    productName?: string
   ) => CabinetData | undefined
   setSelectedCabinet: (cabinet: CabinetData | null) => void
 }
@@ -48,9 +52,11 @@ export const useProductDrivenCreation = ({
       selectedSubcategory.subcategory.name
     )
 
-    if (!wsProducts) throw new Error("WsProducts data is required to create cabinets.")
+    if (!wsProducts)
+      throw new Error("WsProducts data is required to create cabinets.")
 
     const productEntry = wsProducts.products[selectedProductId || ""]
+    const productName = productEntry?.product
     const designId = productEntry?.designId
     const designEntry = wsProducts.designs[designId || ""]
     if (!designEntry) {
@@ -60,7 +66,9 @@ export const useProductDrivenCreation = ({
     const { type3D, design } = designEntry
 
     if (!type3D) {
-      throw new Error(`3D type not specified in design entry for design: ${design}`)
+      throw new Error(
+        `3D type not specified in design entry for design: ${design}`
+      )
     }
 
     const legacyCategoryMap: Record<
@@ -70,6 +78,8 @@ export const useProductDrivenCreation = ({
       base: "base",
       overhead: "top",
       tall: "tall",
+      panel: "panel",
+      filler: "filler",
     }
 
     const cabinetType = legacyCategoryMap[type3D] || "base"
@@ -77,7 +87,8 @@ export const useProductDrivenCreation = ({
     const cabinetData = createCabinetRef.current(
       cabinetType,
       selectedSubcategory.subcategory.id,
-      selectedProductId
+      selectedProductId,
+      productName
     )
     if (cabinetData) setSelectedCabinetRef.current(cabinetData)
   }, [

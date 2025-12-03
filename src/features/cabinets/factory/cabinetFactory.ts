@@ -13,6 +13,10 @@ const defaultDimensions: Defaults = {
   top: { width: 600, height: 600, depth: 300 },
   base: { width: 600, height: 720, depth: 600 },
   tall: { width: 600, height: 2400, depth: 600 },
+  // Panel: width = thickness (16mm), height = panel height, depth = panel face width
+  panel: { width: 16, height: 720, depth: 600 },
+  // Filler: width = filler width, height = filler height, depth = return depth (for L-shape, 40mm)
+  filler: { width: 100, height: 720, depth: 40 },
 }
 
 export const createCabinet = (
@@ -23,6 +27,8 @@ export const createCabinet = (
     spacing?: number
     customDimensions?: Partial<CarcassDimensions>
     productId?: string
+    fillerType?: "linear" | "l-shape"
+    fillerReturnPosition?: "left" | "right"
   }
 ): CabinetData => {
   const productId = opts?.productId
@@ -96,6 +102,48 @@ export const createCabinet = (
         productId,
         cabinetId
       )
+      break
+    case "panel":
+      carcass = CarcassAssembly.createPanelCabinet(
+        dimensions,
+        {
+          shelfCount: 0,
+          shelfSpacing: 0,
+          doorEnabled: false,
+          drawerEnabled: false,
+        },
+        productId,
+        cabinetId
+      )
+      break
+    case "filler":
+      if (opts?.fillerType === "l-shape") {
+        carcass = CarcassAssembly.createLShapeFiller(
+          dimensions,
+          {
+            shelfCount: 0,
+            shelfSpacing: 0,
+            doorEnabled: false,
+            drawerEnabled: false,
+          },
+          productId,
+          cabinetId,
+          opts?.fillerReturnPosition || "left"
+        )
+      } else {
+        // Default to linear filler
+        carcass = CarcassAssembly.createLinearFiller(
+          dimensions,
+          {
+            shelfCount: 0,
+            shelfSpacing: 0,
+            doorEnabled: false,
+            drawerEnabled: false,
+          },
+          productId,
+          cabinetId
+        )
+      }
       break
     default:
       carcass = CarcassAssembly.createTopCabinet(

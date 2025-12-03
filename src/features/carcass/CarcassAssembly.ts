@@ -7,6 +7,8 @@ import { CarcassTop } from "./parts/CarcassTop"
 import { CarcassLeg } from "./parts/CarcassLeg"
 import { CarcassDoor } from "./parts/CarcassDoor"
 import { CarcassDrawer } from "./parts/CarcassDrawer"
+import { CarcassPanel } from "./parts/CarcassPanel"
+import { CarcassFront } from "./parts/CarcassFront"
 import { DrawerHeightManager } from "./parts/DrawerHeightManager"
 import { CarcassMaterial, CarcassMaterialData } from "./Material"
 import { DoorMaterial } from "./DoorMaterial"
@@ -53,9 +55,11 @@ export interface CarcassConfig {
   drawerEnabled?: boolean // Whether drawers are enabled for this cabinet
   drawerQuantity?: number // Number of drawers (1-6)
   drawerHeights?: number[] // Individual drawer heights
+  fillerType?: "linear" | "l-shape" // For filler cabinets: linear or L-shaped
+  fillerReturnPosition?: "left" | "right" // For L-shape filler: position of return panel
 }
 
-export type CabinetType = "top" | "base" | "tall"
+export type CabinetType = "top" | "base" | "tall" | "panel" | "filler"
 
 export class CarcassAssembly {
   public group: THREE.Group
@@ -73,6 +77,11 @@ export class CarcassAssembly {
   private legs: CarcassLeg[] = []
   private doors: CarcassDoor[] = []
   private drawers: CarcassDrawer[] = []
+
+  // Panel and filler specific parts
+  private panel?: CarcassPanel // For panel type cabinet
+  private frontPanel?: CarcassFront // For filler type cabinet (main panel)
+  private fillerReturn?: CarcassPanel // For L-shape filler (return panel)
 
   public productId!: string
   public cabinetId!: string
@@ -120,7 +129,18 @@ export class CarcassAssembly {
   }
 
   private buildCarcass(): void {
-    // Create all carcass parts
+    // Handle panel and filler types differently
+    if (this.cabinetType === "panel") {
+      this.buildPanelCabinet()
+      return
+    }
+
+    if (this.cabinetType === "filler") {
+      this.buildFillerCabinet()
+      return
+    }
+
+    // Create all carcass parts for traditional cabinet types
     this.createEndPanels()
     this.createBackPanel()
     this.createBottomPanel()
@@ -145,6 +165,81 @@ export class CarcassAssembly {
 
     // Position the entire carcass based on type
     this.positionCarcass()
+  }
+
+  /**
+   * Build a panel cabinet - just a single decorative side panel
+   * Cabinet width = panel thickness, height = panel height, depth = panel width
+   */
+  private buildPanelCabinet(): void {
+    // For panel cabinet:
+    // dimensions.width = panel thickness (X axis)
+    // dimensions.height = panel height (Y axis)
+    // dimensions.depth = panel face width (Z axis)
+    this.panel = new CarcassPanel({
+      height: this.dimensions.height,
+      panelWidth: this.dimensions.depth, // depth of cabinet = width of panel face
+      thickness: this.dimensions.width, // width of cabinet = thickness of panel
+      material: this.config.material.getMaterial(),
+    })
+
+    this.group.add(this.panel.group)
+
+    // Position panel cabinet (no legs for panel type)
+    this.group.position.set(0, 0, 0)
+  }
+
+  /**
+   * Build a filler cabinet - linear or L-shape filler
+   * Linear: single front panel at back (z=0)
+   * L-shape: front panel + return panel (40mm depth)
+   */
+  private buildFillerCabinet(): void {
+    const thickness = this.getThickness()
+    const isLShape = this.config.fillerType === "l-shape"
+
+    // Main front panel
+    // For linear filler: positioned at z=0 (back)
+    // For L-shape filler: also at z=0 (back)
+    this.frontPanel = new CarcassFront({
+      width: this.dimensions.width,
+      height: this.dimensions.height,
+      thickness: thickness,
+      material: this.config.material.getMaterial(),
+      zPosition: 0, // At back
+    })
+
+    this.group.add(this.frontPanel.group)
+
+    // For L-shape filler, add return panel
+    if (isLShape) {
+      const returnDepth = 40 // Always 40mm for return panel
+      const returnPosition = this.config.fillerReturnPosition || "left"
+
+      // Return panel is a CarcassPanel oriented parallel to YZ plane
+      // positioned at the left or right back corner of the main panel
+      this.fillerReturn = new CarcassPanel({
+        height: this.dimensions.height,
+        panelWidth: returnDepth, // 40mm depth
+        thickness: thickness,
+        material: this.config.material.getMaterial(),
+      })
+
+      // Position return panel
+      // For "left": at x=0, behind the front panel
+      // For "right": at x=width-thickness, behind the front panel
+      if (returnPosition === "right") {
+        this.fillerReturn.group.position.x =
+          this.dimensions.width - thickness / 2
+      }
+      // For left position, the default position (0) works since CarcassPanel
+      // positions itself with back-bottom corner at origin
+
+      this.group.add(this.fillerReturn.group)
+    }
+
+    // Position filler cabinet (no legs for filler type)
+    this.group.position.set(0, 0, 0)
   }
 
   private createEndPanels(): void {
@@ -205,10 +300,12 @@ export class CarcassAssembly {
 
   private createTopPanel(): void {
     // Top: TopHeight= Depth (Z Axes), TopWidth =Width - 2x Thickness (X Axes), TopThickness= Thickness (Y Axes)
-    const { panelWidth, effectiveDepth } = this.calculateCommonPanelDimensions()
+    const { panelWidth, effectiveDepth: _effectiveDepth } =
+      this.calculateCommonPanelDimensions()
 
-    // Get Base Rail depth from data using MaterialLoader
-    const baseRailDepth = MaterialLoader.getBaseRailDepth(this.cabinetType)
+    // Get Base Rail depth from data using MaterialLoader (only for traditional cabinet types)
+    const traditionalType = this.cabinetType as "top" | "base" | "tall"
+    const baseRailDepth = MaterialLoader.getBaseRailDepth(traditionalType)
 
     // Determine if this is a Drawer Base cabinet
     const isDrawerBase =
@@ -223,7 +320,7 @@ export class CarcassAssembly {
       leftEndThickness: this.getThickness(),
       backThickness: this.getThickness(),
       material: this.config.material.getMaterial(),
-      cabinetType: this.cabinetType,
+      cabinetType: traditionalType,
       baseRailDepth: baseRailDepth,
       isDrawerBase: isDrawerBase,
     })
@@ -445,6 +542,17 @@ export class CarcassAssembly {
   public updateDimensions(newDimensions: CarcassDimensions): void {
     this.dimensions = newDimensions
 
+    // Handle panel and filler types differently
+    if (this.cabinetType === "panel") {
+      this.updatePanelDimensions()
+      return
+    }
+
+    if (this.cabinetType === "filler") {
+      this.updateFillerDimensions()
+      return
+    }
+
     const thickness = this.getThickness()
     const { panelWidth, effectiveDepth } = this.calculateCommonPanelDimensions()
 
@@ -513,6 +621,52 @@ export class CarcassAssembly {
 
     // Update drawers with new dimensions
     this.updateDrawers()
+  }
+
+  /**
+   * Update dimensions for panel cabinet
+   */
+  private updatePanelDimensions(): void {
+    if (this.panel) {
+      this.panel.updateDimensions(
+        this.dimensions.height,
+        this.dimensions.depth, // depth of cabinet = width of panel face
+        this.dimensions.width // width of cabinet = thickness of panel
+      )
+    }
+  }
+
+  /**
+   * Update dimensions for filler cabinet
+   */
+  private updateFillerDimensions(): void {
+    const thickness = this.getThickness()
+
+    if (this.frontPanel) {
+      this.frontPanel.updateDimensions(
+        this.dimensions.width,
+        this.dimensions.height,
+        thickness
+      )
+    }
+
+    if (this.fillerReturn) {
+      const returnDepth = 40 // Always 40mm
+      this.fillerReturn.updateDimensions(
+        this.dimensions.height,
+        returnDepth,
+        thickness
+      )
+
+      // Update position based on return position
+      const returnPosition = this.config.fillerReturnPosition || "left"
+      if (returnPosition === "right") {
+        this.fillerReturn.group.position.x =
+          this.dimensions.width - thickness / 2
+      } else {
+        this.fillerReturn.group.position.x = thickness / 2
+      }
+    }
   }
 
   public updateConfig(newConfig: Partial<CarcassConfig>): void {
@@ -632,12 +786,26 @@ export class CarcassAssembly {
   }
 
   public dispose(): void {
-    // Dispose all parts
-    this.leftEnd.dispose()
-    this.rightEnd.dispose()
-    this.back.dispose()
-    this.bottom.dispose()
-    this.top.dispose()
+    // Dispose panel and filler specific parts
+    if (this.panel) {
+      this.panel.dispose()
+      this.panel = undefined
+    }
+    if (this.frontPanel) {
+      this.frontPanel.dispose()
+      this.frontPanel = undefined
+    }
+    if (this.fillerReturn) {
+      this.fillerReturn.dispose()
+      this.fillerReturn = undefined
+    }
+
+    // Dispose traditional carcass parts (only if they exist)
+    if (this.leftEnd) this.leftEnd.dispose()
+    if (this.rightEnd) this.rightEnd.dispose()
+    if (this.back) this.back.dispose()
+    if (this.bottom) this.bottom.dispose()
+    if (this.top) this.top.dispose()
 
     this.shelves.forEach((shelf) => shelf.dispose())
     this.legs.forEach((leg) => leg.dispose())
@@ -1352,5 +1520,68 @@ export class CarcassAssembly {
     cabinetId: string
   ): CarcassAssembly {
     return new CarcassAssembly("tall", dimensions, config, productId, cabinetId)
+  }
+
+  /**
+   * Create a panel cabinet - a single decorative side panel
+   * @param dimensions - width = panel thickness, height = panel height, depth = panel face width
+   */
+  static createPanelCabinet(
+    dimensions: CarcassDimensions,
+    config: Partial<CarcassConfig>,
+    productId: string,
+    cabinetId: string
+  ): CarcassAssembly {
+    return new CarcassAssembly(
+      "panel",
+      dimensions,
+      config,
+      productId,
+      cabinetId
+    )
+  }
+
+  /**
+   * Create a linear filler - a single front panel positioned at back
+   * @param dimensions - width = filler width, height = filler height, depth = panel thickness
+   */
+  static createLinearFiller(
+    dimensions: CarcassDimensions,
+    config: Partial<CarcassConfig>,
+    productId: string,
+    cabinetId: string
+  ): CarcassAssembly {
+    return new CarcassAssembly(
+      "filler",
+      dimensions,
+      { ...config, fillerType: "linear" },
+      productId,
+      cabinetId
+    )
+  }
+
+  /**
+   * Create an L-shape filler - front panel + return panel (40mm depth)
+   * @param dimensions - width = filler width, height = filler height, depth = return panel depth (typically 40mm)
+   * @param returnPosition - position of return panel: "left" or "right"
+   */
+  static createLShapeFiller(
+    dimensions: CarcassDimensions,
+    config: Partial<CarcassConfig>,
+    productId: string,
+    cabinetId: string,
+    returnPosition: "left" | "right" = "left"
+  ): CarcassAssembly {
+    return new CarcassAssembly(
+      "filler",
+      dimensions,
+      {
+        ...config,
+        fillerType: "l-shape",
+        fillerReturnPosition: returnPosition,
+      },
+      productId,
+      cabinetId
+    )
   }
 }

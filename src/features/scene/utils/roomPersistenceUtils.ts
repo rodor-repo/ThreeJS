@@ -91,7 +91,8 @@ async function prefetchProductData(productIds: string[]): Promise<void> {
 export type CreateCabinetFn = (
   cabinetType: CabinetType,
   subcategoryId: string,
-  productId?: string
+  productId?: string,
+  productName?: string
 ) => CabinetData | undefined
 
 interface SerializeRoomOptions {
@@ -312,7 +313,8 @@ export async function restoreRoom({
         const cabinetData = createCabinet(
           savedCabinet.cabinetType as CabinetType,
           savedCabinet.subcategoryId,
-          savedCabinet.productId
+          savedCabinet.productId,
+          savedCabinet.productName
         )
 
         if (!cabinetData) {

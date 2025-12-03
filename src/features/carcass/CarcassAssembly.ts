@@ -37,6 +37,7 @@ import { WsProduct } from "@/types/erpTypes"
 import _, { entries } from "lodash"
 import { getProductData } from "@/server/getProductData"
 import { toNum } from "../cabinets/ui/ProductPanel"
+import { CabinetType } from "../scene/types"
 
 export interface CarcassDimensions {
   width: number // Width of the cabinet (X Axes)
@@ -59,7 +60,7 @@ export interface CarcassConfig {
   fillerReturnPosition?: "left" | "right" // For L-shape filler: position of return panel
 }
 
-export type CabinetType = "top" | "base" | "tall" | "panel" | "filler"
+export { type CabinetType } from "../scene/types"
 
 export class CarcassAssembly {
   public group: THREE.Group

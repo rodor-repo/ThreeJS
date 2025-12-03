@@ -31,10 +31,12 @@ export type Category = {
   color: string
 }
 
+export type CabinetType = "base" | "top" | "tall" | "panel" | "filler"
+
 export type CabinetData = {
   group: THREE.Group
   carcass: CarcassAssembly
-  cabinetType: "base" | "top" | "tall" | "panel" | "filler"
+  cabinetType: CabinetType
   subcategoryId: string
   /** Optional webshop productId associated with this 3D object */
   productId?: string

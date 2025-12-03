@@ -10,7 +10,7 @@ export interface SavedCabinet {
   cabinetId: string
   productId?: string
   productName?: string
-  cabinetType: 'base' | 'top' | 'tall' | 'panel' | 'filler'
+  cabinetType: CabinetType
   subcategoryId: string
   dimensions: {
     width: number
@@ -73,6 +73,7 @@ export interface SavedRoom {
   cabinetSyncs?: Array<{ cabinetId: string, syncedWith: string[] }>
 }
 
+import { CabinetType } from '@/features/carcass'
 // Import server actions for file storage
 import {
   saveRoomToFile,

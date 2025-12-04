@@ -140,6 +140,9 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
   const [syncCabinets, setSyncCabinets] = useState<string[]>([])
   // Temporary raw editing buffer for number inputs so user can type full value before clamping/validation
   const [editingValues, setEditingValues] = useState<Record<string, string>>({})
+  // "Off the Floor" dimension for fillers and panels
+  const [offTheFloor, setOffTheFloor] = useState<number>(0)
+  const [editingOffTheFloor, setEditingOffTheFloor] = useState<string>('')
   
   // Load group data when selected cabinet changes
   useEffect(() => {
@@ -171,7 +174,14 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
 
   useEffect(() => {
     setMaterialColor(selectedCabinet?.material.getColour() || '#ffffff')
+    // Initialize "Off the Floor" value for fillers and panels
+    if (selectedCabinet && (selectedCabinet.cabinetType === 'filler' || selectedCabinet.cabinetType === 'panel')) {
+      const currentY = selectedCabinet.group.position.y
+      setOffTheFloor(Math.max(0, Math.min(1200, currentY)))
+      setEditingOffTheFloor('')
+    }
   }, [selectedCabinet])
+  
 
   // add window event listener for productPanel:updateDim
   useEffect(() => {
@@ -255,6 +265,9 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
   const widthGDIds = threeJsGDs?.["width"] || []
   const heightGDIds = threeJsGDs?.["height"] || []
   const depthGDIds = threeJsGDs?.["depth"] || []
+  
+  // Disable height and depth editing for fillers/panels added from modal
+  const isModalFillerOrPanel = (selectedCabinet?.cabinetType === 'filler' || selectedCabinet?.cabinetType === 'panel') && selectedCabinet?.hideLockIcons === true
   const doorOverhangGDIds = threeJsGDs?.["doorOverhang"] || []
   const shelfQtyGDIds = threeJsGDs?.["shelfQty"] || []
   const drawerQtyGDIds = threeJsGDs?.["drawerQty"] || []
@@ -485,6 +498,10 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
 
   const applyPrimaryDimsTo3D = (vals: Record<string, number | string>, changedId?: string) => {
     if (!selectedCabinet || !onDimensionsChange) return
+    
+    // Disable height and depth editing for fillers/panels added from modal
+    const isModalFillerOrPanel = (selectedCabinet.cabinetType === 'filler' || selectedCabinet.cabinetType === 'panel') && selectedCabinet.hideLockIcons === true
+    
     let width = selectedCabinet.dimensions.width
     let height = selectedCabinet.dimensions.height
     let depth = selectedCabinet.dimensions.depth
@@ -500,8 +517,11 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
       const v = vals[id]
       const gdId = dimObj.GDId
       if (widthGDIds.includes(gdId)) width = toNum(v) || width
-      if (heightGDIds.includes(gdId)) height = toNum(v) || height
-      if (depthGDIds.includes(gdId)) depth = toNum(v) || depth
+      // Skip height and depth updates for modal fillers/panels
+      if (!isModalFillerOrPanel) {
+        if (heightGDIds.includes(gdId)) height = toNum(v) || height
+        if (depthGDIds.includes(gdId)) depth = toNum(v) || depth
+      }
       if (doorOverhangGDIds.includes(gdId)) overhangDoor = v.toString().toLowerCase() === 'yes' || v === 1 || v === '1'
       if (shelfQtyGDIds.includes(gdId)) shelfCount = toNum(v) || shelfCount
       if (drawerQtyGDIds.includes(gdId)) drawerQty = toNum(v) || drawerQty
@@ -940,7 +960,13 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
                             <div className="flex items-center gap-1.5 mb-1.5">
                               <input
                                 type="number"
-                                disabled={isDependentDrawer}
+                                disabled={
+                                  isDependentDrawer || 
+                                  (isModalFillerOrPanel && dimObj.GDId ? (
+                                    heightGDIds.includes(dimObj.GDId) || 
+                                    depthGDIds.includes(dimObj.GDId)
+                                  ) : false)
+                                }
                                 className="w-20 text-center text-sm px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent leading-tight"
                                 value={editingValues[id] !== undefined ? editingValues[id] : String(values[id] ?? dimObj.defaultValue ?? dimObj.min)}
                                 min={dimObj.min}
@@ -1007,7 +1033,13 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
                               />
                               <button
                                 type="button"
-                                disabled={isDependentDrawer}
+                                disabled={
+                                  isDependentDrawer || 
+                                  (isModalFillerOrPanel && dimObj.GDId ? (
+                                    heightGDIds.includes(dimObj.GDId) || 
+                                    depthGDIds.includes(dimObj.GDId)
+                                  ) : false)
+                                }
                                 title="Reset dimension"
                                 onClick={() => {
                                   const next = { ...values, [id]: defVal }
@@ -1103,6 +1135,120 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
                       </div>
                     )
                   })}
+                
+                {/* Off the Floor - Only for Fillers and Panels */}
+                {(selectedCabinet?.cabinetType === 'filler' || selectedCabinet?.cabinetType === 'panel') && (
+                  <div className="space-y-2 pt-2 border-t border-gray-200">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Off the Floor
+                      </label>
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5 mb-1.5">
+                        <input
+                          type="number"
+                          className="w-20 text-center text-sm px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent leading-tight"
+                          value={editingOffTheFloor !== '' ? editingOffTheFloor : String(offTheFloor)}
+                          min={0}
+                          max={1200}
+                          onChange={e => {
+                            setEditingOffTheFloor(e.target.value)
+                          }}
+                          onBlur={() => {
+                            const raw = editingOffTheFloor
+                            if (raw === '') {
+                              setEditingOffTheFloor('')
+                              return
+                            }
+                            let val = Number(raw)
+                            if (isNaN(val)) {
+                              setEditingOffTheFloor('')
+                              return
+                            }
+                            val = Math.max(0, Math.min(1200, val))
+                            setOffTheFloor(val)
+                            setEditingOffTheFloor('')
+                            
+                            // Update cabinet Y position and adjust height to maintain top position
+                            if (selectedCabinet && allCabinets) {
+                              const actualCabinet = allCabinets.find(c => c.cabinetId === selectedCabinet.cabinetId)
+                              if (actualCabinet) {
+                                const currentY = actualCabinet.group.position.y
+                                const currentHeight = actualCabinet.carcass.dimensions.height
+                                const topPosition = currentY + currentHeight
+                                
+                                // Calculate new height to maintain top position
+                                const newHeight = topPosition - val
+                                
+                                // Update Y position
+                                actualCabinet.group.position.set(
+                                  actualCabinet.group.position.x,
+                                  val,
+                                  actualCabinet.group.position.z
+                                )
+                                
+                                // Update height to maintain top position
+                                if (onDimensionsChange) {
+                                  onDimensionsChange({
+                                    width: actualCabinet.carcass.dimensions.width,
+                                    height: newHeight,
+                                    depth: actualCabinet.carcass.dimensions.depth
+                                  })
+                                }
+                              }
+                            }
+                          }}
+                        />
+                      </div>
+                      <input
+                        type="range"
+                        className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
+                        value={offTheFloor}
+                        min={0}
+                        max={1200}
+                        onChange={e => {
+                          const val = Math.max(0, Math.min(1200, Number(e.target.value)))
+                          setOffTheFloor(val)
+                          setEditingOffTheFloor('')
+                          
+                          // Update cabinet Y position and adjust height to maintain top position
+                          if (selectedCabinet && allCabinets) {
+                            const actualCabinet = allCabinets.find(c => c.cabinetId === selectedCabinet.cabinetId)
+                            if (actualCabinet) {
+                              const currentY = actualCabinet.group.position.y
+                              const currentHeight = actualCabinet.carcass.dimensions.height
+                              const topPosition = currentY + currentHeight
+                              
+                              // Calculate new height to maintain top position
+                              const newHeight = topPosition - val
+                              
+                              // Update Y position
+                              actualCabinet.group.position.set(
+                                actualCabinet.group.position.x,
+                                val,
+                                actualCabinet.group.position.z
+                              )
+                              
+                              // Update height to maintain top position
+                              if (onDimensionsChange) {
+                                onDimensionsChange({
+                                  width: actualCabinet.carcass.dimensions.width,
+                                  height: newHeight,
+                                  depth: actualCabinet.carcass.dimensions.depth
+                                })
+                              }
+                            }
+                          }
+                        }}
+                      />
+                      <div className="flex justify-between text-xs text-gray-500 mt-1">
+                        <span>0</span>
+                        <span>1200</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 

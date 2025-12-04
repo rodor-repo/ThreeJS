@@ -3,6 +3,8 @@ import { ViewId } from "../../../cabinets/ViewManager"
 import { toastThrottled } from "@/features/cabinets/ui/ProductPanel"
 import { getClient } from "@/app/QueryProvider"
 import { getProductData } from "@/server/getProductData"
+import { updateChildCabinets } from "./childCabinetHandler"
+import { updateKickerPosition } from "./kickerPositionHandler"
 
 interface ViewManagerResult {
   getCabinetsInView: (viewId: ViewId) => string[]
@@ -121,12 +123,19 @@ export const handleProductDimensionChange = (
 
   // Store old width and position before updating
   const oldWidth = selectedCabinet.carcass.dimensions.width
+  const oldHeight = selectedCabinet.carcass.dimensions.height
+  const oldDepth = selectedCabinet.carcass.dimensions.depth
   const oldX = selectedCabinet.group.position.x
   const leftLock = selectedCabinet.leftLock ?? false
   const rightLock = selectedCabinet.rightLock ?? false
 
   // Calculate width delta (how much the width changed)
   const widthDelta = newDimensions.width - oldWidth
+  
+  // Detect which dimensions changed
+  const heightChanged = Math.abs(newDimensions.height - oldHeight) > 0.1
+  const widthChanged = Math.abs(newDimensions.width - oldWidth) > 0.1
+  const depthChanged = Math.abs(newDimensions.depth - oldDepth) > 0.1
 
   // Check for sync relationships - sync logic overrides lock system and pair system
   if (widthDelta !== 0) {
@@ -230,6 +239,21 @@ export const handleProductDimensionChange = (
           // Not leftmost: update dimensions, position may need adjustment
           selectedCabinet.carcass.updateDimensions(newDimensions)
           // Position will be adjusted by cabinets to the left if needed
+        }
+        
+        // Update child cabinets (fillers/panels) when parent changes
+        updateChildCabinets(selectedCabinet, cabinets, {
+          heightChanged,
+          widthChanged,
+          depthChanged,
+          positionChanged: false
+        })
+        
+        // Update kicker position when parent dimensions change
+        if (selectedCabinet.cabinetType === 'base' || selectedCabinet.cabinetType === 'tall') {
+          updateKickerPosition(selectedCabinet, cabinets, {
+            dimensionsChanged: true
+          })
         }
 
         // Calculate new sync width
@@ -346,6 +370,21 @@ export const handleProductDimensionChange = (
       // Position stays the same (left edge is frozen)
       // Just update dimensions
       selectedCabinet.carcass.updateDimensions(newDimensions)
+      
+      // Update child cabinets (fillers/panels) when parent changes
+      updateChildCabinets(selectedCabinet, cabinets, {
+        heightChanged,
+        widthChanged,
+        depthChanged,
+        positionChanged: false
+      })
+      
+      // Update kicker position when parent dimensions change
+      if (selectedCabinet.cabinetType === 'base' || selectedCabinet.cabinetType === 'tall') {
+        updateKickerPosition(selectedCabinet, cabinets, {
+          dimensionsChanged: true
+        })
+      }
 
       // Handle grouped cabinets (Pair system) - apply proportional width changes
       // Only apply if sync didn't apply
@@ -508,6 +547,22 @@ export const handleProductDimensionChange = (
         selectedCabinet.group.position.y,
         selectedCabinet.group.position.z
       )
+      
+      // Update child cabinets (fillers/panels) when parent changes
+      updateChildCabinets(selectedCabinet, cabinets, {
+        heightChanged,
+        widthChanged,
+        depthChanged,
+        positionChanged: Math.abs(clampedX - oldX) > 0.1
+      })
+      
+      // Update kicker position when parent dimensions/position change
+      if (selectedCabinet.cabinetType === 'base' || selectedCabinet.cabinetType === 'tall') {
+        updateKickerPosition(selectedCabinet, cabinets, {
+          dimensionsChanged: true,
+          positionChanged: Math.abs(clampedX - oldX) > 0.1
+        })
+      }
 
       // Handle grouped cabinets - apply proportional width changes
       const groupData = cabinetGroups.get(selectedCabinet.cabinetId)
@@ -680,6 +735,22 @@ export const handleProductDimensionChange = (
         selectedCabinet.group.position.y,
         selectedCabinet.group.position.z
       )
+      
+      // Update child cabinets (fillers/panels) when parent changes
+      updateChildCabinets(selectedCabinet, cabinets, {
+        heightChanged,
+        widthChanged,
+        depthChanged,
+        positionChanged: Math.abs(clampedX - oldX) > 0.1
+      })
+      
+      // Update kicker position when parent dimensions/position change
+      if (selectedCabinet.cabinetType === 'base' || selectedCabinet.cabinetType === 'tall') {
+        updateKickerPosition(selectedCabinet, cabinets, {
+          dimensionsChanged: true,
+          positionChanged: Math.abs(clampedX - oldX) > 0.1
+        })
+      }
 
       // Handle grouped cabinets - apply proportional width changes
       const groupData = cabinetGroups.get(selectedCabinet.cabinetId)
@@ -819,5 +890,20 @@ export const handleProductDimensionChange = (
   } else {
     // Width didn't change, just update other dimensions
     selectedCabinet.carcass.updateDimensions(newDimensions)
+    
+    // Update child cabinets (fillers/panels) when parent changes
+    updateChildCabinets(selectedCabinet, cabinets, {
+      heightChanged,
+      widthChanged: false,
+      depthChanged,
+      positionChanged: false
+    })
+    
+    // Update kicker position when parent dimensions change
+    if (selectedCabinet.cabinetType === 'base' || selectedCabinet.cabinetType === 'tall') {
+      updateKickerPosition(selectedCabinet, cabinets, {
+        dimensionsChanged: true
+      })
+    }
   }
 }

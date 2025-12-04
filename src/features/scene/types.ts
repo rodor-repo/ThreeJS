@@ -38,6 +38,7 @@ export type CabinetType =
   | "panel"
   | "filler"
   | "wardrobe"
+  | "kicker"
 
 export type CabinetData = {
   group: THREE.Group
@@ -54,4 +55,14 @@ export type CabinetData = {
   rightLock?: boolean // When locked, right edge is frozen - cabinet can only extend to the left
   /** Sort number based on order cabinets were added to the scene */
   sortNumber?: number
+  /** Flag to hide lock icons - used for fillers/panels added from modal */
+  hideLockIcons?: boolean
+  /** Parent cabinet ID - used for fillers/panels added from modal to track parent-child relationship */
+  parentCabinetId?: string
+  /** Side relative to parent ('left' | 'right') - used for fillers/panels added from modal */
+  parentSide?: 'left' | 'right'
+  /** For kicker type: reference to the KickerFace instance */
+  kickerFace?: any // KickerFace instance
+  /** For kicker type: parent cabinet ID that this kicker belongs to */
+  kickerParentCabinetId?: string
 }

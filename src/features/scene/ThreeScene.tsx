@@ -1,6 +1,8 @@
+import * as THREE from 'three'
 import { DoorMaterial } from '@/features/carcass'
 import { Subcategory } from '@/components/categoriesData'
 import { Settings, ShoppingCart, Undo, Redo, Flag, History, Clock, Trash2 } from 'lucide-react'
+import type { CabinetData } from './types'
 import { debounce } from 'lodash'
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useCabinets } from '../cabinets/hooks/useCabinets'
@@ -32,8 +34,11 @@ import type { ViewId } from '../cabinets/ViewManager'
 import type { SavedRoom } from '@/data/savedRooms'
 import { handleViewDimensionChange } from './utils/handlers/viewDimensionHandler'
 import { handleSplashbackHeightChange } from './utils/handlers/splashbackHandler'
+import { handleKickerHeightChange } from './utils/handlers/kickerHeightHandler'
 import { handleProductDimensionChange } from './utils/handlers/productDimensionHandler'
 import { handleDeleteCabinet } from './utils/handlers/deleteCabinetHandler'
+import { createCabinet as createCabinetEntry } from '../cabinets/factory/cabinetFactory'
+import { updateChildCabinets } from './utils/handlers/childCabinetHandler'
 
 interface ThreeSceneProps {
   wallDimensions: WallDims
@@ -55,6 +60,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
   const [numbersVisible, setNumbersVisible] = useState(false)
   const [selectedMode, setSelectedMode] = useState<'admin' | 'user'>('user') // Radio button selection
   const [isOrthoView, setIsOrthoView] = useState(false) // Track ortho view state for UI
+  const [cameraViewMode, setCameraViewMode] = useState<'x' | 'y' | 'z' | null>(null) // Track which ortho view is active
   // Cabinet groups: Map of cabinetId -> array of { cabinetId, percentage }
   const [cabinetGroups, setCabinetGroups] = useState<Map<string, Array<{ cabinetId: string; percentage: number }>>>(new Map())
   // Cabinet sync relationships: Map of cabinetId -> array of synced cabinetIds
@@ -94,6 +100,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     showProductPanel,
     setShowProductPanel,
     createCabinet,
+    addCabinet,
     clearCabinets,
     updateCabinetViewId,
     updateCabinetLock,
@@ -107,7 +114,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
   const { updateSnapGuides, clearSnapGuides } = useSnapGuides(sceneRef, wallDimensions)
 
   // Dimension lines for showing cabinet measurements
-  useDimensionLines(sceneRef, cabinets, dimensionsVisible, viewManager.viewManager, wallDimensions)
+  useDimensionLines(sceneRef, cabinets, dimensionsVisible, viewManager.viewManager, wallDimensions, cameraViewMode)
 
   // Cabinet numbering system
   useCabinetNumbers(sceneRef, cabinets, numbersVisible)
@@ -183,6 +190,92 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     { orthoCameraRef, isOrthoActiveRef }
   )
 
+  // Control wall transparency based on camera view mode
+  // X view: Side walls (left, right, middle) transparent, back wall normal
+  // Y view: Back wall transparent, side walls (left, right, middle) normal
+  // Z view or 3D: All walls normal
+  useEffect(() => {
+    // Determine opacity for back wall and side walls based on view mode
+    const backWallOpacity = cameraViewMode === 'y' ? 0 : 0.9 // Transparent in Y view, normal otherwise
+    const sideWallsOpacity = cameraViewMode === 'x' ? 0 : 0.9 // Transparent in X view, normal otherwise
+
+    // Update back wall
+    if (wallRef.current) {
+      wallRef.current.traverse((child) => {
+        if (child instanceof THREE.Mesh && child.material) {
+          const material = child.material as THREE.MeshLambertMaterial
+          if (material.transparent !== undefined) {
+            material.opacity = backWallOpacity
+            material.needsUpdate = true
+          }
+        }
+      })
+    }
+
+    // Update left wall
+    if (leftWallRef.current) {
+      leftWallRef.current.traverse((child) => {
+        if (child instanceof THREE.Mesh && child.material) {
+          const material = child.material as THREE.MeshLambertMaterial
+          if (material.transparent !== undefined) {
+            material.opacity = sideWallsOpacity
+            material.needsUpdate = true
+          }
+        }
+      })
+    }
+
+    // Update right wall
+    if (rightWallRef.current) {
+      rightWallRef.current.traverse((child) => {
+        if (child instanceof THREE.Mesh && child.material) {
+          const material = child.material as THREE.MeshLambertMaterial
+          if (material.transparent !== undefined) {
+            material.opacity = sideWallsOpacity
+            material.needsUpdate = true
+          }
+        }
+      })
+    }
+
+    // Update additional walls (middle walls)
+    // Traverse the scene to find additional walls
+    if (sceneRef.current) {
+      sceneRef.current.traverse((child) => {
+        // Skip the back wall (wallRef.current)
+        if (child === wallRef.current) {
+          return
+        }
+
+        // Check if this is an additional wall by checking its geometry
+        // Additional walls are perpendicular to back wall (extend in Z direction)
+        if (child instanceof THREE.Group && child.children.length > 0) {
+          const firstChild = child.children[0]
+          if (firstChild instanceof THREE.Mesh) {
+            const material = firstChild.material as THREE.MeshLambertMaterial
+            // Check if this is an additional wall (has thickness in X direction, extends in Z)
+            // Additional walls have geometry with small X dimension (thickness)
+            if (material && material.transparent !== undefined && firstChild.geometry) {
+              const geometry = firstChild.geometry as THREE.BoxGeometry
+              // Additional walls have small X dimension (wall thickness)
+              // and are positioned away from X=0 and X=backWallLength
+              if (geometry.parameters && geometry.parameters.width < 100) {
+                // This is likely a wall (has small width/thickness)
+                // Check if it's not the back wall (back wall has large X dimension)
+                const xPos = child.position.x
+                const backWallLength = wallDimensions.backWallLength ?? wallDimensions.length
+                // Additional walls are positioned between 0 and backWallLength
+                if (xPos > 0 && xPos < backWallLength) {
+                  material.opacity = sideWallsOpacity
+                  material.needsUpdate = true
+                }
+              }
+            }
+          }
+        }
+      })
+    }
+  }, [cameraViewMode, wallRef, leftWallRef, rightWallRef, sceneRef, wallDimensions])
 
   // Handle category changes
   useEffect(() => {
@@ -309,6 +402,301 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
   const [showHistory, setShowHistory] = useState(false)
   const [historyTab, setHistoryTab] = useState<'manual' | 'auto'>('manual')
   const [isCheckpointed, setIsCheckpointed] = useState(false)
+
+  // Handle filler selection and creation
+  const handleFillerSelect = useCallback((cabinetId: string, productId: string, side: 'left' | 'right') => {
+    if (!wsProducts || !sceneRef.current) return
+
+    const parentCabinet = cabinets.find(c => c.cabinetId === cabinetId)
+    if (!parentCabinet) return
+
+    const productEntry = wsProducts.products[productId]
+    if (!productEntry) return
+
+    const productName = productEntry.product
+    const designId = productEntry.designId
+    const designEntry = wsProducts.designs[designId || ""]
+    if (!designEntry) return
+
+    // Check if it's a filler or panel type
+    const cabinetType = designEntry.type3D
+    if (cabinetType !== 'filler' && cabinetType !== 'panel') return
+
+    // Determine filler type from product name (only for fillers)
+    const fillerType = cabinetType === 'filler' && (productName?.toLowerCase().includes("l shape") || productName?.toLowerCase().includes("l-shape"))
+      ? "l-shape" 
+      : "linear"
+
+    // Get filler subcategory (find first filler subcategory)
+    const fillersCategory = Object.entries(wsProducts.categories).find(([, cat]) =>
+      cat.category.toLowerCase().includes('filler') || cat.category.toLowerCase().includes('panel')
+    )
+    if (!fillersCategory) return
+
+    const [categoryId] = fillersCategory
+    const fillerSubcategory = Object.entries(wsProducts.subCategories).find(([, sc]) => sc.categoryId === categoryId)
+    if (!fillerSubcategory) return
+
+    const [subcategoryId, subcategoryData] = fillerSubcategory
+
+    // Match height to parent cabinet height
+    const itemHeight = parentCabinet.carcass.dimensions.height
+
+    // Determine filler return position for L-Shape fillers
+    // When added to LEFT side: return should be on RIGHT side of filler (toward cabinet)
+    // When added to RIGHT side: return should be on LEFT side of filler (toward cabinet)
+    const fillerReturnPosition = cabinetType === 'filler' && fillerType === 'l-shape' 
+      ? (side === 'left' ? 'right' : 'left')
+      : undefined
+
+    // Create filler or panel using the hook (adds to scene and state)
+    const newCabinet = createCabinet(cabinetType, subcategoryId, productId, productName, fillerReturnPosition)
+    if (!newCabinet) return
+
+    // Mark this filler/panel as added from modal to hide icons
+    newCabinet.hideLockIcons = true
+    // Store parent-child relationship
+    newCabinet.parentCabinetId = cabinetId
+    newCabinet.parentSide = side
+
+    // Check if parent is overhead cabinet with overhang doors
+    const isOverheadWithOverhang = parentCabinet.cabinetType === 'top' && 
+                                    parentCabinet.carcass.config.overhangDoor === true
+    const overhangAmount = 20 // 20mm overhang extension
+
+    // Update dimensions to match parent cabinet height
+    // For overhead cabinets with overhang: extend height downward by overhang amount
+    let finalHeight = itemHeight
+    if (isOverheadWithOverhang) {
+      finalHeight = itemHeight + overhangAmount
+    }
+
+    if (cabinetType === 'filler') {
+      // Filler dimensions
+      newCabinet.carcass.updateDimensions({
+        width: fillerType === 'l-shape' ? 100 : 16, // L-shape uses width for gap, linear uses 16mm thickness
+        height: finalHeight, // Match parent cabinet height (with overhang extension if applicable)
+        depth: fillerType === 'l-shape' ? 40 : 100, // L-shape return depth, linear face width
+      })
+    } else if (cabinetType === 'panel') {
+      // Panel dimensions: width = thickness (16mm), height = panel height
+      // For END/Side Panels: depth = parent depth + 20mm (extend in positive Z)
+      // For other panels: depth = panel face width (600mm default)
+      const parentDepth = parentCabinet.carcass.dimensions.depth
+      
+      // Check if this is an END Panel or Side Panel by checking product name or subcategory
+      const productNameLower = productName?.toLowerCase() || ''
+      const subcategoryName = subcategoryData?.subCategory?.toLowerCase() || ''
+      const isEndPanel = productNameLower.includes("end") || 
+                         productNameLower.includes("side panel") ||
+                         subcategoryName.includes("side-panel") ||
+                         subcategoryName.includes("side panel")
+      
+      const panelDepth = isEndPanel ? parentDepth + 20 : 600 // END/Side Panel: parent depth + 20mm, others: 600mm
+      
+      newCabinet.carcass.updateDimensions({
+        width: 16, // Panel thickness
+        height: finalHeight, // Match parent cabinet height (with overhang extension if applicable)
+        depth: panelDepth, // END/Side Panel: parent depth + 20mm, others: 600mm default
+      })
+    }
+
+    // Position next to parent cabinet
+    const parentX = parentCabinet.group.position.x
+    const parentWidth = parentCabinet.carcass.dimensions.width
+    const parentY = parentCabinet.group.position.y
+    const parentZ = parentCabinet.group.position.z
+    const parentDepth = parentCabinet.carcass.dimensions.depth
+
+    // Calculate door front edge position to align fillers/panels with doors
+    // Door center Z position: parentZ + parentDepth + doorThickness/2 + 2mm offset
+    // Door front edge Z: door center + doorThickness/2 = parentZ + parentDepth + doorThickness + 2mm
+    const doorMaterial = parentCabinet.carcass.config.doorMaterial
+    const doorThickness = doorMaterial ? doorMaterial.getThickness() : 0
+    const doorOffset = 2 // 2mm clearance offset
+    const doorFrontEdgeZ = parentZ + parentDepth + doorThickness + doorOffset
+
+    // For fillers/panels, we need to position them so their front edge aligns with door front edge
+    // Filler/panel back edge is at fillerZ (cabinet origin is at back-bottom-left)
+    // Filler/panel front edge is at: fillerZ + fillerDepth
+    // So: fillerZ + fillerDepth = doorFrontEdgeZ
+    // Therefore: fillerZ = doorFrontEdgeZ - fillerDepth
+    // L-Shape fillers need an additional 20mm forward offset
+    const fillerDepth = newCabinet.carcass.dimensions.depth
+    const lShapeOffset = cabinetType === 'filler' && fillerType === 'l-shape' ? 20 : 0
+    const fillerZ = doorFrontEdgeZ - fillerDepth + lShapeOffset
+
+    // Calculate Y position: align bottom with parent bottom, extend upward (positive Y)
+    // For overhead with overhang: position 20mm lower (negative Y) to align with door overhang
+    let fillerY = parentY // Align bottom Y with parent bottom Y (extends upward in positive Y direction)
+    if (isOverheadWithOverhang) {
+      // Position 20mm lower (negative Y) to align with door overhang extension
+      fillerY = parentY - overhangAmount
+    }
+
+    if (side === 'left') {
+      // Position to the left of the cabinet
+      newCabinet.group.position.set(
+        parentX - newCabinet.carcass.dimensions.width,
+        fillerY, // Y position (with overhang adjustment if applicable)
+        fillerZ // Align front edge with door front edge
+      )
+    } else {
+      // Position to the right of the cabinet
+      newCabinet.group.position.set(
+        parentX + parentWidth,
+        fillerY, // Y position (with overhang adjustment if applicable)
+        fillerZ // Align front edge with door front edge
+      )
+    }
+
+    // Add to same view as parent cabinet
+    if (parentCabinet.viewId) {
+      updateCabinetViewId(newCabinet.cabinetId, parentCabinet.viewId)
+    }
+
+    // Set lock states for fillers based on which side they're added
+    // Right filler: activate LEFT lock, release RIGHT lock
+    // Left filler: activate RIGHT lock, release LEFT lock
+    if (cabinetType === 'filler' || cabinetType === 'panel') {
+      if (side === 'right') {
+        updateCabinetLock(newCabinet.cabinetId, true, false) // Left lock ON, Right lock OFF
+      } else {
+        updateCabinetLock(newCabinet.cabinetId, false, true) // Left lock OFF, Right lock ON
+      }
+    }
+  }, [cabinets, wsProducts, sceneRef, createCabinet, updateCabinetViewId, updateCabinetLock])
+
+  // Handle kicker face toggle for a specific cabinet
+  const handleKickerToggle = useCallback((cabinetId: string, enabled: boolean) => {
+    const cabinet = cabinets.find(c => c.cabinetId === cabinetId)
+    if (!cabinet || (cabinet.cabinetType !== 'base' && cabinet.cabinetType !== 'tall')) {
+      return
+    }
+
+    // Import KickerFace dynamically
+    import('../carcass/parts/KickerFace').then(({ KickerFace }) => {
+      if (enabled) {
+        // Get kicker height from cabinet's Y position (Y position = kicker height set in view settings)
+        // Kicker height is always >= 0 (cannot go negative)
+        const kickerHeight = Math.max(0, cabinet.group.position.y)
+
+        // Check if kicker already exists as a separate CabinetData entry
+        const existingKickerCabinet = cabinets.find(
+          (c) => c.cabinetType === 'kicker' && c.kickerParentCabinetId === cabinetId
+        )
+
+        if (!existingKickerCabinet) {
+          // Create new kicker face
+          const kickerFace = new KickerFace({
+            width: cabinet.carcass.dimensions.width,
+            legHeight: kickerHeight,
+            depth: cabinet.carcass.dimensions.depth,
+            material: cabinet.carcass.config.material.getMaterial(),
+          })
+
+          // Calculate world position for kicker
+          // Kicker is positioned relative to cabinet, so we need to convert to world coordinates
+          const cabinetWorldPos = new THREE.Vector3()
+          cabinet.group.getWorldPosition(cabinetWorldPos)
+          
+          // Kicker local position relative to cabinet (from KickerFace.updatePosition)
+          const kickerLocalX = cabinet.carcass.dimensions.width / 2
+          const kickerLocalY = -kickerHeight / 2
+          const kickerLocalZ = cabinet.carcass.dimensions.depth - 70 + 16 / 2 // depth - zOffset + thickness/2
+          
+          // Convert to world position
+          const kickerWorldPos = new THREE.Vector3(
+            cabinetWorldPos.x + kickerLocalX,
+            cabinetWorldPos.y + kickerLocalY,
+            cabinetWorldPos.z + kickerLocalZ
+          )
+
+          // Set kicker group position in world space
+          kickerFace.group.position.copy(kickerWorldPos)
+          
+          // Name the group for easy identification
+          kickerFace.group.name = `kickerFace_${cabinet.cabinetId}`
+
+          // Create a dummy CarcassAssembly for the kicker (required by CabinetData)
+          // We'll use a minimal carcass that won't interfere with selection
+          const dummyCarcass = {
+            dimensions: {
+              width: cabinet.carcass.dimensions.width,
+              height: kickerHeight,
+              depth: 16, // kicker thickness
+            },
+            config: cabinet.carcass.config,
+            updateDimensions: () => {},
+            updateKickerHeight: () => {},
+            updateKickerFace: () => {},
+          } as any
+
+          // Create CabinetData entry for kicker
+          const kickerCabinetData: CabinetData = {
+            group: kickerFace.group,
+            carcass: dummyCarcass,
+            cabinetType: 'kicker',
+            subcategoryId: cabinet.subcategoryId,
+            cabinetId: `kicker_${cabinetId}_${Date.now()}`,
+            viewId: cabinet.viewId,
+            kickerFace: kickerFace,
+            kickerParentCabinetId: cabinetId,
+            hideLockIcons: true, // Hide lock icons for kickers
+          }
+
+          // Add to scene and cabinets array using addCabinet method
+          addCabinet(kickerCabinetData)
+
+          // Store reference on parent cabinet for easy lookup
+          ;(cabinet.group as any).kickerFace = kickerFace
+          ;(cabinet.group as any).kickerCabinetData = kickerCabinetData
+        } else {
+          // Update existing kicker face dimensions if cabinet changed
+          const kickerFace = existingKickerCabinet.kickerFace
+          if (kickerFace && typeof kickerFace.updateDimensions === 'function') {
+            kickerFace.updateDimensions(
+              cabinet.carcass.dimensions.width,
+              kickerHeight,
+              cabinet.carcass.dimensions.depth
+            )
+            // Update world position
+            const cabinetWorldPos = new THREE.Vector3()
+            cabinet.group.getWorldPosition(cabinetWorldPos)
+            const kickerLocalX = cabinet.carcass.dimensions.width / 2
+            const kickerLocalY = -kickerHeight / 2
+            const kickerLocalZ = cabinet.carcass.dimensions.depth - 70 + 16 / 2
+            const kickerWorldPos = new THREE.Vector3(
+              cabinetWorldPos.x + kickerLocalX,
+              cabinetWorldPos.y + kickerLocalY,
+              cabinetWorldPos.z + kickerLocalZ
+            )
+            kickerFace.group.position.copy(kickerWorldPos)
+          }
+        }
+      } else {
+        // Remove kicker face from this cabinet
+        const existingKickerCabinet = cabinets.find(
+          (c) => c.cabinetType === 'kicker' && c.kickerParentCabinetId === cabinetId
+        )
+
+        if (existingKickerCabinet) {
+          // Dispose the kicker face
+          const kickerFace = existingKickerCabinet.kickerFace
+          if (kickerFace && typeof kickerFace.dispose === 'function') {
+            kickerFace.dispose()
+          }
+
+          // Remove kicker using deleteCabinet method
+          deleteCabinet(existingKickerCabinet.cabinetId)
+
+          // Clean up references
+          delete (cabinet.group as any).kickerFace
+          delete (cabinet.group as any).kickerCabinetData
+        }
+      }
+    })
+  }, [cabinets, sceneRef, addCabinet, deleteCabinet, setSelectedCabinets])
 
   const propagateLockToPairedCabinets = useCallback(
     (sourceCabinetId: string, leftLock: boolean, rightLock: boolean) => {
@@ -487,6 +875,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
           viewId={selectedViewId}
           cabinets={cabinets}
           wsProducts={wsProducts || null}
+          wallDimensions={wallDimensions}
           onDimensionChange={(gdId, newValue, productDataMap) => {
             handleViewDimensionChange(gdId, newValue, productDataMap, {
               cabinets,
@@ -502,6 +891,12 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
               wallDimensions
             })
           }}
+          onKickerHeightChange={(viewId, height) => {
+            handleKickerHeightChange(viewId as ViewId, height, {
+              cabinets,
+              viewManager
+            })
+          }}
         />
       )}
 
@@ -512,9 +907,9 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         onToggleMode={() => setCameraMode(prev => prev === 'constrained' ? 'free' : 'constrained')}
         onReset={resetCameraPosition}
         onClear={clearCabinets}
-        onX={() => { setCameraMode('constrained'); setCameraXView(); setIsOrthoView(true); }}
-        onY={() => { setCameraMode('constrained'); setCameraYView(); setIsOrthoView(true); }}
-        onZ={() => { setCameraMode('constrained'); setCameraZView(); setIsOrthoView(true); }}
+        onX={() => { setCameraMode('constrained'); setCameraXView(); setIsOrthoView(true); setCameraViewMode('x'); }}
+        onY={() => { setCameraMode('constrained'); setCameraYView(); setIsOrthoView(true); setCameraViewMode('y'); }}
+        onZ={() => { setCameraMode('constrained'); setCameraZView(); setIsOrthoView(true); setCameraViewMode('z'); }}
         onToggleDimensions={() => setDimensionsVisible(prev => !prev)}
         onToggleNumbers={() => setNumbersVisible(prev => !prev)}
         numbersVisible={numbersVisible}
@@ -526,13 +921,15 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         canDelete={!!selectedCabinet}
         isMenuOpen={isMenuOpen}
         isOrthoView={isOrthoView}
-        onResetTo3D={() => { resetToPerspective(zoomLevel); setIsOrthoView(false); }}
+        onResetTo3D={() => { resetToPerspective(zoomLevel); setIsOrthoView(false); setCameraViewMode(null); }}
       />
 
       {/* Camera Movement Instructions moved to CameraControls component - appears on hover */}
 
       {/* Cabinet Lock Icons - appear on double-click */}
-      {cabinetWithLockIcons && (
+      {/* Don't show icons for fillers/panels added from modal (marked with hideLockIcons) */}
+      {cabinetWithLockIcons && 
+       !cabinetWithLockIcons.hideLockIcons && (
         <CabinetLockIcons
           cabinet={cabinetWithLockIcons}
           camera={cameraRef.current}
@@ -547,6 +944,9 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
               setCabinetWithLockIcons(prev => prev ? { ...prev, leftLock, rightLock } : null)
             }
           }}
+          onKickerToggle={handleKickerToggle}
+          wsProducts={wsProducts}
+          onFillerSelect={handleFillerSelect}
         />
       )}
 
@@ -580,7 +980,8 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
           drawerHeights: selectedCabinet.carcass.config.drawerHeights,
           cabinetId: selectedCabinet.cabinetId,
           viewId: selectedCabinet.viewId,
-          carcass: selectedCabinet.carcass
+          carcass: selectedCabinet.carcass,
+          hideLockIcons: selectedCabinet.hideLockIcons
         } : null}
         viewManager={viewManager}
         allCabinets={cabinets}
@@ -789,6 +1190,13 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
           if (selectedCabinet) {
             // Update overhang door setting
             selectedCabinet.carcass.updateOverhangDoor(overhang);
+            
+            // Update child cabinets (fillers/panels) when overhang changes
+            if (selectedCabinet.cabinetType === 'top') {
+              updateChildCabinets(selectedCabinet, cabinets, {
+                overhangChanged: true
+              })
+            }
           }
         }}
         onDrawerToggle={(enabled) => {
@@ -1014,12 +1422,14 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
       </div>
 
       {/* SAVE Button - Left Bottom Corner */}
-      <button
-        onClick={openSaveModal}
-        className="fixed bottom-4 left-4 z-50 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-lg transition-colors duration-200 font-medium"
-      >
-        SAVE
-      </button>
+      <div className="fixed bottom-4 left-4 z-50 flex gap-3 items-center">
+        <button
+          onClick={openSaveModal}
+          className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-lg transition-colors duration-200 font-medium"
+        >
+          SAVE
+        </button>
+      </div>
     </div>
   );
 };

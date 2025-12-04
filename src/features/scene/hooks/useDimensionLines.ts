@@ -29,7 +29,8 @@ export const useDimensionLines = (
   cabinets: CabinetData[],
   visible: boolean = true,
   viewManager?: ViewManager,
-  wallDimensions?: WallDimensions
+  wallDimensions?: WallDimensions,
+  cameraViewMode?: 'x' | 'y' | 'z' | null
 ) => {
   const dimensionLinesRef = useRef<THREE.Group[]>([])
 
@@ -138,8 +139,13 @@ export const useDimensionLines = (
       selectedByKickerHeight.set(kickerHeight, leftmost.cabinetId)
     })
 
-    // Create dimension lines for each cabinet
+    // Create dimension lines for each cabinet (skip kickers)
     cabinets.forEach((cabinet) => {
+      // Skip dimension lines for kickers
+      if (cabinet.cabinetType === 'kicker') {
+        return
+      }
+
       const height = cabinet.carcass.dimensions.height
       const depth = cabinet.carcass.dimensions.depth
       const isSelectedForHeight =
@@ -154,12 +160,40 @@ export const useDimensionLines = (
           selectedByKickerHeight.get(kickerHeight) === cabinet.cabinetId
       }
 
+      // Determine which dimension lines to show based on camera view mode
+      // X view: Show Z (depth) and Y (height), hide X (width)
+      // Y view: Show X (width) and Y (height), hide Z (depth)
+      // Z view: Show Z (depth) and X (width), hide Y (height)
+      // 3D view (null): Show all
+      let showWidth = true
+      let showHeightDim = isSelectedForHeight
+      let showDepthDim = isSelectedForDepth
+      
+      if (cameraViewMode === 'x') {
+        // X view: Show Z and Y, hide X
+        showWidth = false
+        showHeightDim = isSelectedForHeight
+        showDepthDim = isSelectedForDepth
+      } else if (cameraViewMode === 'y') {
+        // Y view: Show X and Y, hide Z
+        showWidth = true
+        showHeightDim = isSelectedForHeight
+        showDepthDim = false
+      } else if (cameraViewMode === 'z') {
+        // Z view: Show Z and X, hide Y
+        showWidth = true
+        showHeightDim = false
+        showDepthDim = isSelectedForDepth
+      }
+
       const dimensionGroup = createCabinetDimensionLines(
         cabinet,
         wallOffsetContext,
-        isSelectedForHeight,
-        isSelectedForDepth,
-        isSelectedForKickerHeight
+        showHeightDim,
+        showDepthDim,
+        isSelectedForKickerHeight,
+        cabinets, // Pass all cabinets for parent-child alignment
+        showWidth // Pass showWidth parameter
       )
       sceneRef.current!.add(dimensionGroup)
       dimensionLinesRef.current.push(dimensionGroup)
@@ -176,10 +210,14 @@ export const useDimensionLines = (
     const hasTopCabinets = cabinets.some((c) => c.cabinetType === "top")
 
     if (hasTopCabinets) {
-      // Calculate overall width including all cabinets
+      // Calculate overall width including all cabinets (exclude kickers)
       let allMinX = Infinity
       let allMaxX = -Infinity
       cabinets.forEach((cabinet) => {
+        // Skip kickers
+        if (cabinet.cabinetType === 'kicker') {
+          return
+        }
         const x = cabinet.group.position.x
         const width = cabinet.carcass.dimensions.width
         allMinX = Math.min(allMinX, x)

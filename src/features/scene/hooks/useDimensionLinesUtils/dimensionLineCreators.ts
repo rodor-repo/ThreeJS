@@ -74,7 +74,9 @@ export function createCabinetDimensionLines(
   wallOffsetContext: WallOffsetContext,
   showHeight: boolean = true,
   showDepth: boolean = true,
-  showKickerHeight: boolean = false
+  showKickerHeight: boolean = false,
+  allCabinets?: CabinetData[], // Optional: needed for fillers/panels to align with parent
+  showWidth: boolean = true // Show width (X axis) dimension line
 ): THREE.Group {
   const group = new THREE.Group()
   const color = DIMENSION_CONSTANTS.colors.cabinet
@@ -88,40 +90,55 @@ export function createCabinetDimensionLines(
   const y = pos.y
   const z = pos.z
 
+  // For fillers/panels added from modal, use parent cabinet's Z position for dimension line alignment
+  let dimensionZ = z + depth + offset
+  if (cabinet.parentCabinetId && allCabinets && (cabinet.cabinetType === 'filler' || cabinet.cabinetType === 'panel')) {
+    const parentCabinet = allCabinets.find(c => c.cabinetId === cabinet.parentCabinetId)
+    if (parentCabinet) {
+      // Use the exact same Z calculation as parent cabinet's dimension line
+      // Parent uses: parentZ + parentDepth + offset
+      const parentZ = parentCabinet.group.position.z
+      const parentDepth = parentCabinet.carcass.dimensions.depth
+      dimensionZ = parentZ + parentDepth + offset
+    }
+  }
+
   // Apply wall offsets to X positions for dimension lines
   const xLeft = applyWallOffset(x - offset, wallOffsetContext)
   const xRight = x + width
   const xCabinetLeft = x
 
   // WIDTH dimension (along X axis) - at top front
-  const widthDimension = createCompleteDimension({
-    extensionStart1: new THREE.Vector3(
-      xCabinetLeft,
-      y + height,
-      z + depth + offset
-    ),
-    extensionStart2: new THREE.Vector3(xRight, y + height, z + depth + offset),
-    dimensionPoint1: new THREE.Vector3(
-      xCabinetLeft,
-      y + height + offset,
-      z + depth + offset
-    ),
-    dimensionPoint2: new THREE.Vector3(
-      xRight,
-      y + height + offset,
-      z + depth + offset
-    ),
-    labelText: `${Math.ceil(width)}mm`,
-    labelPosition: new THREE.Vector3(
-      (xCabinetLeft + xRight) / 2,
-      y + height + offset + 30,
-      z + depth + offset
-    ),
-    color,
-    arrowColor,
-    lineWidth,
-  })
-  group.add(widthDimension)
+  if (showWidth) {
+    const widthDimension = createCompleteDimension({
+      extensionStart1: new THREE.Vector3(
+        xCabinetLeft,
+        y + height,
+        dimensionZ
+      ),
+      extensionStart2: new THREE.Vector3(xRight, y + height, dimensionZ),
+      dimensionPoint1: new THREE.Vector3(
+        xCabinetLeft,
+        y + height + offset,
+        dimensionZ
+      ),
+      dimensionPoint2: new THREE.Vector3(
+        xRight,
+        y + height + offset,
+        dimensionZ
+      ),
+      labelText: `${Math.ceil(width)}mm`,
+      labelPosition: new THREE.Vector3(
+        (xCabinetLeft + xRight) / 2,
+        y + height + offset + 30,
+        dimensionZ
+      ),
+      color,
+      arrowColor,
+      lineWidth,
+    })
+    group.add(widthDimension)
+  }
 
   // HEIGHT dimension (along Y axis) - at left front
   if (showHeight) {
@@ -154,6 +171,11 @@ export function createCabinetDimensionLines(
     (cabinet.cabinetType === "base" || cabinet.cabinetType === "tall")
   ) {
     const kickerHeight = y // Y position equals kicker height for base/tall
+    
+    // Text orientation based on kicker height:
+    // - When height < 100mm: Horizontal text (along X axis)
+    // - When height >= 100mm: Vertical text (rotated 90 degrees, along Y axis)
+    const useVerticalText = kickerHeight >= 100
 
     const kickerDimension = createCompleteDimension({
       extensionStart1: new THREE.Vector3(xCabinetLeft, 0, z + depth + offset),
@@ -177,13 +199,15 @@ export function createCabinetDimensionLines(
       color,
       arrowColor,
       lineWidth,
-      isVerticalText: true,
+      isVerticalText: useVerticalText,
     })
     group.add(kickerDimension)
   }
 
   // DEPTH dimension (along Z axis) - at top left
-  if (showDepth) {
+  // Skip depth dimension for L-Shape fillers (width = 100mm indicates L-Shape)
+  const isLShapeFiller = cabinet.cabinetType === 'filler' && width === 100
+  if (showDepth && !isLShapeFiller) {
     const depthDimension = createCompleteDimension({
       extensionStart1: new THREE.Vector3(xLeft, y + height, z),
       extensionStart2: new THREE.Vector3(xLeft, y + height, z + depth),
@@ -222,11 +246,17 @@ export function createOverallWidthDimension(
   const extensionLength = DIMENSION_CONSTANTS.defaults.overallExtensionLength
 
   // Find min and max X positions, and max Y (top) position
+  // Exclude kickers from overall width calculations
   let minX = Infinity
   let maxX = -Infinity
   let maxY = -Infinity
 
   cabinets.forEach((cabinet) => {
+    // Skip kickers
+    if (cabinet.cabinetType === 'kicker') {
+      return
+    }
+
     const x = cabinet.group.position.x
     const y = cabinet.group.position.y
     const width = cabinet.carcass.dimensions.width
@@ -238,10 +268,12 @@ export function createOverallWidthDimension(
   })
 
   const overallWidth = maxX - minX
-  // Position at front of cabinets
+  // Position at front of cabinets (exclude kickers)
   const zPos =
     Math.max(
-      ...cabinets.map((c) => c.group.position.z + c.carcass.dimensions.depth)
+      ...cabinets
+        .filter((c) => c.cabinetType !== 'kicker')
+        .map((c) => c.group.position.z + c.carcass.dimensions.depth)
     ) + offset
 
   // Short extension lines (fixed length)
@@ -328,7 +360,7 @@ export function createOverallHeightDimension(
 
     const cabinetIds = viewManager.getCabinetsInView(viewId)
     const viewCabinets = cabinets.filter((c) =>
-      cabinetIds.includes(c.cabinetId)
+      cabinetIds.includes(c.cabinetId) && c.cabinetType !== 'kicker'
     )
 
     if (viewCabinets.length === 0) return
@@ -591,7 +623,7 @@ export function detectEmptySpacesY(
 
     const cabinetIds = viewManager.getCabinetsInView(viewId)
     const viewCabinets = cabinets.filter((c) =>
-      cabinetIds.includes(c.cabinetId)
+      cabinetIds.includes(c.cabinetId) && c.cabinetType !== 'kicker'
     )
 
     if (viewCabinets.length < 2) return
@@ -794,7 +826,7 @@ export function detectEmptySpacesXOverhead(
 
     const cabinetIds = viewManager.getCabinetsInView(viewId)
     const viewCabinets = cabinets.filter((c) =>
-      cabinetIds.includes(c.cabinetId)
+      cabinetIds.includes(c.cabinetId) && c.cabinetType !== 'kicker'
     )
 
     const topCabinets = viewCabinets.filter((c) => c.cabinetType === "top")
@@ -900,7 +932,7 @@ export function detectEmptySpacesX(
 
     const cabinetIds = viewManager.getCabinetsInView(viewId)
     const viewCabinets = cabinets.filter((c) =>
-      cabinetIds.includes(c.cabinetId)
+      cabinetIds.includes(c.cabinetId) && c.cabinetType !== 'kicker'
     )
 
     if (viewCabinets.length < 2) return

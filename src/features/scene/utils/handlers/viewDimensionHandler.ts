@@ -1,6 +1,7 @@
 import { CabinetData, WallDimensions } from "../../types"
 import { ViewId } from "../../../cabinets/ViewManager"
 import { cabinetPanelState } from "../../../cabinets/ui/ProductPanel"
+import { updateChildCabinets } from "./childCabinetHandler"
 
 // Define the interface for the ViewManager hook result (subset used here)
 interface ViewManagerResult {
@@ -96,11 +97,22 @@ export const handleViewDimensionChange = (
     let depth = cabinet.carcass.dimensions.depth
     let shelfCount: number | undefined = cabinet.carcass?.config?.shelfCount
 
+    // Disable height and depth editing for fillers/panels added from modal
+    const isModalFillerOrPanel = (cabinet.cabinetType === 'filler' || cabinet.cabinetType === 'panel') && cabinet.hideLockIcons === true
+    
     if (widthGDIds.includes(dimObj.GDId)) {
       width = newValue
     } else if (heightGDIds.includes(dimObj.GDId)) {
+      // Skip height updates for modal fillers/panels
+      if (isModalFillerOrPanel) {
+        return // Don't update height for modal fillers/panels
+      }
       height = newValue
     } else if (depthGDIds.includes(dimObj.GDId)) {
+      // Skip depth updates for modal fillers/panels
+      if (isModalFillerOrPanel) {
+        return // Don't update depth for modal fillers/panels
+      }
       depth = newValue
     } else if (shelfQtyGDIds.includes(dimObj.GDId)) {
       shelfCount = newValue
@@ -135,6 +147,11 @@ export const handleViewDimensionChange = (
               values: cabUpdatedValues,
             })
           }
+          
+          // Update child cabinets (fillers/panels) when overhang changes
+          updateChildCabinets(cab, cabinets, {
+            overhangChanged: true
+          })
         }
       })
       return // Door overhang doesn't affect dimensions, so we can return early

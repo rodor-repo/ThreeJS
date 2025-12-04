@@ -6,7 +6,9 @@ import {
   getSnapGuides,
   DEFAULT_SNAP_CONFIG,
 } from "../lib/snapUtils"
+import { updateKickerPosition } from "../utils/handlers/kickerPositionHandler"
 import type { ViewManager, ViewId } from "../../cabinets/ViewManager"
+import { updateChildCabinets } from "../utils/handlers/childCabinetHandler"
 
 type CameraDragAPI = {
   startDrag: (x: number, y: number) => void
@@ -214,7 +216,8 @@ export const useSceneInteractions = (
         newY,
         snapCandidates,
         DEFAULT_SNAP_CONFIG,
-        wallDimensions.additionalWalls // Pass additional walls for snap detection
+        wallDimensions.additionalWalls, // Pass additional walls for snap detection
+        cabinets // Pass full cabinets array for child lookup
       )
 
       // Use snapped position if snapping occurred
@@ -285,6 +288,18 @@ export const useSceneInteractions = (
         newY,
         draggedCabinet.group.position.z
       )
+      
+      // Update child cabinets (fillers/panels) when parent moves
+      updateChildCabinets(draggedCabinet, cabinets, {
+        positionChanged: true
+      })
+      
+      // Update kicker position when parent cabinet moves
+      if (draggedCabinet.cabinetType === 'base' || draggedCabinet.cabinetType === 'tall') {
+        updateKickerPosition(draggedCabinet, cabinets, {
+          positionChanged: true
+        })
+      }
 
       // If dragged cabinet belongs to a view (not "none"), move ALL cabinets in that view together
       // Note: Left wall boundary is already checked above before moving the dragged cabinet
@@ -696,6 +711,14 @@ export const useSceneInteractions = (
           // Cabinet was double-clicked - handle cabinet interaction
           // Double-click selects single cabinet and shows lock icons
           setSelectedCabinets([clickedCabinet])
+
+          // Don't show lock icons for fillers/panels/kickers added from modal (marked with hideLockIcons)
+          // Also don't show lock icons for kickers (they are separate selectable parts)
+          if (clickedCabinet.hideLockIcons === true || clickedCabinet.cabinetType === 'kicker') {
+            setCabinetWithLockIcons(null)
+            setShowProductPanel(false) // Don't open ProductPanel for kickers
+            return // Stop here - don't show icons for fillers/panels/kickers
+          }
 
           // Toggle lock icons - if same cabinet, hide; if different, show on new one
           if (cabinetWithLockIcons === clickedCabinet) {

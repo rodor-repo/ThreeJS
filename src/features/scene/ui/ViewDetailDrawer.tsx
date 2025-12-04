@@ -4,7 +4,7 @@ import { ChevronLeft } from 'lucide-react'
 import { useQueries } from '@tanstack/react-query'
 import { getProductData } from '@/server/getProductData'
 import type { WsProducts, GDThreeJsType } from '@/types/erpTypes'
-import type { CabinetData } from '../types'
+import type { CabinetData, WallDimensions } from '../types'
 import { cabinetPanelState } from '@/features/cabinets/ui/ProductPanel'
 import _ from 'lodash'
 
@@ -16,8 +16,10 @@ type Props = {
   wsProducts: WsProducts | null
   viewId: string | null
   splashbackHeight?: number
+  wallDimensions?: WallDimensions
   onDimensionChange?: (gdId: string, newValue: number, productDataMap: Map<string, any>) => void
   onSplashbackHeightChange?: (viewId: string, height: number) => void
+  onKickerHeightChange?: (viewId: string, height: number) => void
 }
 
 export const ViewDetailDrawer: React.FC<Props> = ({
@@ -27,8 +29,10 @@ export const ViewDetailDrawer: React.FC<Props> = ({
   cabinets,
   wsProducts,
   viewId,
+  wallDimensions,
   onDimensionChange,
   onSplashbackHeightChange,
+  onKickerHeightChange,
 }) => {
   // Get all unique productIds from cabinets in the scene
   const uniqueProductIds = useMemo(() => {
@@ -208,7 +212,7 @@ export const ViewDetailDrawer: React.FC<Props> = ({
   // State for slider values
   const [sliderValues, setSliderValues] = useState<Record<string, number>>({})
   
-  // Calculate current gap between base/tall and top cabinets in the view
+  // Calculate current gap between ALL base/tall and ALL top cabinets in the view (globally)
   const calculateCurrentGap = useCallback((viewId: string | null): number => {
     if (!viewId) return 20
     
@@ -217,107 +221,106 @@ export const ViewDetailDrawer: React.FC<Props> = ({
     
     if (viewCabinets.length < 2) return 20
     
-    // Group cabinets by their X position ranges (cabinets that overlap horizontally)
-    const xRanges: Array<{ minX: number; maxX: number; baseCabinets: CabinetData[]; topCabinets: CabinetData[] }> = []
+    // Get all base/tall cabinets
+    const baseTallCabinets = viewCabinets.filter(c => c.cabinetType === 'base' || c.cabinetType === 'tall')
     
-    viewCabinets.forEach((cabinet) => {
-      const x = cabinet.group.position.x
-      const width = cabinet.carcass.dimensions.width
-      const minX = x
-      const maxX = x + width
-      
-      // Find if this cabinet overlaps with any existing X range
-      let foundRange = false
-      for (const range of xRanges) {
-        // Check if there's horizontal overlap
-        if (!(maxX < range.minX || minX > range.maxX)) {
-          // Overlaps - merge into this range
-          range.minX = Math.min(range.minX, minX)
-          range.maxX = Math.max(range.maxX, maxX)
-          
-          // Add cabinet to appropriate list
-          if (cabinet.cabinetType === 'base' || cabinet.cabinetType === 'tall') {
-            if (!range.baseCabinets.includes(cabinet)) {
-              range.baseCabinets.push(cabinet)
-            }
-          } else if (cabinet.cabinetType === 'top') {
-            if (!range.topCabinets.includes(cabinet)) {
-              range.topCabinets.push(cabinet)
-            }
-          }
-          
-          foundRange = true
-          break
-        }
-      }
-      
-      if (!foundRange) {
-        // Create new X range
-        const baseCabinets: CabinetData[] = []
-        const topCabinets: CabinetData[] = []
-        
-        if (cabinet.cabinetType === 'base' || cabinet.cabinetType === 'tall') {
-          baseCabinets.push(cabinet)
-        } else if (cabinet.cabinetType === 'top') {
-          topCabinets.push(cabinet)
-        }
-        
-        xRanges.push({ minX, maxX, baseCabinets, topCabinets })
-      }
-    })
+    // Get all overhead (top) cabinets
+    const overheadCabinets = viewCabinets.filter(c => c.cabinetType === 'top')
     
-    // Find the gap between base and top cabinets
-    let foundGap: number | null = null
+    // If no base/tall or no overhead cabinets, return default
+    if (baseTallCabinets.length === 0 || overheadCabinets.length === 0) return 20
     
-    xRanges.forEach((range) => {
-      if (range.baseCabinets.length === 0 || range.topCabinets.length === 0) return
-      
-      // Find the highest base/tall cabinet
-      const highestBase = range.baseCabinets.reduce((prev, curr) => {
-        const prevTop = prev.group.position.y + prev.carcass.dimensions.height
-        const currTop = curr.group.position.y + curr.carcass.dimensions.height
-        return currTop > prevTop ? curr : prev
-      }, range.baseCabinets[0])
-      
-      if (!highestBase) return
-      
-      const baseTop = highestBase.group.position.y + highestBase.carcass.dimensions.height
-      
-      // Find the lowest top cabinet
-      const lowestTop = range.topCabinets.reduce((prev, curr) => {
-        return curr.group.position.y < prev.group.position.y ? curr : prev
-      }, range.topCabinets[0])
-      
-      if (!lowestTop) return
-      
-      const topBottom = lowestTop.group.position.y
-      
-      // Calculate gap
-      if (topBottom > baseTop) {
-        const gap = topBottom - baseTop
-        // Use the first gap found, or the smallest gap if multiple exist
-        if (foundGap === null || gap < foundGap) {
-          foundGap = gap
-        }
-      }
-    })
+    // Find the HIGHEST base/tall cabinet top (Y + height)
+    const highestBaseTop = Math.max(
+      ...baseTallCabinets.map(c => c.group.position.y + c.carcass.dimensions.height)
+    )
     
-    // Return found gap, or default to 20
-    return foundGap !== null ? Math.round(foundGap) : 20
+    // Find the LOWEST overhead cabinet Y position (bottom)
+    const lowestOverheadY = Math.min(
+      ...overheadCabinets.map(c => c.group.position.y)
+    )
+    
+    // Calculate gap: Lowest Overhead Y minus Highest Base Top
+    if (lowestOverheadY > highestBaseTop) {
+      const gap = lowestOverheadY - highestBaseTop
+      return Math.round(gap)
+    }
+    
+    // If overhead is below base (shouldn't happen normally), return default
+    return 20
   }, [cabinets])
+
+  // Calculate current kicker height from base/tall cabinets in the view
+  const calculateCurrentKickerHeight = useCallback((viewId: string | null): number => {
+    if (!viewId) return 100
+    
+    // Get all cabinets in the scene that belong to this view
+    const viewCabinets = cabinets.filter(c => c.viewId === viewId)
+    
+    // Get all base/tall cabinets
+    const baseTallCabinets = viewCabinets.filter(c => c.cabinetType === 'base' || c.cabinetType === 'tall')
+    
+    if (baseTallCabinets.length === 0) return 100
+    
+    // Kicker height is the Y position of base/tall cabinets
+    // Get the most common kicker height (or average if they differ)
+    const kickerHeights = baseTallCabinets.map(c => c.group.position.y)
+    
+    // Return the first kicker height found (they should all be the same in a view)
+    // If they differ, return the most common one or average
+    if (kickerHeights.length > 0) {
+      // Round to nearest integer
+      return Math.round(kickerHeights[0])
+    }
+    
+    return 100
+  }, [cabinets])
+
+  // Calculate min/max splashback height (max is fixed at 1000mm, constraints applied in handler)
+  const calculateSplashbackLimits = useCallback((viewId: string | null): { min: number; max: number } => {
+    const min = 20 // Minimum reasonable gap
+    const max = 1000 // Maximum allowed (constraints will be applied when positioning cabinets)
+    
+    return { min, max }
+  }, [])
+
+  // State for kicker height - initialize with current value
+  const [kickerHeightValue, setKickerHeightValue] = useState(() => {
+    return calculateCurrentKickerHeight(viewId)
+  })
 
   // State for splashback height - initialize with current gap
   const [splashbackHeightValue, setSplashbackHeightValue] = useState(() => {
     return calculateCurrentGap(viewId)
   })
 
+  // Calculate splashback limits
+  const splashbackLimits = useMemo(() => {
+    return calculateSplashbackLimits(viewId)
+  }, [viewId, calculateSplashbackLimits])
+
+  // Update kicker height when drawer opens or viewId changes
+  React.useEffect(() => {
+    if (isOpen && viewId) {
+      const currentKickerHeight = calculateCurrentKickerHeight(viewId)
+      // Clamp to valid range (16-170mm)
+      const clampedKickerHeight = Math.max(16, Math.min(170, currentKickerHeight))
+      setKickerHeightValue(clampedKickerHeight)
+    }
+  }, [isOpen, viewId, calculateCurrentKickerHeight])
+
   // Update splashback height when drawer opens or viewId changes
   React.useEffect(() => {
     if (isOpen && viewId) {
       const currentGap = calculateCurrentGap(viewId)
-      setSplashbackHeightValue(currentGap)
+      // Clamp current gap to valid range
+      const clampedGap = Math.max(
+        splashbackLimits.min,
+        Math.min(splashbackLimits.max, currentGap)
+      )
+      setSplashbackHeightValue(clampedGap)
     }
-  }, [isOpen, viewId, calculateCurrentGap])
+  }, [isOpen, viewId, calculateCurrentGap, splashbackLimits])
   
   // Group dimensions by threeJsType
   const groupedDimensions = useMemo(() => {
@@ -355,15 +358,6 @@ export const ViewDetailDrawer: React.FC<Props> = ({
     <AnimatePresence>
       {isOpen && (
         <>
-          {/* Backdrop */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-            className="fixed inset-0 bg-black bg-opacity-30 z-[60]"
-          />
-
           {/* Drawer */}
           <motion.div
             initial={{ x: '100%' }}
@@ -501,6 +495,57 @@ export const ViewDetailDrawer: React.FC<Props> = ({
 
             </div>
             
+            {/* Kicker Height Control - above Splashback */}
+            {viewId && (
+              <div className="mt-6 pt-6 border-t border-gray-300">
+                <div className="border border-gray-200 rounded-lg bg-white p-4">
+                  <h3 className="font-semibold text-gray-800 mb-4">Kicker Height</h3>
+                  <div>
+                    <h4 className="font-medium text-gray-700 mb-3 text-sm">Leg Height for Base and Tall Cabinets</h4>
+                    
+                    {/* Number input and slider */}
+                    <div>
+                      <div className="flex items-center gap-1.5 mb-1.5">
+                        <input
+                          type="number"
+                          className="w-20 text-center text-sm px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent leading-tight"
+                          value={kickerHeightValue}
+                          min={16}
+                          max={170}
+                          onChange={(e) => {
+                            const val = Number(e.target.value)
+                            if (val >= 16 && val <= 170 && viewId) {
+                              setKickerHeightValue(val)
+                              onKickerHeightChange?.(viewId, val)
+                            }
+                          }}
+                        />
+                        <span className="text-sm text-gray-500">mm</span>
+                      </div>
+                      <input
+                        type="range"
+                        className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
+                        value={kickerHeightValue}
+                        min={16}
+                        max={170}
+                        onChange={(e) => {
+                          const val = Number(e.target.value)
+                          if (viewId) {
+                            setKickerHeightValue(val)
+                            onKickerHeightChange?.(viewId, val)
+                          }
+                        }}
+                      />
+                      <div className="flex justify-between text-xs text-gray-500 mt-1">
+                        <span>16</span>
+                        <span>170</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Splashback Height Control - at the bottom */}
             {viewId && (
               <div className="mt-6 pt-6 border-t border-gray-300">
@@ -516,11 +561,11 @@ export const ViewDetailDrawer: React.FC<Props> = ({
                           type="number"
                           className="w-20 text-center text-sm px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent leading-tight"
                           value={splashbackHeightValue}
-                          min={20}
-                          max={1000}
+                          min={splashbackLimits.min}
+                          max={splashbackLimits.max}
                           onChange={(e) => {
                             const val = Number(e.target.value)
-                            if (val >= 20 && val <= 1000 && viewId) {
+                            if (val >= splashbackLimits.min && val <= splashbackLimits.max && viewId) {
                               setSplashbackHeightValue(val)
                               onSplashbackHeightChange?.(viewId, val)
                             }
@@ -532,8 +577,8 @@ export const ViewDetailDrawer: React.FC<Props> = ({
                         type="range"
                         className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
                         value={splashbackHeightValue}
-                        min={20}
-                        max={1000}
+                        min={splashbackLimits.min}
+                        max={splashbackLimits.max}
                         onChange={(e) => {
                           const val = Number(e.target.value)
                           if (viewId) {
@@ -543,8 +588,8 @@ export const ViewDetailDrawer: React.FC<Props> = ({
                         }}
                       />
                       <div className="flex justify-between text-xs text-gray-500 mt-1">
-                        <span>20</span>
-                        <span>1000</span>
+                        <span>{splashbackLimits.min}</span>
+                        <span>{splashbackLimits.max}</span>
                       </div>
                     </div>
                   </div>

@@ -16,103 +16,67 @@ export const handleSplashbackHeightChange = (
 ) => {
   const { cabinets, viewManager, wallDimensions } = params
 
-  // Apply the gap to all base/tall and top cabinet pairs in this view
+  // Get all cabinets in this view
   const cabinetIds = viewManager.getCabinetsInView(viewId as ViewId)
   const viewCabinets = cabinets.filter((c) => cabinetIds.includes(c.cabinetId))
 
-  // Group cabinets by their X position ranges (cabinets that overlap horizontally)
-  const xRanges: Array<{
-    minX: number
-    maxX: number
-    baseCabinets: CabinetData[]
-    topCabinets: CabinetData[]
-  }> = []
+  // Get all base/tall cabinets
+  const baseTallCabinets = viewCabinets.filter(c => c.cabinetType === 'base' || c.cabinetType === 'tall')
+  
+  // Get all overhead (top) cabinets
+  const overheadCabinets = viewCabinets.filter(c => c.cabinetType === 'top')
 
-  viewCabinets.forEach((cabinet) => {
-    const x = cabinet.group.position.x
-    const width = cabinet.carcass.dimensions.width
-    const minX = x
-    const maxX = x + width
+  // If no base/tall or no overhead cabinets, nothing to do
+  if (baseTallCabinets.length === 0 || overheadCabinets.length === 0) return
 
-    // Find if this cabinet overlaps with any existing X range
-    let foundRange = false
-    for (const range of xRanges) {
-      // Check if there's horizontal overlap
-      if (!(maxX < range.minX || minX > range.maxX)) {
-        // Overlaps - merge into this range
-        range.minX = Math.min(range.minX, minX)
-        range.maxX = Math.max(range.maxX, maxX)
+  // Find the HIGHEST base/tall cabinet top (Y + height) - this is our reference point
+  const highestBaseTop = Math.max(
+    ...baseTallCabinets.map(c => c.group.position.y + c.carcass.dimensions.height)
+  )
 
-        // Add cabinet to appropriate list
-        if (cabinet.cabinetType === "base" || cabinet.cabinetType === "tall") {
-          if (!range.baseCabinets.includes(cabinet)) {
-            range.baseCabinets.push(cabinet)
-          }
-        } else if (cabinet.cabinetType === "top") {
-          if (!range.topCabinets.includes(cabinet)) {
-            range.topCabinets.push(cabinet)
-          }
-        }
+  // Calculate target overhead bottom Y position: highest base top + splashback height
+  const targetOverheadBottomY = highestBaseTop + height
 
-        foundRange = true
-        break
-      }
+  // Find the tallest Tall cabinet in the view (if any) to use as constraint
+  const tallCabinets = viewCabinets.filter(c => c.cabinetType === 'tall')
+  let maxTallTop: number | null = null
+  if (tallCabinets.length > 0) {
+    maxTallTop = Math.max(
+      ...tallCabinets.map(tall => tall.group.position.y + tall.carcass.dimensions.height)
+    )
+  }
+
+  // Position ALL overhead cabinets so their bottom is at targetOverheadBottomY
+  overheadCabinets.forEach((overheadCabinet) => {
+    let newY = targetOverheadBottomY
+
+    // Calculate maximum allowed Y position based on constraints
+    // 1. Back wall height constraint: overhead top cannot exceed wall height
+    // overhead top = newY + overheadHeight <= wallHeight
+    // newY <= wallHeight - overheadHeight
+    const maxYFromWall = wallDimensions.height - overheadCabinet.carcass.dimensions.height
+    
+    // 2. Tall cabinet constraint: if Tall cabinet exists, overhead top cannot exceed Tall top
+    // overhead top = newY + overheadHeight <= maxTallTop
+    // newY <= maxTallTop - overheadHeight
+    let maxYFromTall: number | null = null
+    if (maxTallTop !== null) {
+      maxYFromTall = maxTallTop - overheadCabinet.carcass.dimensions.height
     }
 
-    if (!foundRange) {
-      // Create new X range
-      const baseCabinets: CabinetData[] = []
-      const topCabinets: CabinetData[] = []
-
-      if (cabinet.cabinetType === "base" || cabinet.cabinetType === "tall") {
-        baseCabinets.push(cabinet)
-      } else if (cabinet.cabinetType === "top") {
-        topCabinets.push(cabinet)
-      }
-
-      xRanges.push({ minX, maxX, baseCabinets, topCabinets })
+    // Use the most restrictive constraint (smallest max Y)
+    let maxY = maxYFromWall
+    if (maxYFromTall !== null && maxYFromTall < maxY) {
+      maxY = maxYFromTall
     }
-  })
 
-  // For each X range, apply splashback height gap
-  xRanges.forEach((range) => {
-    // Skip if no top cabinets to position
-    if (range.topCabinets.length === 0) return
+    // Apply boundary clamping
+    const clampedY = Math.max(0, Math.min(maxY, newY))
 
-    // Skip if no base/tall cabinets to measure from
-    if (range.baseCabinets.length === 0) return
-
-    // Find the highest base/tall cabinet in this range
-    const highestBase = range.baseCabinets.reduce((prev, curr) => {
-      const prevTop = prev.group.position.y + prev.carcass.dimensions.height
-      const currTop = curr.group.position.y + curr.carcass.dimensions.height
-      return currTop > prevTop ? curr : prev
-    }, range.baseCabinets[0])
-
-    if (!highestBase) return
-
-    const baseTop =
-      highestBase.group.position.y + highestBase.carcass.dimensions.height
-    const targetTopBottom = baseTop + height
-
-    // Position all top cabinets so their bottom is at targetTopBottom
-    range.topCabinets.forEach((topCabinet) => {
-      const newY = targetTopBottom
-
-      // Apply boundary clamping
-      const clampedY = Math.max(
-        0,
-        Math.min(
-          wallDimensions.height - topCabinet.carcass.dimensions.height,
-          newY
-        )
-      )
-
-      topCabinet.group.position.set(
-        topCabinet.group.position.x,
-        clampedY,
-        topCabinet.group.position.z
-      )
-    })
+    overheadCabinet.group.position.set(
+      overheadCabinet.group.position.x,
+      clampedY,
+      overheadCabinet.group.position.z
+    )
   })
 }

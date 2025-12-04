@@ -34,7 +34,8 @@ export const useCabinets = (
       categoryType: CabinetType,
       subcategoryType: string,
       productId?: string,
-      productName?: string
+      productName?: string,
+      fillerReturnPosition?: "left" | "right"
     ) => {
       if (!sceneRef.current) return
 
@@ -46,7 +47,8 @@ export const useCabinets = (
       const data = createCabinetEntry(categoryType, subcategoryType, {
         indexOffset: cabinetCounter,
         productId,
-        fillerType
+        fillerType,
+        fillerReturnPosition
       })
       // Add sortNumber based on order added to scene
       const cabinetWithSortNumber = { ...data, sortNumber: sortNumberCounter }
@@ -193,6 +195,16 @@ export const useCabinets = (
     [sceneRef, cabinets, selectedCabinet]
   )
 
+  const addCabinet = useCallback(
+    (cabinetData: CabinetData) => {
+      if (!sceneRef.current) return
+      sceneRef.current.add(cabinetData.group)
+      setCabinets((prev) => [...prev, cabinetData])
+      return cabinetData
+    },
+    [sceneRef]
+  )
+
   return {
     cabinets,
     cabinetCounter,
@@ -203,6 +215,7 @@ export const useCabinets = (
     showProductPanel,
     setShowProductPanel,
     createCabinet,
+    addCabinet, // New: method to add existing CabinetData to scene
     clearCabinets,
     addHoverEffect,
     removeHoverEffect,

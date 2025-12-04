@@ -752,6 +752,9 @@ export class CarcassAssembly {
 
     // Update drawers with new dimensions
     this.updateDrawers()
+
+    // Update kicker face if it exists
+    this.updateKickerFace()
   }
 
   /**
@@ -871,6 +874,42 @@ export class CarcassAssembly {
         this.cabinetType === "wardrobe"
       ) {
         this.group.position.y = kickerHeight
+      }
+    }
+
+    // Update kicker face if it exists
+    this.updateKickerFace()
+  }
+
+  /**
+   * Updates the kicker face geometry if it exists for this cabinet.
+   * Called automatically when dimensions or kicker height change.
+   */
+  private updateKickerFace(): void {
+    // Only update kicker faces for base and tall cabinets
+    if (this.cabinetType !== "base" && this.cabinetType !== "tall") {
+      return
+    }
+
+    // Check if kicker face exists for this cabinet
+    const kickerFaceGroup = this.group.children.find(
+      (child) => child.name === `kickerFace_${this.cabinetId}`
+    )
+
+    if (kickerFaceGroup) {
+      // Get kicker face reference
+      const kickerFace = (this.group as any).kickerFace
+      if (kickerFace && typeof kickerFace.updateDimensions === "function") {
+        // Get kicker height from cabinet's Y position (Y position = kicker height)
+        // Kicker height is always >= 0 (cannot go negative)
+        const kickerHeight = Math.max(0, this.group.position.y)
+
+        // Update kicker face dimensions
+        kickerFace.updateDimensions(
+          this.dimensions.width,
+          kickerHeight,
+          this.dimensions.depth
+        )
       }
     }
   }

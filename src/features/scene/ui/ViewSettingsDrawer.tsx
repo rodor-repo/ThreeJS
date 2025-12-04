@@ -355,15 +355,6 @@ export const ViewDetailDrawer: React.FC<Props> = ({
     <AnimatePresence>
       {isOpen && (
         <>
-          {/* Backdrop */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-            className="fixed inset-0 bg-black bg-opacity-30 z-[60]"
-          />
-
           {/* Drawer */}
           <motion.div
             initial={{ x: '100%' }}

@@ -27,6 +27,7 @@ export interface SelectedCabinetSnapshot {
   carcass?: CarcassAssembly
   cabinetId: string
   viewId?: string
+  hideLockIcons?: boolean
 }
 
 export interface ProductPanelCallbacks {

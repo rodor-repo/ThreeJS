@@ -168,22 +168,26 @@ export const useDimensionLines = (
       let showWidth = true
       let showHeightDim = isSelectedForHeight
       let showDepthDim = isSelectedForDepth
+      let showKickerHeightDim = isSelectedForKickerHeight
       
       if (cameraViewMode === 'x') {
         // X view: Show Z and Y, hide X
         showWidth = false
         showHeightDim = isSelectedForHeight
         showDepthDim = isSelectedForDepth
+        showKickerHeightDim = isSelectedForKickerHeight // Kicker height is Y-axis, show in X view
       } else if (cameraViewMode === 'y') {
         // Y view: Show X and Y, hide Z
         showWidth = true
         showHeightDim = isSelectedForHeight
         showDepthDim = false
+        showKickerHeightDim = isSelectedForKickerHeight // Kicker height is Y-axis, show in Y view
       } else if (cameraViewMode === 'z') {
-        // Z view: Show Z and X, hide Y
+        // Z view: Show Z and X, hide Y (including kicker height)
         showWidth = true
         showHeightDim = false
         showDepthDim = isSelectedForDepth
+        showKickerHeightDim = false // Kicker height is Y-axis, hide in Z view
       }
 
       const dimensionGroup = createCabinetDimensionLines(
@@ -191,7 +195,7 @@ export const useDimensionLines = (
         wallOffsetContext,
         showHeightDim,
         showDepthDim,
-        isSelectedForKickerHeight,
+        showKickerHeightDim, // Use the calculated showKickerHeightDim instead of isSelectedForKickerHeight
         cabinets, // Pass all cabinets for parent-child alignment
         showWidth // Pass showWidth parameter
       )
@@ -199,59 +203,61 @@ export const useDimensionLines = (
       dimensionLinesRef.current.push(dimensionGroup)
     })
 
-    // Create overall width dimension line
-    const overallDimension = createOverallWidthDimension(cabinets)
-    if (overallDimension) {
-      sceneRef.current!.add(overallDimension)
-      dimensionLinesRef.current.push(overallDimension)
-    }
+    // Create overall width dimension line (X-axis) - hide in X view
+    if (cameraViewMode !== 'x') {
+      const overallDimension = createOverallWidthDimension(cabinets)
+      if (overallDimension) {
+        sceneRef.current!.add(overallDimension)
+        dimensionLinesRef.current.push(overallDimension)
+      }
 
-    // Check if we need additional overall width dimension for base/tall only
-    const hasTopCabinets = cabinets.some((c) => c.cabinetType === "top")
+      // Check if we need additional overall width dimension for base/tall only
+      const hasTopCabinets = cabinets.some((c) => c.cabinetType === "top")
 
-    if (hasTopCabinets) {
-      // Calculate overall width including all cabinets (exclude kickers)
-      let allMinX = Infinity
-      let allMaxX = -Infinity
-      cabinets.forEach((cabinet) => {
-        // Skip kickers
-        if (cabinet.cabinetType === 'kicker') {
-          return
-        }
-        const x = cabinet.group.position.x
-        const width = cabinet.carcass.dimensions.width
-        allMinX = Math.min(allMinX, x)
-        allMaxX = Math.max(allMaxX, x + width)
-      })
-      const overallWidthAll = allMaxX - allMinX
+      if (hasTopCabinets) {
+        // Calculate overall width including all cabinets (exclude kickers)
+        let allMinX = Infinity
+        let allMaxX = -Infinity
+        cabinets.forEach((cabinet) => {
+          // Skip kickers
+          if (cabinet.cabinetType === 'kicker') {
+            return
+          }
+          const x = cabinet.group.position.x
+          const width = cabinet.carcass.dimensions.width
+          allMinX = Math.min(allMinX, x)
+          allMaxX = Math.max(allMaxX, x + width)
+        })
+        const overallWidthAll = allMaxX - allMinX
 
-      // Calculate overall width excluding top cabinets
-      const baseTallCabinets = cabinets.filter(
-        (c) => c.cabinetType === "base" || c.cabinetType === "tall"
-      )
-      let baseTallMinX = Infinity
-      let baseTallMaxX = -Infinity
-      baseTallCabinets.forEach((cabinet) => {
-        const x = cabinet.group.position.x
-        const width = cabinet.carcass.dimensions.width
-        baseTallMinX = Math.min(baseTallMinX, x)
-        baseTallMaxX = Math.max(baseTallMaxX, x + width)
-      })
-      const overallWidthBaseTall = baseTallMaxX - baseTallMinX
+        // Calculate overall width excluding top cabinets
+        const baseTallCabinets = cabinets.filter(
+          (c) => c.cabinetType === "base" || c.cabinetType === "tall"
+        )
+        let baseTallMinX = Infinity
+        let baseTallMaxX = -Infinity
+        baseTallCabinets.forEach((cabinet) => {
+          const x = cabinet.group.position.x
+          const width = cabinet.carcass.dimensions.width
+          baseTallMinX = Math.min(baseTallMinX, x)
+          baseTallMaxX = Math.max(baseTallMaxX, x + width)
+        })
+        const overallWidthBaseTall = baseTallMaxX - baseTallMinX
 
-      // Only create additional dimension if widths are different
-      if (Math.abs(overallWidthAll - overallWidthBaseTall) > 0.1) {
-        const baseTallOverallDimension =
-          createBaseTallOverallWidthDimension(cabinets)
-        if (baseTallOverallDimension) {
-          sceneRef.current!.add(baseTallOverallDimension)
-          dimensionLinesRef.current.push(baseTallOverallDimension)
+        // Only create additional dimension if widths are different
+        if (Math.abs(overallWidthAll - overallWidthBaseTall) > 0.1) {
+          const baseTallOverallDimension =
+            createBaseTallOverallWidthDimension(cabinets)
+          if (baseTallOverallDimension) {
+            sceneRef.current!.add(baseTallOverallDimension)
+            dimensionLinesRef.current.push(baseTallOverallDimension)
+          }
         }
       }
     }
 
-    // Create overall height dimension for each view
-    if (viewManager) {
+    // Create overall height dimension for each view (Y-axis) - hide in Z view
+    if (viewManager && cameraViewMode !== 'z') {
       const overallHeightDimensions = createOverallHeightDimension(
         cabinets,
         viewManager,
@@ -265,79 +271,83 @@ export const useDimensionLines = (
 
     // Create dimension lines for empty spaces
     if (viewManager) {
-      // Detect and render Y-axis empty spaces
-      const emptySpacesY = detectEmptySpacesY(cabinets, viewManager)
+      // Detect and render Y-axis empty spaces (Y-axis) - hide in Z view
+      if (cameraViewMode !== 'z') {
+        const emptySpacesY = detectEmptySpacesY(cabinets, viewManager)
 
-      // Group by similar heights and only show leftmost for each group
-      const heightGroups = new Map<number, typeof emptySpacesY>()
-      const SIMILAR_HEIGHT_TOLERANCE = 1
+        // Group by similar heights and only show leftmost for each group
+        const heightGroups = new Map<number, typeof emptySpacesY>()
+        const SIMILAR_HEIGHT_TOLERANCE = 1
 
-      emptySpacesY.forEach((space) => {
-        let foundGroup = false
-        for (const [groupHeight, spaces] of Array.from(
-          heightGroups.entries()
-        )) {
-          if (
-            Math.abs(space.height - groupHeight) <= SIMILAR_HEIGHT_TOLERANCE
-          ) {
-            spaces.push(space)
-            foundGroup = true
-            break
+        emptySpacesY.forEach((space) => {
+          let foundGroup = false
+          for (const [groupHeight, spaces] of Array.from(
+            heightGroups.entries()
+          )) {
+            if (
+              Math.abs(space.height - groupHeight) <= SIMILAR_HEIGHT_TOLERANCE
+            ) {
+              spaces.push(space)
+              foundGroup = true
+              break
+            }
           }
-        }
 
-        if (!foundGroup) {
-          heightGroups.set(space.height, [space])
-        }
-      })
+          if (!foundGroup) {
+            heightGroups.set(space.height, [space])
+          }
+        })
 
-      // For each height group, only show the leftmost dimension
-      heightGroups.forEach((spaces) => {
-        const leftmostSpace = spaces.reduce((prev, curr) =>
-          curr.leftmostX < prev.leftmostX ? curr : prev
-        )
+        // For each height group, only show the leftmost dimension
+        heightGroups.forEach((spaces) => {
+          const leftmostSpace = spaces.reduce((prev, curr) =>
+            curr.leftmostX < prev.leftmostX ? curr : prev
+          )
 
-        const viewCabinetIds = viewManager.getCabinetsInView(
-          leftmostSpace.viewId
-        )
-        const viewCabinets = cabinets.filter((c) =>
-          viewCabinetIds.includes(c.cabinetId)
-        )
-        if (viewCabinets.length > 0) {
+          const viewCabinetIds = viewManager.getCabinetsInView(
+            leftmostSpace.viewId
+          )
+          const viewCabinets = cabinets.filter((c) =>
+            viewCabinetIds.includes(c.cabinetId)
+          )
+          if (viewCabinets.length > 0) {
+            const zPos = 30
+
+            const emptySpaceYDimension = createEmptySpaceYDimension(
+              leftmostSpace.bottomY,
+              leftmostSpace.topY,
+              leftmostSpace.height,
+              leftmostSpace.leftmostX,
+              zPos
+            )
+            sceneRef.current!.add(emptySpaceYDimension)
+            dimensionLinesRef.current.push(emptySpaceYDimension)
+          }
+        })
+      }
+
+      // Detect and render X-axis empty spaces (X-axis) - hide in X view
+      if (cameraViewMode !== 'x') {
+        const emptySpacesX = detectEmptySpacesX(cabinets, viewManager)
+
+        emptySpacesX.forEach((space) => {
           const zPos = 30
 
-          const emptySpaceYDimension = createEmptySpaceYDimension(
-            leftmostSpace.bottomY,
-            leftmostSpace.topY,
-            leftmostSpace.height,
-            leftmostSpace.leftmostX,
-            zPos
+          const emptySpaceXDimension = createEmptySpaceXDimension(
+            space.leftX,
+            space.rightX,
+            space.width,
+            space.topY,
+            space.leftCabinetType,
+            space.rightCabinetType,
+            space.baseTopY,
+            zPos,
+            wallOffsetContext
           )
-          sceneRef.current!.add(emptySpaceYDimension)
-          dimensionLinesRef.current.push(emptySpaceYDimension)
-        }
-      })
-
-      // Detect and render X-axis empty spaces
-      const emptySpacesX = detectEmptySpacesX(cabinets, viewManager)
-
-      emptySpacesX.forEach((space) => {
-        const zPos = 30
-
-        const emptySpaceXDimension = createEmptySpaceXDimension(
-          space.leftX,
-          space.rightX,
-          space.width,
-          space.topY,
-          space.leftCabinetType,
-          space.rightCabinetType,
-          space.baseTopY,
-          zPos,
-          wallOffsetContext
-        )
-        sceneRef.current!.add(emptySpaceXDimension)
-        dimensionLinesRef.current.push(emptySpaceXDimension)
-      })
+          sceneRef.current!.add(emptySpaceXDimension)
+          dimensionLinesRef.current.push(emptySpaceXDimension)
+        })
+      }
     }
   }, [
     sceneRef,
@@ -346,6 +356,7 @@ export const useDimensionLines = (
     viewManager,
     wallDimensions,
     getWallOffsetContext,
+    cameraViewMode, // Add cameraViewMode to dependencies
   ])
 
   // Store cabinets ref and previous positions to track changes

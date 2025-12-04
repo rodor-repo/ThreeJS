@@ -79,6 +79,12 @@ export function createCabinetDimensionLines(
   showWidth: boolean = true // Show width (X axis) dimension line
 ): THREE.Group {
   const group = new THREE.Group()
+  
+  // Skip dimension lines for return bulkheads (left and right)
+  if (cabinet.cabinetType === 'bulkhead' && cabinet.bulkheadReturnSide) {
+    return group // Return empty group, no dimension lines
+  }
+  
   const color = DIMENSION_CONSTANTS.colors.cabinet
   const arrowColor = DIMENSION_CONSTANTS.colors.arrow
   const lineWidth = DIMENSION_CONSTANTS.defaults.lineWidth
@@ -90,48 +96,96 @@ export function createCabinetDimensionLines(
   const y = pos.y
   const z = pos.z
 
+  // Check if this is a bulkhead (no offset for dimension lines)
+  const isBulkhead = cabinet.cabinetType === 'bulkhead'
+  
+  // For bulkheads, the group.position is at the center, so we need to calculate edges
+  // For other cabinets, group.position is at bottom-back-left corner
+  let xLeftEdge: number
+  let xRightEdge: number
+  let yBottomEdge: number
+  let yTopEdge: number
+  
+  if (isBulkhead) {
+    // Bulkhead: group.position is at center, so edges are at ±width/2 and ±height/2
+    xLeftEdge = x - width / 2
+    xRightEdge = x + width / 2
+    yBottomEdge = y - height / 2
+    yTopEdge = y + height / 2
+  } else {
+    // Regular cabinets: group.position is at bottom-back-left corner
+    xLeftEdge = x
+    xRightEdge = x + width
+    yBottomEdge = y
+    yTopEdge = y + height
+  }
+
   // For fillers/panels added from modal, use parent cabinet's Z position for dimension line alignment
-  let dimensionZ = z + depth + offset
-  if (cabinet.parentCabinetId && allCabinets && (cabinet.cabinetType === 'filler' || cabinet.cabinetType === 'panel')) {
-    const parentCabinet = allCabinets.find(c => c.cabinetId === cabinet.parentCabinetId)
-    if (parentCabinet) {
-      // Use the exact same Z calculation as parent cabinet's dimension line
-      // Parent uses: parentZ + parentDepth + offset
-      const parentZ = parentCabinet.group.position.z
-      const parentDepth = parentCabinet.carcass.dimensions.depth
-      dimensionZ = parentZ + parentDepth + offset
+  // For bulkheads, use front edge Z position (no offset)
+  let dimensionZ: number
+  if (isBulkhead) {
+    // Bulkhead: group.position.z is at center, front edge is at z + depth/2 (since depth = thickness = 16mm)
+    // For dimension line, use front edge position (no offset)
+    dimensionZ = z + depth / 2
+  } else {
+    dimensionZ = z + depth + offset
+    if (cabinet.parentCabinetId && allCabinets && (cabinet.cabinetType === 'filler' || cabinet.cabinetType === 'panel')) {
+      const parentCabinet = allCabinets.find(c => c.cabinetId === cabinet.parentCabinetId)
+      if (parentCabinet) {
+        // Use the exact same Z calculation as parent cabinet's dimension line
+        // Parent uses: parentZ + parentDepth + offset
+        const parentZ = parentCabinet.group.position.z
+        const parentDepth = parentCabinet.carcass.dimensions.depth
+        dimensionZ = parentZ + parentDepth + offset
+      }
     }
   }
 
-  // Apply wall offsets to X positions for dimension lines
-  const xLeft = applyWallOffset(x - offset, wallOffsetContext)
-  const xRight = x + width
-  const xCabinetLeft = x
+  // Apply wall offsets to X positions for dimension lines (only for non-bulkheads)
+  const xLeft = isBulkhead ? xLeftEdge : applyWallOffset(xLeftEdge - offset, wallOffsetContext)
+  const xRight = xRightEdge
+  const xCabinetLeft = xLeftEdge
 
   // WIDTH dimension (along X axis) - at top front
   if (showWidth) {
+    // For bulkheads: offset by +100mm in Y and +20mm in Z
+    // For others: offset above top edge
+    let widthDimensionY: number
+    let widthDimensionZ: number
+    let widthLabelY: number
+    
+    if (isBulkhead) {
+      widthDimensionY = yTopEdge + 100 // +100mm offset in Y
+      widthDimensionZ = dimensionZ + 20 // +20mm offset in Z
+      widthLabelY = widthDimensionY + 30 // Label offset above dimension line
+    } else {
+      widthDimensionY = yTopEdge + offset
+      widthDimensionZ = dimensionZ
+      widthLabelY = widthDimensionY + 30
+    }
+    
     const widthDimension = createCompleteDimension({
       extensionStart1: new THREE.Vector3(
         xCabinetLeft,
-        y + height,
+        yTopEdge, // Extension starts at top edge
         dimensionZ
       ),
-      extensionStart2: new THREE.Vector3(xRight, y + height, dimensionZ),
+      extensionStart2: new THREE.Vector3(xRight, yTopEdge, dimensionZ), // Extension ends at top edge
       dimensionPoint1: new THREE.Vector3(
         xCabinetLeft,
-        y + height + offset,
-        dimensionZ
+        widthDimensionY,
+        widthDimensionZ
       ),
       dimensionPoint2: new THREE.Vector3(
         xRight,
-        y + height + offset,
-        dimensionZ
+        widthDimensionY,
+        widthDimensionZ
       ),
       labelText: `${Math.ceil(width)}mm`,
       labelPosition: new THREE.Vector3(
         (xCabinetLeft + xRight) / 2,
-        y + height + offset + 30,
-        dimensionZ
+        widthLabelY,
+        widthDimensionZ
       ),
       color,
       arrowColor,
@@ -142,20 +196,61 @@ export function createCabinetDimensionLines(
 
   // HEIGHT dimension (along Y axis) - at left front
   if (showHeight) {
+    // For bulkheads: use parent cabinet's X and Z offsets
+    // For others: offset to the left
+    let heightDimensionX: number
+    let heightLabelX: number
+    let heightDimensionZ: number
+    
+    if (isBulkhead && cabinet.bulkheadParentCabinetId && allCabinets) {
+      // Find parent cabinet and use its dimension line offsets
+      const parentCabinet = allCabinets.find(c => c.cabinetId === cabinet.bulkheadParentCabinetId)
+      if (parentCabinet) {
+        const parentX = parentCabinet.group.position.x
+        const parentZ = parentCabinet.group.position.z
+        const parentDepth = parentCabinet.carcass.dimensions.depth
+        const parentXLeftEdge = parentX // Parent's left edge
+        
+        // Calculate parent's dimension line X position
+        const parentDimensionLineX = applyWallOffset(parentXLeftEdge - offset, wallOffsetContext)
+        
+        // Calculate the offset distance from parent's left edge to its dimension line
+        // This will be negative (toward negative X) if dimension line is on the left
+        const parentOffsetDistance = parentXLeftEdge - parentDimensionLineX
+        
+        // Apply the same offset distance to bulkhead's left edge
+        // This ensures the dimension line is on the same side (left/right) as the parent's
+        heightDimensionX = xLeftEdge - parentOffsetDistance
+        heightLabelX = heightDimensionX - 30
+        
+        // Use parent's Z offset (same calculation as regular cabinets)
+        heightDimensionZ = parentZ + parentDepth + offset
+      } else {
+        // Fallback if parent not found
+        heightDimensionX = xLeftEdge - offset
+        heightDimensionZ = dimensionZ
+        heightLabelX = heightDimensionX - 30
+      }
+    } else {
+      heightDimensionX = xLeft
+      heightDimensionZ = z + depth + offset
+      heightLabelX = heightDimensionX - 30
+    }
+    
     const heightDimension = createCompleteDimension({
-      extensionStart1: new THREE.Vector3(xCabinetLeft, y, z + depth + offset),
+      extensionStart1: new THREE.Vector3(xLeftEdge, yBottomEdge, dimensionZ), // Extension starts at left edge
       extensionStart2: new THREE.Vector3(
-        xCabinetLeft,
-        y + height,
-        z + depth + offset
-      ),
-      dimensionPoint1: new THREE.Vector3(xLeft, y, z + depth + offset),
-      dimensionPoint2: new THREE.Vector3(xLeft, y + height, z + depth + offset),
+        xLeftEdge,
+        yTopEdge,
+        dimensionZ
+      ), // Extension ends at left edge
+      dimensionPoint1: new THREE.Vector3(heightDimensionX, yBottomEdge, heightDimensionZ),
+      dimensionPoint2: new THREE.Vector3(heightDimensionX, yTopEdge, heightDimensionZ),
       labelText: `${Math.ceil(height)}mm`,
       labelPosition: new THREE.Vector3(
-        xLeft - 30,
-        y + height / 2,
-        z + depth + offset
+        heightLabelX,
+        (yBottomEdge + yTopEdge) / 2,
+        heightDimensionZ
       ),
       color,
       arrowColor,
@@ -206,8 +301,9 @@ export function createCabinetDimensionLines(
 
   // DEPTH dimension (along Z axis) - at top left
   // Skip depth dimension for L-Shape fillers (width = 100mm indicates L-Shape)
+  // Skip depth dimension for bulkheads (thickness dimension not needed)
   const isLShapeFiller = cabinet.cabinetType === 'filler' && width === 100
-  if (showDepth && !isLShapeFiller) {
+  if (showDepth && !isLShapeFiller && !isBulkhead) {
     const depthDimension = createCompleteDimension({
       extensionStart1: new THREE.Vector3(xLeft, y + height, z),
       extensionStart2: new THREE.Vector3(xLeft, y + height, z + depth),

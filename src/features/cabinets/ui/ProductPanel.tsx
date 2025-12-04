@@ -9,6 +9,7 @@ import type { ProductPanelProps } from './productPanel.types'
 import { ViewSelector } from './ViewSelector'
 import type { ViewId } from '../ViewManager'
 import toast from 'react-hot-toast'
+import { updateKickerPosition } from '@/features/scene/utils/handlers/kickerPositionHandler'
 
 // Throttled toast to prevent spam when user drags sliders rapidly
 export const toastThrottled = _.throttle(
@@ -1196,6 +1197,17 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
                                     depth: actualCabinet.carcass.dimensions.depth
                                   })
                                 }
+
+                                // Update parent kicker if child's "off the floor" changed
+                                // (affects whether child is included in kicker width)
+                                if (actualCabinet.parentCabinetId && allCabinets) {
+                                  const parentCabinet = allCabinets.find(c => c.cabinetId === actualCabinet.parentCabinetId)
+                                  if (parentCabinet && (parentCabinet.cabinetType === 'base' || parentCabinet.cabinetType === 'tall')) {
+                                    updateKickerPosition(parentCabinet, allCabinets, {
+                                      dimensionsChanged: true
+                                    })
+                                  }
+                                }
                               }
                             }
                           }}
@@ -1237,6 +1249,17 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
                                   height: newHeight,
                                   depth: actualCabinet.carcass.dimensions.depth
                                 })
+                              }
+
+                              // Update parent kicker if child's "off the floor" changed
+                              // (affects whether child is included in kicker width)
+                              if (actualCabinet.parentCabinetId && allCabinets) {
+                                const parentCabinet = allCabinets.find(c => c.cabinetId === actualCabinet.parentCabinetId)
+                                if (parentCabinet && (parentCabinet.cabinetType === 'base' || parentCabinet.cabinetType === 'tall')) {
+                                  updateKickerPosition(parentCabinet, allCabinets, {
+                                    dimensionsChanged: true
+                                  })
+                                }
                               }
                             }
                           }

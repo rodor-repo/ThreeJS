@@ -1,4 +1,5 @@
 import { CabinetData } from "../../types"
+import { updateKickerPosition } from "./kickerPositionHandler"
 
 /**
  * Updates child fillers/panels when parent cabinet dimensions change
@@ -133,18 +134,32 @@ export const updateChildCabinets = (
       }
     }
 
-    // 5. Position change: Update child X position to maintain snap position
+    // 5. Position change: Update child X and Y position to maintain snap position and follow parent Y
     if (changes.positionChanged) {
+      // Calculate new Y position based on parent Y
+      // For overhead cabinets with overhang: position 20mm lower to align with door overhang
+      let newY = parentY
+      if (isOverheadWithOverhang) {
+        newY = parentY - overhangAmount // Position 20mm lower (negative Y) to align with door overhang
+      }
+
       if (side === 'left') {
         childCabinet.group.position.set(
           parentX - childCabinet.carcass.dimensions.width,
-          childCabinet.group.position.y,
+          newY,
           childCabinet.group.position.z
         )
       } else if (side === 'right') {
         childCabinet.group.position.set(
           parentX + parentWidth,
-          childCabinet.group.position.y,
+          newY,
+          childCabinet.group.position.z
+        )
+      } else {
+        // If side is not specified, still update Y position
+        childCabinet.group.position.set(
+          childCabinet.group.position.x,
+          newY,
           childCabinet.group.position.z
         )
       }
@@ -187,5 +202,16 @@ export const updateChildCabinets = (
       )
     }
   })
+
+  // Update parent kicker if parent is base or tall and child dimensions/position changed
+  // (affects kicker width extension)
+  if (
+    (parentCabinet.cabinetType === 'base' || parentCabinet.cabinetType === 'tall') &&
+    (changes.widthChanged || changes.positionChanged)
+  ) {
+    updateKickerPosition(parentCabinet, cabinets, {
+      dimensionsChanged: true
+    })
+  }
 }
 

@@ -1,5 +1,6 @@
 import { CabinetData } from "../../types"
 import { ViewId } from "../../../cabinets/ViewManager"
+import { updateKickerPosition } from "./kickerPositionHandler"
 
 interface ViewManagerResult {
   viewManager: {
@@ -18,10 +19,26 @@ export const handleDeleteCabinet = (
     ) => void
     deleteCabinet: (id: string) => void
     setCabinetToDelete: (cabinet: CabinetData | null) => void
+    allCabinets: CabinetData[] // Add allCabinets to update kicker after deletion
   }
 ) => {
-  const { viewManager, setCabinetGroups, deleteCabinet, setCabinetToDelete } =
+  const { viewManager, setCabinetGroups, deleteCabinet, setCabinetToDelete, allCabinets } =
     params
+
+  // If deleting a child filler/panel, update parent kicker before deletion
+  if (
+    cabinetToDelete.parentCabinetId &&
+    (cabinetToDelete.cabinetType === 'filler' || cabinetToDelete.cabinetType === 'panel') &&
+    cabinetToDelete.hideLockIcons === true
+  ) {
+    const parentCabinet = allCabinets.find(c => c.cabinetId === cabinetToDelete.parentCabinetId)
+    if (parentCabinet && (parentCabinet.cabinetType === 'base' || parentCabinet.cabinetType === 'tall')) {
+      // Update kicker before deleting child (child still exists in allCabinets at this point)
+      updateKickerPosition(parentCabinet, allCabinets, {
+        dimensionsChanged: true
+      })
+    }
+  }
 
   // Remove from ViewManager if assigned to a view
   if (cabinetToDelete.viewId && cabinetToDelete.viewId !== "none") {

@@ -122,13 +122,24 @@ export const useCabinetNumbers = (
       const cabinetHeight = cabinet.carcass.dimensions.height
       const cabinetDepth = cabinet.carcass.dimensions.depth
 
-      // Position at middle of front edge
-      // Front edge is at cabinetZ + cabinetDepth (not depth/2)
-      sprite.position.set(
-        cabinetX + cabinetWidth / 2, // Middle X
-        cabinetY + cabinetHeight / 2, // Middle Y
-        cabinetZ + cabinetDepth + 100 // Front edge + 100mm offset in positive Z
-      )
+      // For kickers and bulkheads, group.position is already at the center
+      if (cabinet.cabinetType === 'kicker' || cabinet.cabinetType === 'bulkhead') {
+        // Position at center (X, Y are already centered)
+        // Add offset in Z direction to position in front
+        sprite.position.set(
+          cabinetX, // Already centered X
+          cabinetY, // Already centered Y
+          cabinetZ + cabinetDepth / 2 + 100 // Center Z + half depth + 100mm offset in positive Z
+        )
+      } else {
+        // Regular cabinets: position at middle of front edge
+        // Front edge is at cabinetZ + cabinetDepth (not depth/2)
+        sprite.position.set(
+          cabinetX + cabinetWidth / 2, // Middle X
+          cabinetY + cabinetHeight / 2, // Middle Y
+          cabinetZ + cabinetDepth + 100 // Front edge + 100mm offset in positive Z
+        )
+      }
 
       if (sceneRef.current) {
         sceneRef.current.add(sprite)
@@ -181,12 +192,23 @@ export const useCabinetNumbers = (
       const cabinetHeight = cabinet.carcass.dimensions.height
       const cabinetDepth = cabinet.carcass.dimensions.depth
 
-      // Update position to middle of front edge
-      sprite.position.set(
-        cabinetX + cabinetWidth / 2,
-        cabinetY + cabinetHeight / 2,
-        cabinetZ + cabinetDepth + 100 // Front edge + 100mm offset in positive Z
-      )
+      // For kickers and bulkheads, group.position is already at the center
+      if (cabinet.cabinetType === 'kicker' || cabinet.cabinetType === 'bulkhead') {
+        // Position at center (X, Y are already centered)
+        // Add offset in Z direction to position in front
+        sprite.position.set(
+          cabinetX, // Already centered X
+          cabinetY, // Already centered Y
+          cabinetZ + cabinetDepth / 2 + 100 // Center Z + half depth + 100mm offset in positive Z
+        )
+      } else {
+        // Regular cabinets: update position to middle of front edge
+        sprite.position.set(
+          cabinetX + cabinetWidth / 2,
+          cabinetY + cabinetHeight / 2,
+          cabinetZ + cabinetDepth + 100 // Front edge + 100mm offset in positive Z
+        )
+      }
     })
   }, [cabinets, visible])
 }

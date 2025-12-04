@@ -93,17 +93,71 @@ export const useCabinets = (
 
   const updateCabinetViewId = useCallback(
     (cabinetId: string, viewId: string | undefined) => {
-      setCabinets((prev) =>
-        prev.map((cab) =>
-          cab.cabinetId === cabinetId ? { ...cab, viewId } : cab
-        )
-      )
+      setCabinets((prev) => {
+        // Find all child cabinets (fillers/panels) that belong to this parent
+        const childCabinetIds = prev
+          .filter(
+            (cab) =>
+              cab.parentCabinetId === cabinetId &&
+              (cab.cabinetType === 'filler' || cab.cabinetType === 'panel')
+          )
+          .map((cab) => cab.cabinetId)
+
+        // Find all kickers that belong to this parent
+        const kickerCabinetIds = prev
+          .filter(
+            (cab) =>
+              cab.kickerParentCabinetId === cabinetId &&
+              cab.cabinetType === 'kicker'
+          )
+          .map((cab) => cab.cabinetId)
+
+        // Update parent cabinet and all its children (fillers/panels and kickers)
+        return prev.map((cab) => {
+          if (cab.cabinetId === cabinetId) {
+            // Update parent cabinet
+            return { ...cab, viewId }
+          } else if (childCabinetIds.includes(cab.cabinetId)) {
+            // Update child fillers/panels to match parent's viewId
+            return { ...cab, viewId }
+          } else if (kickerCabinetIds.includes(cab.cabinetId)) {
+            // Update kickers to match parent's viewId
+            return { ...cab, viewId }
+          }
+          return cab
+        })
+      })
       // Update selected cabinets if they were modified
-      setSelectedCabinets((prev) =>
-        prev.map((cab) =>
-          cab.cabinetId === cabinetId ? { ...cab, viewId } : cab
-        )
-      )
+      setSelectedCabinets((prev) => {
+        // Find child cabinet IDs from selected cabinets
+        const childCabinetIds = prev
+          .filter(
+            (cab) =>
+              cab.parentCabinetId === cabinetId &&
+              (cab.cabinetType === 'filler' || cab.cabinetType === 'panel')
+          )
+          .map((cab) => cab.cabinetId)
+
+        // Find kicker cabinet IDs from selected cabinets
+        const kickerCabinetIds = prev
+          .filter(
+            (cab) =>
+              cab.kickerParentCabinetId === cabinetId &&
+              cab.cabinetType === 'kicker'
+          )
+          .map((cab) => cab.cabinetId)
+
+        return prev.map((cab) => {
+          if (cab.cabinetId === cabinetId) {
+            return { ...cab, viewId }
+          } else if (childCabinetIds.includes(cab.cabinetId)) {
+            return { ...cab, viewId }
+          } else if (kickerCabinetIds.includes(cab.cabinetId)) {
+            return { ...cab, viewId }
+          }
+          return cab
+        })
+      })
     },
     []
   )
@@ -198,11 +252,22 @@ export const useCabinets = (
   const addCabinet = useCallback(
     (cabinetData: CabinetData) => {
       if (!sceneRef.current) return
-      sceneRef.current.add(cabinetData.group)
-      setCabinets((prev) => [...prev, cabinetData])
-      return cabinetData
+      
+      // Assign sort number if not already assigned (for independent products like kickers and bulkheads)
+      const cabinetWithSortNumber = cabinetData.sortNumber 
+        ? cabinetData 
+        : { ...cabinetData, sortNumber: sortNumberCounter }
+      
+      // Increment sort number counter if we assigned a new number
+      if (!cabinetData.sortNumber) {
+        setSortNumberCounter((prev) => prev + 1)
+      }
+      
+      sceneRef.current.add(cabinetWithSortNumber.group)
+      setCabinets((prev) => [...prev, cabinetWithSortNumber])
+      return cabinetWithSortNumber
     },
-    [sceneRef]
+    [sceneRef, sortNumberCounter]
   )
 
   return {

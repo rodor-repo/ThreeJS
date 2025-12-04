@@ -7,6 +7,7 @@ import {
   DEFAULT_SNAP_CONFIG,
 } from "../lib/snapUtils"
 import { updateKickerPosition } from "../utils/handlers/kickerPositionHandler"
+import { updateBulkheadPosition, updateReturnBulkheads } from "../utils/handlers/bulkheadPositionHandler"
 import type { ViewManager, ViewId } from "../../cabinets/ViewManager"
 import { updateChildCabinets } from "../utils/handlers/childCabinetHandler"
 
@@ -45,7 +46,9 @@ export const useSceneInteractions = (
   leftWallRef?: React.MutableRefObject<THREE.Group | null>,
   rightWallRef?: React.MutableRefObject<THREE.Group | null>,
   onOpenWallDrawer?: () => void,
-  orthoRefs?: OrthoRefs
+  orthoRefs?: OrthoRefs,
+  addCabinet?: (cabinet: CabinetData) => void,
+  deleteCabinet?: (cabinetId: string) => void
 ) => {
   const isDraggingCabinetRef = useRef(false)
   const dragStartRef = useRef({ x: 0, y: 0 })
@@ -298,6 +301,37 @@ export const useSceneInteractions = (
       if (draggedCabinet.cabinetType === 'base' || draggedCabinet.cabinetType === 'tall') {
         updateKickerPosition(draggedCabinet, cabinets, {
           positionChanged: true
+        })
+      }
+      
+      // If dragged cabinet is a child filler/panel, update parent kicker when child position changes
+      if (
+        draggedCabinet.parentCabinetId &&
+        (draggedCabinet.cabinetType === 'filler' || draggedCabinet.cabinetType === 'panel') &&
+        draggedCabinet.hideLockIcons === true
+      ) {
+        const parentCabinet = cabinets.find(c => c.cabinetId === draggedCabinet.parentCabinetId)
+        if (parentCabinet && (parentCabinet.cabinetType === 'base' || parentCabinet.cabinetType === 'tall')) {
+          updateKickerPosition(parentCabinet, cabinets, {
+            dimensionsChanged: true
+          })
+        }
+      }
+      
+      // Update bulkhead position when parent cabinet moves
+      if (draggedCabinet.cabinetType === 'base' || draggedCabinet.cabinetType === 'top' || draggedCabinet.cabinetType === 'tall') {
+        updateBulkheadPosition(draggedCabinet, cabinets, wallDimensions, {
+          positionChanged: true
+        })
+      }
+
+      // Check all overhead and tall cabinets for return bulkhead updates when any cabinet moves
+      // This ensures return bulkheads are created/removed when cabinets are snapped or reach walls
+      if (addCabinet && deleteCabinet) {
+        cabinets.forEach((cabinet) => {
+          if (cabinet.cabinetType === 'top' || cabinet.cabinetType === 'tall') {
+            updateReturnBulkheads(cabinet, cabinets, wallDimensions, addCabinet, deleteCabinet)
+          }
         })
       }
 

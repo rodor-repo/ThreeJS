@@ -12,11 +12,12 @@ type Props = {
   onClose: () => void
   onLockChange?: (cabinetId: string, leftLock: boolean, rightLock: boolean) => void
   onKickerToggle?: (cabinetId: string, enabled: boolean) => void
+  onBulkheadToggle?: (cabinetId: string, enabled: boolean) => void
   wsProducts?: WsProducts | null
   onFillerSelect?: (cabinetId: string, productId: string, side: 'left' | 'right') => void
 }
 
-export const CabinetLockIcons: React.FC<Props> = ({ cabinet, camera, allCabinets, onClose, onLockChange, onKickerToggle, wsProducts, onFillerSelect }) => {
+export const CabinetLockIcons: React.FC<Props> = ({ cabinet, camera, allCabinets, onClose, onLockChange, onKickerToggle, onBulkheadToggle, wsProducts, onFillerSelect }) => {
   const [positions, setPositions] = useState({ center: { x: 0, y: 0 }, left: { x: 0, y: 0 }, right: { x: 0, y: 0 } })
   
   // Lock states - use cabinet's lock state, default to unlocked (false)
@@ -27,7 +28,37 @@ export const CabinetLockIcons: React.FC<Props> = ({ cabinet, camera, allCabinets
   // Toggle states for letter icons (F, B, U, K)
   const [isFLeftOn, setIsFLeftOn] = useState(false)
   const [isFRightOn, setIsFRightOn] = useState(false)
-  const [isBOn, setIsBOn] = useState(false)
+  // Initialize B state based on whether bulkhead exists as a separate CabinetData entry
+  const [isBOn, setIsBOn] = useState(() => {
+    if (cabinet.cabinetType === 'top' || cabinet.cabinetType === 'tall' || cabinet.cabinetType === 'base') {
+      // Check if bulkhead exists as a separate CabinetData entry
+      const existingBulkheadCabinet = allCabinets.find(
+        (c) => c.cabinetType === 'bulkhead' && c.bulkheadParentCabinetId === cabinet.cabinetId
+      )
+      return !!existingBulkheadCabinet
+    }
+    return false
+  })
+
+  // Sync B state with actual bulkhead existence when cabinet dimensions change
+  useEffect(() => {
+    if (cabinet.cabinetType === 'top' || cabinet.cabinetType === 'tall' || cabinet.cabinetType === 'base') {
+      // Check if bulkhead exists as a separate CabinetData entry
+      const existingBulkheadCabinet = allCabinets.find(
+        (c) => c.cabinetType === 'bulkhead' && c.bulkheadParentCabinetId === cabinet.cabinetId
+      )
+      const bulkheadExists = !!existingBulkheadCabinet
+      // Sync state with actual bulkhead existence
+      setIsBOn(bulkheadExists)
+    }
+  }, [
+    cabinet.cabinetId,
+    cabinet.carcass.dimensions.width,
+    cabinet.carcass.dimensions.height,
+    cabinet.carcass.dimensions.depth,
+    cabinet.group.position.y,
+    allCabinets,
+  ])
   const [isUOn, setIsUOn] = useState(false)
   
   // Modal state for Fillers
@@ -201,8 +232,8 @@ export const CabinetLockIcons: React.FC<Props> = ({ cabinet, camera, allCabinets
           )}
         </div>
 
-      {/* B Icon above Center Lock - Toggleable, only for Tall and Top (Overhead) cabinets */}
-      {showLetterIcons && (cabinet.cabinetType === 'tall' || cabinet.cabinetType === 'top') && (
+      {/* B Icon above Center Lock - Toggleable, for Base, Tall and Top (Overhead) cabinets */}
+      {showLetterIcons && (cabinet.cabinetType === 'base' || cabinet.cabinetType === 'tall' || cabinet.cabinetType === 'top') && (
         <div
           className={`fixed z-50 bg-white rounded-full shadow-lg border-2 transition-colors cursor-pointer flex items-center justify-center ${
             isBOn 
@@ -219,7 +250,11 @@ export const CabinetLockIcons: React.FC<Props> = ({ cabinet, camera, allCabinets
           }}
           onClick={(e) => {
             e.stopPropagation()
-            setIsBOn(prev => !prev)
+            const newBState = !isBOn
+            setIsBOn(newBState)
+            if (onBulkheadToggle) {
+              onBulkheadToggle(cabinet.cabinetId, newBState)
+            }
           }}
         >
           <span className={`font-bold text-sm ${isBOn ? 'text-blue-600' : 'text-gray-400'}`}>B</span>

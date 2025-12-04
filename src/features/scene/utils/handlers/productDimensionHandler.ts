@@ -5,6 +5,7 @@ import { getClient } from "@/app/QueryProvider"
 import { getProductData } from "@/server/getProductData"
 import { updateChildCabinets } from "./childCabinetHandler"
 import { updateKickerPosition } from "./kickerPositionHandler"
+import { updateBulkheadPosition } from "./bulkheadPositionHandler"
 
 interface ViewManagerResult {
   getCabinetsInView: (viewId: ViewId) => string[]
@@ -255,6 +256,16 @@ export const handleProductDimensionChange = (
             dimensionsChanged: true
           })
         }
+        
+        // Update bulkhead position when parent dimensions change
+        if (selectedCabinet.cabinetType === 'base' || selectedCabinet.cabinetType === 'top' || selectedCabinet.cabinetType === 'tall') {
+          updateBulkheadPosition(selectedCabinet, cabinets, wallDimensions, {
+            heightChanged: true,
+            widthChanged: true,
+            depthChanged: true,
+            positionChanged: false
+          })
+        }
 
         // Calculate new sync width
         const newSyncWidth = initialSyncWidth + widthDelta
@@ -298,6 +309,7 @@ export const handleProductDimensionChange = (
         // Reposition all cabinets left-to-right, starting from leftmost position
         let currentX = leftmostX
         sortedSyncCabinets.forEach((cab, index) => {
+          const oldX = cab.group.position.x
           const clampedX = Math.max(0, currentX)
           console.log(
             `[Sync] Positioning cabinet ${index}: X=${clampedX.toFixed(
@@ -309,6 +321,21 @@ export const handleProductDimensionChange = (
             cab.group.position.y,
             cab.group.position.z
           )
+          
+          // Update child cabinets (fillers/panels) when parent position changes due to sync
+          if (Math.abs(clampedX - oldX) > 0.1) {
+            updateChildCabinets(cab, cabinets, {
+              positionChanged: true
+            })
+            
+            // Update kicker position when parent position changes
+            if (cab.cabinetType === 'base' || cab.cabinetType === 'tall') {
+              updateKickerPosition(cab, cabinets, {
+                positionChanged: true
+              })
+            }
+          }
+          
           currentX += cab.carcass.dimensions.width
         })
 
@@ -385,6 +412,16 @@ export const handleProductDimensionChange = (
           dimensionsChanged: true
         })
       }
+      
+      // Update bulkhead position when parent dimensions change (left lock - width changes, position stays same)
+      if (selectedCabinet.cabinetType === 'base' || selectedCabinet.cabinetType === 'top' || selectedCabinet.cabinetType === 'tall') {
+        updateBulkheadPosition(selectedCabinet, cabinets, wallDimensions, {
+          heightChanged,
+          widthChanged,
+          depthChanged,
+          positionChanged: false
+        })
+      }
 
       // Handle grouped cabinets (Pair system) - apply proportional width changes
       // Only apply if sync didn't apply
@@ -415,6 +452,26 @@ export const handleProductDimensionChange = (
               height: groupedCabinet.carcass.dimensions.height,
               depth: groupedCabinet.carcass.dimensions.depth,
             })
+            
+            // Update child cabinets (fillers/panels) when parent width changes
+            updateChildCabinets(groupedCabinet, cabinets, {
+              widthChanged: true
+            })
+            
+            // Update kicker position when parent dimensions change
+            if (groupedCabinet.cabinetType === 'base' || groupedCabinet.cabinetType === 'tall') {
+              updateKickerPosition(groupedCabinet, cabinets, {
+                dimensionsChanged: true
+              })
+            }
+            
+            // Update bulkhead position when parent dimensions change (paired cabinet, left lock, leftLock branch)
+            if (groupedCabinet.cabinetType === 'base' || groupedCabinet.cabinetType === 'top' || groupedCabinet.cabinetType === 'tall') {
+              updateBulkheadPosition(groupedCabinet, cabinets, wallDimensions, {
+                widthChanged: true,
+                positionChanged: false
+              })
+            }
           } else if (groupedRightLock) {
             // Right locked - extend to left
             const groupedOldX = groupedCabinet.group.position.x
@@ -437,6 +494,28 @@ export const handleProductDimensionChange = (
               groupedCabinet.group.position.y,
               groupedCabinet.group.position.z
             )
+            
+            // Update child cabinets (fillers/panels) when parent position/width changes
+            updateChildCabinets(groupedCabinet, cabinets, {
+              widthChanged: true,
+              positionChanged: Math.abs(clampedX - groupedOldX) > 0.1
+            })
+            
+            // Update kicker position when parent dimensions/position change
+            if (groupedCabinet.cabinetType === 'base' || groupedCabinet.cabinetType === 'tall') {
+              updateKickerPosition(groupedCabinet, cabinets, {
+                dimensionsChanged: true,
+                positionChanged: Math.abs(clampedX - groupedOldX) > 0.1
+              })
+            }
+            
+            // Update bulkhead position when parent dimensions/position change (paired cabinet, right lock)
+            if (groupedCabinet.cabinetType === 'top' || groupedCabinet.cabinetType === 'tall') {
+              updateBulkheadPosition(groupedCabinet, cabinets, wallDimensions, {
+                widthChanged: true,
+                positionChanged: Math.abs(clampedX - groupedOldX) > 0.1
+              })
+            }
           } else {
             // Neither lock - extend equally from center
             const groupedOldX = groupedCabinet.group.position.x
@@ -459,6 +538,28 @@ export const handleProductDimensionChange = (
               groupedCabinet.group.position.y,
               groupedCabinet.group.position.z
             )
+            
+            // Update child cabinets (fillers/panels) when parent position/width changes
+            updateChildCabinets(groupedCabinet, cabinets, {
+              widthChanged: true,
+              positionChanged: Math.abs(clampedX - groupedOldX) > 0.1
+            })
+            
+            // Update kicker position when parent dimensions/position change
+            if (groupedCabinet.cabinetType === 'base' || groupedCabinet.cabinetType === 'tall') {
+              updateKickerPosition(groupedCabinet, cabinets, {
+                dimensionsChanged: true,
+                positionChanged: Math.abs(clampedX - groupedOldX) > 0.1
+              })
+            }
+            
+            // Update bulkhead position when parent dimensions/position change (paired cabinet, no lock)
+            if (groupedCabinet.cabinetType === 'top' || groupedCabinet.cabinetType === 'tall') {
+              updateBulkheadPosition(groupedCabinet, cabinets, wallDimensions, {
+                widthChanged: true,
+                positionChanged: Math.abs(clampedX - groupedOldX) > 0.1
+              })
+            }
           }
         })
       }
@@ -490,6 +591,7 @@ export const handleProductDimensionChange = (
           // Cabinet is on the RIGHT if it extends even 1mm toward positive X
           // Check if other cabinet's left edge is to the right of changing cabinet's left edge
           if (otherCabinet.group.position.x > changingLeftEdge) {
+            const oldX = otherCabinet.group.position.x
             const newX = otherCabinet.group.position.x + widthDelta
             // Only clamp left boundary - right wall can be penetrated (auto-adjusts)
             const clampedX = Math.max(0, newX)
@@ -498,6 +600,20 @@ export const handleProductDimensionChange = (
               otherCabinet.group.position.y,
               otherCabinet.group.position.z
             )
+            
+            // Update child cabinets (fillers/panels) when parent position changes due to view repositioning
+            if (Math.abs(clampedX - oldX) > 0.1) {
+              updateChildCabinets(otherCabinet, cabinets, {
+                positionChanged: true
+              })
+              
+              // Update kicker position when parent position changes
+              if (otherCabinet.cabinetType === 'base' || otherCabinet.cabinetType === 'tall') {
+                updateKickerPosition(otherCabinet, cabinets, {
+                  positionChanged: true
+                })
+              }
+            }
           }
         })
       }
@@ -563,6 +679,16 @@ export const handleProductDimensionChange = (
           positionChanged: Math.abs(clampedX - oldX) > 0.1
         })
       }
+      
+      // Update bulkhead position when parent dimensions/position change
+      if (selectedCabinet.cabinetType === 'base' || selectedCabinet.cabinetType === 'top' || selectedCabinet.cabinetType === 'tall') {
+        updateBulkheadPosition(selectedCabinet, cabinets, wallDimensions, {
+          heightChanged: true,
+          widthChanged: true,
+          depthChanged: true,
+          positionChanged: Math.abs(clampedX - oldX) > 0.1
+        })
+      }
 
       // Handle grouped cabinets - apply proportional width changes
       const groupData = cabinetGroups.get(selectedCabinet.cabinetId)
@@ -592,6 +718,26 @@ export const handleProductDimensionChange = (
               height: groupedCabinet.carcass.dimensions.height,
               depth: groupedCabinet.carcass.dimensions.depth,
             })
+            
+            // Update child cabinets (fillers/panels) when parent width changes
+            updateChildCabinets(groupedCabinet, cabinets, {
+              widthChanged: true
+            })
+            
+            // Update kicker position when parent dimensions change
+            if (groupedCabinet.cabinetType === 'base' || groupedCabinet.cabinetType === 'tall') {
+              updateKickerPosition(groupedCabinet, cabinets, {
+                dimensionsChanged: true
+              })
+            }
+            
+            // Update bulkhead position when parent dimensions change (paired cabinet, left lock, rightLock branch)
+            if (groupedCabinet.cabinetType === 'top' || groupedCabinet.cabinetType === 'tall') {
+              updateBulkheadPosition(groupedCabinet, cabinets, wallDimensions, {
+                widthChanged: true,
+                positionChanged: false
+              })
+            }
           } else if (groupedRightLock) {
             // Right locked - extend to left
             const groupedOldX = groupedCabinet.group.position.x
@@ -614,6 +760,28 @@ export const handleProductDimensionChange = (
               groupedCabinet.group.position.y,
               groupedCabinet.group.position.z
             )
+            
+            // Update child cabinets (fillers/panels) when parent position/width changes
+            updateChildCabinets(groupedCabinet, cabinets, {
+              widthChanged: true,
+              positionChanged: Math.abs(clampedX - groupedOldX) > 0.1
+            })
+            
+            // Update kicker position when parent dimensions/position change
+            if (groupedCabinet.cabinetType === 'base' || groupedCabinet.cabinetType === 'tall') {
+              updateKickerPosition(groupedCabinet, cabinets, {
+                dimensionsChanged: true,
+                positionChanged: Math.abs(clampedX - groupedOldX) > 0.1
+              })
+            }
+            
+            // Update bulkhead position when parent dimensions/position change (paired cabinet, right lock, rightLock branch)
+            if (groupedCabinet.cabinetType === 'top' || groupedCabinet.cabinetType === 'tall') {
+              updateBulkheadPosition(groupedCabinet, cabinets, wallDimensions, {
+                widthChanged: true,
+                positionChanged: Math.abs(clampedX - groupedOldX) > 0.1
+              })
+            }
           } else {
             // Neither lock - extend equally from center
             const groupedOldX = groupedCabinet.group.position.x
@@ -636,6 +804,28 @@ export const handleProductDimensionChange = (
               groupedCabinet.group.position.y,
               groupedCabinet.group.position.z
             )
+            
+            // Update child cabinets (fillers/panels) when parent position/width changes
+            updateChildCabinets(groupedCabinet, cabinets, {
+              widthChanged: true,
+              positionChanged: Math.abs(clampedX - groupedOldX) > 0.1
+            })
+            
+            // Update kicker position when parent dimensions/position change
+            if (groupedCabinet.cabinetType === 'base' || groupedCabinet.cabinetType === 'tall') {
+              updateKickerPosition(groupedCabinet, cabinets, {
+                dimensionsChanged: true,
+                positionChanged: Math.abs(clampedX - groupedOldX) > 0.1
+              })
+            }
+            
+            // Update bulkhead position when parent dimensions/position change (paired cabinet, no lock, rightLock branch)
+            if (groupedCabinet.cabinetType === 'top' || groupedCabinet.cabinetType === 'tall') {
+              updateBulkheadPosition(groupedCabinet, cabinets, wallDimensions, {
+                widthChanged: true,
+                positionChanged: Math.abs(clampedX - groupedOldX) > 0.1
+              })
+            }
           }
         })
       }
@@ -671,6 +861,7 @@ export const handleProductDimensionChange = (
               otherCabinet.carcass.dimensions.width <
             changingRightEdge
           ) {
+            const oldX = otherCabinet.group.position.x
             const newX = otherCabinet.group.position.x - widthDelta
             // Only clamp left boundary - right wall can be penetrated (auto-adjusts)
             const clampedX = Math.max(0, newX)
@@ -679,6 +870,20 @@ export const handleProductDimensionChange = (
               otherCabinet.group.position.y,
               otherCabinet.group.position.z
             )
+            
+            // Update child cabinets (fillers/panels) when parent position changes due to view repositioning
+            if (Math.abs(clampedX - oldX) > 0.1) {
+              updateChildCabinets(otherCabinet, cabinets, {
+                positionChanged: true
+              })
+              
+              // Update kicker position when parent position changes
+              if (otherCabinet.cabinetType === 'base' || otherCabinet.cabinetType === 'tall') {
+                updateKickerPosition(otherCabinet, cabinets, {
+                  positionChanged: true
+                })
+              }
+            }
           }
         })
       }
@@ -751,6 +956,16 @@ export const handleProductDimensionChange = (
           positionChanged: Math.abs(clampedX - oldX) > 0.1
         })
       }
+      
+      // Update bulkhead position when parent dimensions/position change
+      if (selectedCabinet.cabinetType === 'base' || selectedCabinet.cabinetType === 'top' || selectedCabinet.cabinetType === 'tall') {
+        updateBulkheadPosition(selectedCabinet, cabinets, wallDimensions, {
+          heightChanged: true,
+          widthChanged: true,
+          depthChanged: true,
+          positionChanged: Math.abs(clampedX - oldX) > 0.1
+        })
+      }
 
       // Handle grouped cabinets - apply proportional width changes
       const groupData = cabinetGroups.get(selectedCabinet.cabinetId)
@@ -780,6 +995,26 @@ export const handleProductDimensionChange = (
               height: groupedCabinet.carcass.dimensions.height,
               depth: groupedCabinet.carcass.dimensions.depth,
             })
+            
+            // Update child cabinets (fillers/panels) when parent width changes
+            updateChildCabinets(groupedCabinet, cabinets, {
+              widthChanged: true
+            })
+            
+            // Update kicker position when parent dimensions change
+            if (groupedCabinet.cabinetType === 'base' || groupedCabinet.cabinetType === 'tall') {
+              updateKickerPosition(groupedCabinet, cabinets, {
+                dimensionsChanged: true
+              })
+            }
+            
+            // Update bulkhead position when parent dimensions change (paired cabinet, left lock, no-lock branch)
+            if (groupedCabinet.cabinetType === 'top' || groupedCabinet.cabinetType === 'tall') {
+              updateBulkheadPosition(groupedCabinet, cabinets, wallDimensions, {
+                widthChanged: true,
+                positionChanged: false
+              })
+            }
           } else if (groupedRightLock) {
             // Right locked - extend to left
             const groupedOldX = groupedCabinet.group.position.x
@@ -802,6 +1037,28 @@ export const handleProductDimensionChange = (
               groupedCabinet.group.position.y,
               groupedCabinet.group.position.z
             )
+            
+            // Update child cabinets (fillers/panels) when parent position/width changes
+            updateChildCabinets(groupedCabinet, cabinets, {
+              widthChanged: true,
+              positionChanged: Math.abs(clampedX - groupedOldX) > 0.1
+            })
+            
+            // Update kicker position when parent dimensions/position change
+            if (groupedCabinet.cabinetType === 'base' || groupedCabinet.cabinetType === 'tall') {
+              updateKickerPosition(groupedCabinet, cabinets, {
+                dimensionsChanged: true,
+                positionChanged: Math.abs(clampedX - groupedOldX) > 0.1
+              })
+            }
+            
+            // Update bulkhead position when parent dimensions/position change (paired cabinet, right lock, no-lock branch)
+            if (groupedCabinet.cabinetType === 'top' || groupedCabinet.cabinetType === 'tall') {
+              updateBulkheadPosition(groupedCabinet, cabinets, wallDimensions, {
+                widthChanged: true,
+                positionChanged: Math.abs(clampedX - groupedOldX) > 0.1
+              })
+            }
           } else {
             // Neither lock - extend equally from center
             const groupedOldX = groupedCabinet.group.position.x
@@ -824,6 +1081,28 @@ export const handleProductDimensionChange = (
               groupedCabinet.group.position.y,
               groupedCabinet.group.position.z
             )
+            
+            // Update child cabinets (fillers/panels) when parent position/width changes
+            updateChildCabinets(groupedCabinet, cabinets, {
+              widthChanged: true,
+              positionChanged: Math.abs(clampedX - groupedOldX) > 0.1
+            })
+            
+            // Update kicker position when parent dimensions/position change
+            if (groupedCabinet.cabinetType === 'base' || groupedCabinet.cabinetType === 'tall') {
+              updateKickerPosition(groupedCabinet, cabinets, {
+                dimensionsChanged: true,
+                positionChanged: Math.abs(clampedX - groupedOldX) > 0.1
+              })
+            }
+            
+            // Update bulkhead position when parent dimensions/position change (paired cabinet, no lock, no-lock branch)
+            if (groupedCabinet.cabinetType === 'top' || groupedCabinet.cabinetType === 'tall') {
+              updateBulkheadPosition(groupedCabinet, cabinets, wallDimensions, {
+                widthChanged: true,
+                positionChanged: Math.abs(clampedX - groupedOldX) > 0.1
+              })
+            }
           }
         })
       }
@@ -863,6 +1142,7 @@ export const handleProductDimensionChange = (
           // Move cabinets on the LEFT side by halfDelta (negative X direction)
           // Cabinet is on the LEFT if it extends even 1mm toward negative X
           if (otherRight < changingRightEdge) {
+            const oldX = otherCabinet.group.position.x
             const newX = otherCabinet.group.position.x - halfDelta
             // Only clamp left boundary - right wall can be penetrated (auto-adjusts)
             const clampedX = Math.max(0, newX)
@@ -871,10 +1151,25 @@ export const handleProductDimensionChange = (
               otherCabinet.group.position.y,
               otherCabinet.group.position.z
             )
+            
+            // Update child cabinets (fillers/panels) when parent position changes due to view repositioning
+            if (Math.abs(clampedX - oldX) > 0.1) {
+              updateChildCabinets(otherCabinet, cabinets, {
+                positionChanged: true
+              })
+              
+              // Update kicker position when parent position changes
+              if (otherCabinet.cabinetType === 'base' || otherCabinet.cabinetType === 'tall') {
+                updateKickerPosition(otherCabinet, cabinets, {
+                  positionChanged: true
+                })
+              }
+            }
           }
           // Move cabinets on the RIGHT side by halfDelta (positive X direction)
           // Cabinet is on the RIGHT if it extends even 1mm toward positive X
           else if (otherX > changingLeftEdge) {
+            const oldX = otherCabinet.group.position.x
             const newX = otherCabinet.group.position.x + halfDelta
             // Only clamp left boundary - right wall can be penetrated (auto-adjusts)
             const clampedX = Math.max(0, newX)
@@ -883,6 +1178,20 @@ export const handleProductDimensionChange = (
               otherCabinet.group.position.y,
               otherCabinet.group.position.z
             )
+            
+            // Update child cabinets (fillers/panels) when parent position changes due to view repositioning
+            if (Math.abs(clampedX - oldX) > 0.1) {
+              updateChildCabinets(otherCabinet, cabinets, {
+                positionChanged: true
+              })
+              
+              // Update kicker position when parent position changes
+              if (otherCabinet.cabinetType === 'base' || otherCabinet.cabinetType === 'tall') {
+                updateKickerPosition(otherCabinet, cabinets, {
+                  positionChanged: true
+                })
+              }
+            }
           }
         })
       }
@@ -903,6 +1212,31 @@ export const handleProductDimensionChange = (
     if (selectedCabinet.cabinetType === 'base' || selectedCabinet.cabinetType === 'tall') {
       updateKickerPosition(selectedCabinet, cabinets, {
         dimensionsChanged: true
+      })
+    }
+    
+    // If selected cabinet is a child filler/panel, update parent kicker when child dimensions change
+    if (
+      selectedCabinet.parentCabinetId &&
+      (selectedCabinet.cabinetType === 'filler' || selectedCabinet.cabinetType === 'panel') &&
+      selectedCabinet.hideLockIcons === true &&
+      (widthChanged || depthChanged) // Only width and depth affect kicker extension
+    ) {
+      const parentCabinet = cabinets.find(c => c.cabinetId === selectedCabinet.parentCabinetId)
+      if (parentCabinet && (parentCabinet.cabinetType === 'base' || parentCabinet.cabinetType === 'tall')) {
+        updateKickerPosition(parentCabinet, cabinets, {
+          dimensionsChanged: true
+        })
+      }
+    }
+    
+    // Update bulkhead position when parent dimensions change (height or depth changed)
+    if (selectedCabinet.cabinetType === 'base' || selectedCabinet.cabinetType === 'top' || selectedCabinet.cabinetType === 'tall') {
+      updateBulkheadPosition(selectedCabinet, cabinets, wallDimensions, {
+        heightChanged,
+        widthChanged: false,
+        depthChanged,
+        positionChanged: false
       })
     }
   }

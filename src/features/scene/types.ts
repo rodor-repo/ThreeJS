@@ -39,6 +39,7 @@ export type CabinetType =
   | "filler"
   | "wardrobe"
   | "kicker"
+  | "bulkhead"
 
 export type CabinetData = {
   group: THREE.Group
@@ -65,4 +66,14 @@ export type CabinetData = {
   kickerFace?: any // KickerFace instance
   /** For kicker type: parent cabinet ID that this kicker belongs to */
   kickerParentCabinetId?: string
+  /** For bulkhead type: reference to the BulkheadFace instance */
+  bulkheadFace?: any // BulkheadFace instance
+  /** For bulkhead type: parent cabinet ID that this bulkhead belongs to */
+  bulkheadParentCabinetId?: string
+  /** For bulkhead return type: reference to the BulkheadReturn instance */
+  bulkheadReturn?: any // BulkheadReturn instance
+  /** For bulkhead return type: parent cabinet ID that this bulkhead return belongs to */
+  bulkheadReturnParentCabinetId?: string
+  /** For bulkhead return type: side ('left' | 'right') */
+  bulkheadReturnSide?: 'left' | 'right'
 }

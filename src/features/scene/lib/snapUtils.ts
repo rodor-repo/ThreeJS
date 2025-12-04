@@ -165,7 +165,7 @@ export function calculateSnapPosition(
  * Get the effective left edge (lowest X) of a cabinet, considering child fillers/panels
  * Optimized to avoid unnecessary filtering
  */
-function getEffectiveLeftEdge(cabinet: CabinetData, allCabinets: CabinetData[]): number {
+export function getEffectiveLeftEdge(cabinet: CabinetData, allCabinets: CabinetData[]): number {
   let minLeft = cabinet.group.position.x
   
   // Find child fillers/panels on the left side - single pass optimization
@@ -190,7 +190,7 @@ function getEffectiveLeftEdge(cabinet: CabinetData, allCabinets: CabinetData[]):
  * Get the effective right edge (highest X) of a cabinet, considering child fillers/panels
  * Optimized to avoid unnecessary filtering
  */
-function getEffectiveRightEdge(cabinet: CabinetData, allCabinets: CabinetData[]): number {
+export function getEffectiveRightEdge(cabinet: CabinetData, allCabinets: CabinetData[]): number {
   const cabinetRight = cabinet.group.position.x + cabinet.carcass.dimensions.width
   let maxRight = cabinetRight
   

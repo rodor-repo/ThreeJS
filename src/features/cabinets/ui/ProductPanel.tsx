@@ -82,6 +82,16 @@ const DynamicPanelWithQuery: React.FC<LocalProductPanelProps> = ({ isVisible, on
   const defaultMaterialSelections = data?.defaultMaterialSelections
   const threeJsGDs = data?.threeJsGDs
 
+  // Sync materialOptions and defaultMaterialSelections to PartDataManager
+  useEffect(() => {
+    if (productId && materialOptions && defaultMaterialSelections) {
+      const { getPartDataManager } = require('@/nesting/PartDataManager')
+      const partDataManager = getPartDataManager()
+      partDataManager.setMaterialOptions(productId, materialOptions)
+      partDataManager.setDefaultMaterialSelections(productId, defaultMaterialSelections)
+    }
+  }, [productId, materialOptions, defaultMaterialSelections])
+
   // Debug: log fetched data shape when visible
   useEffect(() => {
     if (!productId) return
@@ -171,6 +181,17 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
   const cabinetId = selectedCabinet?.cabinetId
   const hasInitializedRef = useRef<boolean>(false)
   const lastSyncedWidthRef = useRef<number | null>(null)
+
+  // Sync materialSelections to PartDataManager whenever it changes
+  useEffect(() => {
+    if (cabinetId && selectedCabinet && Object.keys(materialSelections).length > 0) {
+      const { getPartDataManager } = require('@/nesting/PartDataManager')
+      const partDataManager = getPartDataManager()
+      partDataManager.setMaterialSelections(cabinetId, materialSelections)
+      // Update cabinet parts to refresh door color names
+      partDataManager.updateCabinetParts(selectedCabinet)
+    }
+  }, [cabinetId, materialSelections, selectedCabinet])
 
 
   useEffect(() => {
@@ -441,6 +462,14 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
     // Initialized values and selections
     // Persist initialized state and sync 3D primary dims
     cabinetPanelState.set(cabinetId, { values: nextValues, materialColor: nextColor, materialSelections: nextSelections || {}, price: saved?.price })
+    
+    // Sync materialSelections to PartDataManager on initialization
+    if (nextSelections && Object.keys(nextSelections).length > 0) {
+      const { getPartDataManager } = require('@/nesting/PartDataManager')
+      const partDataManager = getPartDataManager()
+      partDataManager.setMaterialSelections(cabinetId, nextSelections)
+    }
+    
     // Persisted state for cabinet
     // lastInitRef.current = cabinetId
     if (!selectedCabinet.carcass?.defaultDimValuesApplied) {

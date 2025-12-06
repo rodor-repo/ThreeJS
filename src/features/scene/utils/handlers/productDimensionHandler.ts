@@ -6,6 +6,11 @@ import { getProductData } from "@/server/getProductData"
 import { updateChildCabinets } from "./childCabinetHandler"
 import { updateKickerPosition } from "./kickerPositionHandler"
 import { updateBulkheadPosition } from "./bulkheadPositionHandler"
+import {
+  getCabinetRelativeEffectiveBounds,
+  getEffectiveLeftEdge,
+  getEffectiveRightEdge
+} from "../../lib/snapUtils"
 
 interface ViewManagerResult {
   getCabinetsInView: (viewId: ViewId) => string[]
@@ -194,9 +199,10 @@ export const handleProductDimensionChange = (
           `[Sync] Sync logic triggered! Selected sync cabinets: ${selectedSyncCabinets.length}, widthDelta: ${widthDelta}`
         )
 
-        // Sort cabinets by X position (left to right)
+        // Sort cabinets by effective left edge (includes fillers/panels)
         const sortedSyncCabinets = [...selectedSyncCabinets].sort(
-          (a, b) => a.group.position.x - b.group.position.x
+          (a, b) =>
+            getEffectiveLeftEdge(a, cabinets) - getEffectiveLeftEdge(b, cabinets)
         )
 
         console.log(
@@ -209,14 +215,12 @@ export const handleProductDimensionChange = (
           )
         )
 
-        // Calculate initial sync width and positions
-        const leftmostX = sortedSyncCabinets[0].group.position.x
-        const rightmostCabinet =
-          sortedSyncCabinets[sortedSyncCabinets.length - 1]
-        const rightmostX =
-          rightmostCabinet.group.position.x +
-          rightmostCabinet.carcass.dimensions.width
-        const initialSyncWidth = rightmostX - leftmostX
+        // Calculate initial sync width and positions using effective edges (includes fillers/panels)
+        const leftmostEdge = getEffectiveLeftEdge(sortedSyncCabinets[0], cabinets)
+        const rightmostEdge = getEffectiveRightEdge(
+          sortedSyncCabinets[sortedSyncCabinets.length - 1],
+          cabinets
+        )
 
         // Find the changing cabinet index
         const changingCabinetIndex = sortedSyncCabinets.findIndex(
@@ -267,15 +271,6 @@ export const handleProductDimensionChange = (
           })
         }
 
-        // Calculate new sync width
-        const newSyncWidth = initialSyncWidth + widthDelta
-
-        // Get cabinets to the right of the changing cabinet
-        const cabinetsToRight = sortedSyncCabinets.slice(
-          changingCabinetIndex + 1
-        )
-        const cabinetsToLeft = sortedSyncCabinets.slice(0, changingCabinetIndex)
-
         // Distribute width delta among other synced cabinets
         // The algorithm is simple:
         // 1. Update all widths (changing cabinet gets new width, others shrink/grow proportionally)
@@ -299,6 +294,26 @@ export const handleProductDimensionChange = (
             height: cab.carcass.dimensions.height,
             depth: cab.carcass.dimensions.depth,
           })
+          updateChildCabinets(cab, cabinets, {
+            widthChanged: true
+          })
+          if (cab.cabinetType === 'base' || cab.cabinetType === 'tall') {
+            updateKickerPosition(cab, cabinets, {
+              dimensionsChanged: true
+            })
+          }
+          if (
+            cab.cabinetType === 'base' ||
+            cab.cabinetType === 'top' ||
+            cab.cabinetType === 'tall'
+          ) {
+            updateBulkheadPosition(cab, cabinets, wallDimensions, {
+              heightChanged: true,
+              widthChanged: true,
+              depthChanged: false,
+              positionChanged: false
+            })
+          }
           console.log(
             `[Sync] Updated width for cabinet: oldWidth=${(
               newWidth - deltaPerCabinet
@@ -307,23 +322,29 @@ export const handleProductDimensionChange = (
         })
 
         // Reposition all cabinets left-to-right, starting from leftmost position
-        let currentX = leftmostX
+        let currentEffectiveLeft = leftmostEdge
         sortedSyncCabinets.forEach((cab, index) => {
           const oldX = cab.group.position.x
-          const clampedX = Math.max(0, currentX)
+          const { leftOffset, rightOffset } = getCabinetRelativeEffectiveBounds(
+            cab,
+            cabinets
+          )
+          const effectiveWidth = rightOffset - leftOffset
+          const targetEffectiveLeft = Math.max(0, currentEffectiveLeft)
+          const newX = targetEffectiveLeft - leftOffset
           console.log(
-            `[Sync] Positioning cabinet ${index}: X=${clampedX.toFixed(
+            `[Sync] Positioning cabinet ${index}: effectiveLeft=${targetEffectiveLeft.toFixed(
               2
-            )}, width=${cab.carcass.dimensions.width.toFixed(2)}`
+            )}, effectiveWidth=${effectiveWidth.toFixed(2)}, newX=${newX.toFixed(2)}`
           )
           cab.group.position.set(
-            clampedX,
+            newX,
             cab.group.position.y,
             cab.group.position.z
           )
           
           // Update child cabinets (fillers/panels) when parent position changes due to sync
-          if (Math.abs(clampedX - oldX) > 0.1) {
+          if (Math.abs(newX - oldX) > 0.1) {
             updateChildCabinets(cab, cabinets, {
               positionChanged: true
             })
@@ -336,13 +357,13 @@ export const handleProductDimensionChange = (
             }
           }
           
-          currentX += cab.carcass.dimensions.width
+          currentEffectiveLeft = targetEffectiveLeft + effectiveWidth
         })
 
         console.log(
-          `[Sync] Final right edge: ${currentX.toFixed(
+          `[Sync] Final effective right edge: ${currentEffectiveLeft.toFixed(
             2
-          )}, expected: ${rightmostX.toFixed(2)}`
+          )}, expected: ${rightmostEdge.toFixed(2)}`
         )
 
         // Sync logic applied - skip pair system and lock system

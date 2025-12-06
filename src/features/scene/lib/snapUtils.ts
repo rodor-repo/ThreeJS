@@ -191,7 +191,10 @@ export function calculateSnapPosition(
  * Get the effective bounds of a cabinet relative to its own position, considering child fillers/panels
  * Returns offsets from the cabinet's origin (x=0)
  */
-function getCabinetRelativeEffectiveBounds(cabinet: CabinetData, allCabinets: CabinetData[]): { leftOffset: number; rightOffset: number } {
+export function getCabinetRelativeEffectiveBounds(
+  cabinet: CabinetData,
+  allCabinets: CabinetData[]
+): { leftOffset: number; rightOffset: number } {
   const parentWidth = cabinet.carcass.dimensions.width
   
   let minRelLeft = 0

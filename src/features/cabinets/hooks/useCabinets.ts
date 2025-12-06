@@ -8,8 +8,11 @@ import {
   unpulseHover,
 } from "../../scene/lib/selection"
 import type { CabinetData } from "../../scene/types"
-import type { CabinetType } from "@/features/carcass"
+import type { CabinetType, CarcassDimensions } from "@/features/carcass"
 import { cabinetPanelState } from "../ui/ProductPanel"
+
+/** Additional properties to merge into the created CabinetData */
+type AdditionalCabinetProps = Partial<Omit<CabinetData, 'group' | 'carcass' | 'cabinetType' | 'subcategoryId' | 'cabinetId'>>
 
 export const useCabinets = (
   sceneRef: React.MutableRefObject<THREE.Scene | null>
@@ -33,11 +36,17 @@ export const useCabinets = (
     (
       categoryType: CabinetType,
       subcategoryType: string,
-      productId?: string,
-      productName?: string,
-      fillerReturnPosition?: "left" | "right"
+      options?: {
+        productId?: string
+        productName?: string
+        fillerReturnPosition?: "left" | "right"
+        customDimensions?: Partial<CarcassDimensions>
+        additionalProps?: AdditionalCabinetProps
+      }
     ) => {
       if (!sceneRef.current) return
+
+      const { productId, productName, fillerReturnPosition, customDimensions, additionalProps } = options || {}
 
       const fillerType =
         categoryType === "filler"
@@ -48,15 +57,20 @@ export const useCabinets = (
         indexOffset: cabinetCounter,
         productId,
         fillerType,
-        fillerReturnPosition
+        fillerReturnPosition,
+        customDimensions
       })
-      // Add sortNumber based on order added to scene
-      const cabinetWithSortNumber = { ...data, sortNumber: sortNumberCounter }
-      sceneRef.current.add(cabinetWithSortNumber.group)
-      setCabinets((prev) => [...prev, cabinetWithSortNumber])
+      // Add sortNumber based on order added to scene, plus any additional properties
+      const cabinetWithProps: CabinetData = { 
+        ...data, 
+        sortNumber: sortNumberCounter,
+        ...additionalProps
+      }
+      sceneRef.current.add(cabinetWithProps.group)
+      setCabinets((prev) => [...prev, cabinetWithProps])
       setCabinetCounter((prev) => prev + 1)
       setSortNumberCounter((prev) => prev + 1)
-      return cabinetWithSortNumber
+      return cabinetWithProps
     },
     [sceneRef, cabinetCounter, sortNumberCounter]
   )
@@ -249,27 +263,6 @@ export const useCabinets = (
     [sceneRef, cabinets, selectedCabinet]
   )
 
-  const addCabinet = useCallback(
-    (cabinetData: CabinetData) => {
-      if (!sceneRef.current) return
-      
-      // Assign sort number if not already assigned (for independent products like kickers and bulkheads)
-      const cabinetWithSortNumber = cabinetData.sortNumber 
-        ? cabinetData 
-        : { ...cabinetData, sortNumber: sortNumberCounter }
-      
-      // Increment sort number counter if we assigned a new number
-      if (!cabinetData.sortNumber) {
-        setSortNumberCounter((prev) => prev + 1)
-      }
-      
-      sceneRef.current.add(cabinetWithSortNumber.group)
-      setCabinets((prev) => [...prev, cabinetWithSortNumber])
-      return cabinetWithSortNumber
-    },
-    [sceneRef, sortNumberCounter]
-  )
-
   return {
     cabinets,
     cabinetCounter,
@@ -280,7 +273,6 @@ export const useCabinets = (
     showProductPanel,
     setShowProductPanel,
     createCabinet,
-    addCabinet, // New: method to add existing CabinetData to scene
     clearCabinets,
     addHoverEffect,
     removeHoverEffect,

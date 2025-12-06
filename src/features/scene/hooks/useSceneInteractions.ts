@@ -46,9 +46,7 @@ export const useSceneInteractions = (
   leftWallRef?: React.MutableRefObject<THREE.Group | null>,
   rightWallRef?: React.MutableRefObject<THREE.Group | null>,
   onOpenWallDrawer?: () => void,
-  orthoRefs?: OrthoRefs,
-  addCabinet?: (cabinet: CabinetData) => void,
-  deleteCabinet?: (cabinetId: string) => void
+  orthoRefs?: OrthoRefs
 ) => {
   const isDraggingCabinetRef = useRef(false)
   const dragStartRef = useRef({ x: 0, y: 0 })
@@ -327,13 +325,11 @@ export const useSceneInteractions = (
 
       // Check all overhead and tall cabinets for return bulkhead updates when any cabinet moves
       // This ensures return bulkheads are created/removed when cabinets are snapped or reach walls
-      if (addCabinet && deleteCabinet) {
-        cabinets.forEach((cabinet) => {
-          if (cabinet.cabinetType === 'top' || cabinet.cabinetType === 'tall') {
-            updateReturnBulkheads(cabinet, cabinets, wallDimensions, addCabinet, deleteCabinet)
-          }
-        })
-      }
+      cabinets.forEach((cabinet) => {
+        if (cabinet.cabinetType === 'top' || cabinet.cabinetType === 'tall') {
+          updateReturnBulkheads(cabinet, cabinets, wallDimensions)
+        }
+      })
 
       // If dragged cabinet belongs to a view (not "none"), move ALL cabinets in that view together
       // Note: Left wall boundary is already checked above before moving the dragged cabinet

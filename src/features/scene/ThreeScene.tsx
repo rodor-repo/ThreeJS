@@ -2,7 +2,6 @@ import * as THREE from 'three'
 import { DoorMaterial } from '@/features/carcass'
 import { Subcategory } from '@/components/categoriesData'
 import { Settings, ShoppingCart, Undo, Redo, Flag, History, Clock, Trash2, ChevronDown } from 'lucide-react'
-import type { CabinetData } from './types'
 import { debounce } from 'lodash'
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useCabinets } from '../cabinets/hooks/useCabinets'
@@ -38,7 +37,6 @@ import { handleSplashbackHeightChange } from './utils/handlers/splashbackHandler
 import { handleKickerHeightChange } from './utils/handlers/kickerHeightHandler'
 import { handleProductDimensionChange } from './utils/handlers/productDimensionHandler'
 import { handleDeleteCabinet } from './utils/handlers/deleteCabinetHandler'
-import { createCabinet as createCabinetEntry } from '../cabinets/factory/cabinetFactory'
 import { updateChildCabinets } from './utils/handlers/childCabinetHandler'
 
 interface ThreeSceneProps {
@@ -102,7 +100,6 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     showProductPanel,
     setShowProductPanel,
     createCabinet,
-    addCabinet,
     clearCabinets,
     updateCabinetViewId,
     updateCabinetLock,
@@ -189,9 +186,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     leftWallRef,
     rightWallRef,
     handleWallClick,
-    { isOrthoActiveRef, orthoCameraRef }, // orthoRefs
-    addCabinet,
-    deleteCabinet
+    { isOrthoActiveRef, orthoCameraRef } // orthoRefs
   )
 
   // Control wall transparency based on camera view mode
@@ -454,14 +449,17 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
       : undefined
 
     // Create filler or panel using the hook (adds to scene and state)
-    const newCabinet = createCabinet(cabinetType, subcategoryId, productId, productName, fillerReturnPosition)
+    const newCabinet = createCabinet(cabinetType, subcategoryId, {
+      productId,
+      productName,
+      fillerReturnPosition,
+      additionalProps: {
+        hideLockIcons: true,
+        parentCabinetId: cabinetId,
+        parentSide: side,
+      }
+    })
     if (!newCabinet) return
-
-    // Mark this filler/panel as added from modal to hide icons
-    newCabinet.hideLockIcons = true
-    // Store parent-child relationship
-    newCabinet.parentCabinetId = cabinetId
-    newCabinet.parentSide = side
 
     // Check if parent is overhead cabinet with overhang doors
     const isOverheadWithOverhang = parentCabinet.cabinetType === 'top' &&
@@ -642,15 +640,22 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     const effectiveWidth = maxX - minX
     const effectiveLeftX = minX
 
-    // Create kicker using the proper factory method (imported at top of file)
-    const kickerCabinetData = createCabinetEntry("kicker", subcategoryId, {
+    // Create kicker using createCabinet (same pattern as filler creation)
+    const kickerCabinet = createCabinet("kicker", subcategoryId, {
       productId,
       customDimensions: {
         width: effectiveWidth,
         height: kickerHeight,
         depth: parentCabinet.carcass.dimensions.depth,
       },
+      additionalProps: {
+        viewId: parentCabinet.viewId,
+        kickerParentCabinetId: cabinetId,
+        hideLockIcons: true,
+      }
     })
+
+    if (!kickerCabinet) return
 
     // Calculate world position for kicker
     const cabinetWorldPos = new THREE.Vector3()
@@ -666,23 +671,12 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
       cabinetWorldPos.z + kickerLocalZ
     )
 
-    kickerCabinetData.group.position.copy(kickerWorldPos)
-    kickerCabinetData.group.name = `kicker_${parentCabinet.cabinetId}`
-
-    // Add additional properties for the kicker cabinet
-    const extendedKickerData: CabinetData = {
-      ...kickerCabinetData,
-      viewId: parentCabinet.viewId,
-      kickerParentCabinetId: cabinetId,
-      hideLockIcons: true,
-    }
-
-    // Add to scene and cabinets array
-    addCabinet(extendedKickerData)
+    kickerCabinet.group.position.copy(kickerWorldPos)
+    kickerCabinet.group.name = `kicker_${parentCabinet.cabinetId}`
 
       // Store reference on parent cabinet
-      ; (parentCabinet.group as any).kickerCabinetData = extendedKickerData
-  }, [cabinets, wsProducts, addCabinet])
+      ; (parentCabinet.group as any).kickerCabinetData = kickerCabinet
+  }, [cabinets, wsProducts, createCabinet])
 
   // Handle kicker face removal for a specific cabinet
   // Note: Kicker creation is handled by handleKickerSelect with product association
@@ -806,15 +800,22 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
       const cabinetTopY = parentCabinet.group.position.y + parentCabinet.carcass.dimensions.height
       const bulkheadHeight = Math.max(0, wallDimensions.height - cabinetTopY)
 
-      // Create bulkhead using the proper factory method
-      const bulkheadCabinetData = createCabinetEntry("bulkhead", subcategoryId, {
+      // Create bulkhead using createCabinet (same pattern as filler creation)
+      const bulkheadCabinet = createCabinet("bulkhead", subcategoryId, {
         productId,
         customDimensions: {
           width: effectiveWidth,
           height: bulkheadHeight,
           depth: parentCabinet.carcass.dimensions.depth,
         },
+        additionalProps: {
+          viewId: parentCabinet.viewId,
+          bulkheadParentCabinetId: cabinetId,
+          hideLockIcons: true,
+        }
       })
+
+      if (!bulkheadCabinet) return
 
       // Calculate world position for bulkhead
       const cabinetWorldPos = new THREE.Vector3()
@@ -826,8 +827,8 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         cabinetWorldPos.z + parentCabinet.carcass.dimensions.depth - 16 / 2
       )
 
-      bulkheadCabinetData.group.position.copy(bulkheadWorldPos)
-      bulkheadCabinetData.group.name = `bulkhead_${parentCabinet.cabinetId}`
+      bulkheadCabinet.group.position.copy(bulkheadWorldPos)
+      bulkheadCabinet.group.name = `bulkhead_${parentCabinet.cabinetId}`
 
       // For overhead and tall cabinets, add return bulkheads via CarcassAssembly
       if (parentCabinet.cabinetType === 'top' || parentCabinet.cabinetType === 'tall') {
@@ -854,29 +855,18 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
 
         // Add returns via CarcassAssembly methods (returns are part of the bulkhead carcass)
         if (needsLeftReturn) {
-          bulkheadCabinetData.carcass.addBulkheadReturn('left', returnHeight, returnDepth, offsetX)
+          bulkheadCabinet.carcass.addBulkheadReturn('left', returnHeight, returnDepth, offsetX)
         }
 
         if (needsRightReturn) {
-          bulkheadCabinetData.carcass.addBulkheadReturn('right', returnHeight, returnDepth, offsetX)
+          bulkheadCabinet.carcass.addBulkheadReturn('right', returnHeight, returnDepth, offsetX)
         }
       }
 
-      // Add additional properties for the bulkhead cabinet
-      const extendedBulkheadData: CabinetData = {
-        ...bulkheadCabinetData,
-        viewId: parentCabinet.viewId,
-        bulkheadParentCabinetId: cabinetId,
-        hideLockIcons: true,
-      }
-
-      // Add to scene and cabinets array
-      addCabinet(extendedBulkheadData)
-
-        // Store reference on parent cabinet
-        ; (parentCabinet.group as any).bulkheadCabinetData = extendedBulkheadData
+      // Store reference on parent cabinet
+      ; (parentCabinet.group as any).bulkheadCabinetData = bulkheadCabinet
     })
-  }, [cabinets, wsProducts, wallDimensions, addCabinet])
+  }, [cabinets, wsProducts, wallDimensions, createCabinet])
 
   const propagateLockToPairedCabinets = useCallback(
     (sourceCabinetId: string, leftLock: boolean, rightLock: boolean) => {

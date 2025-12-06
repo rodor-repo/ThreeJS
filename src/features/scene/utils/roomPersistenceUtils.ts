@@ -7,7 +7,7 @@ import {
 } from "@/data/savedRooms"
 import { cabinetPanelState } from "@/features/cabinets/ui/ProductPanel"
 import type { WsProducts } from "@/types/erpTypes"
-import type { CabinetType } from "@/features/carcass"
+import type { CabinetType, CarcassDimensions } from "@/features/carcass"
 import type { CabinetData, WallDimensions as WallDims } from "../types"
 import type { View, ViewId, ViewManager } from "@/features/cabinets/ViewManager"
 import { getClient } from "@/app/QueryProvider"
@@ -91,8 +91,18 @@ async function prefetchProductData(productIds: string[]): Promise<void> {
 export type CreateCabinetFn = (
   cabinetType: CabinetType,
   subcategoryId: string,
-  productId?: string,
-  productName?: string
+  options?: {
+    productId?: string
+    productName?: string
+    fillerReturnPosition?: "left" | "right"
+    customDimensions?: Partial<CarcassDimensions>
+    additionalProps?: Partial<
+      Omit<
+        CabinetData,
+        "group" | "carcass" | "cabinetType" | "subcategoryId" | "cabinetId"
+      >
+    >
+  }
 ) => CabinetData | undefined
 
 interface SerializeRoomOptions {
@@ -313,8 +323,10 @@ export async function restoreRoom({
         const cabinetData = createCabinet(
           savedCabinet.cabinetType as CabinetType,
           savedCabinet.subcategoryId,
-          savedCabinet.productId,
-          savedCabinet.productName
+          {
+            productId: savedCabinet.productId,
+            productName: savedCabinet.productName,
+          }
         )
 
         if (!cabinetData) {

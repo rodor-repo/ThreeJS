@@ -1,9 +1,22 @@
 import { useEffect, type MutableRefObject, useRef } from "react"
 import type { Subcategory } from "@/components/categoriesData"
 import type { WsProducts } from "@/types/erpTypes"
-import type { CabinetType } from "@/features/carcass"
+import type { CabinetType, CarcassDimensions } from "@/features/carcass"
 import type { CabinetData } from "../types"
 import type * as THREE from "three"
+
+type CreateCabinetOptions = {
+  productId?: string
+  productName?: string
+  fillerReturnPosition?: "left" | "right"
+  customDimensions?: Partial<CarcassDimensions>
+  additionalProps?: Partial<
+    Omit<
+      CabinetData,
+      "group" | "carcass" | "cabinetType" | "subcategoryId" | "cabinetId"
+    >
+  >
+}
 
 type UseProductDrivenCreationOptions = {
   selectedSubcategory:
@@ -16,8 +29,7 @@ type UseProductDrivenCreationOptions = {
   createCabinet: (
     cabinetType: CabinetType,
     subcategoryId: string,
-    productId?: string,
-    productName?: string
+    options?: CreateCabinetOptions
   ) => CabinetData | undefined
   setSelectedCabinet: (cabinet: CabinetData | null) => void
 }
@@ -90,8 +102,10 @@ export const useProductDrivenCreation = ({
     const cabinetData = createCabinetRef.current(
       cabinetType,
       selectedSubcategory.subcategory.id,
-      selectedProductId,
-      productName
+      {
+        productId: selectedProductId,
+        productName,
+      }
     )
     if (cabinetData) setSelectedCabinetRef.current(cabinetData)
   }, [

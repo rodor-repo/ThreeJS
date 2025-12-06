@@ -395,9 +395,7 @@ function reachesMiddleWallFromRight(
 export function updateReturnBulkheads(
   overheadCabinet: CabinetData,
   allCabinets: CabinetData[],
-  wallDimensions: WallDimensions,
-  _addCabinet: (cabinet: CabinetData) => void,
-  _deleteCabinet: (cabinetId: string) => void
+  wallDimensions: WallDimensions
 ) {
   if (
     overheadCabinet.cabinetType !== "top" &&

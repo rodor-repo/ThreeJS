@@ -242,129 +242,47 @@ export const updateBulkheadPosition = (
   }
 
   // Update return bulkheads if they exist (for overhead and tall cabinets)
+  // Returns are now part of the bulkhead's CarcassAssembly
   if (
     parentCabinet.cabinetType === "top" ||
     parentCabinet.cabinetType === "tall"
   ) {
-    const returnBulkheadCabinets = allCabinets.filter(
-      (c) =>
-        c.cabinetType === "bulkhead" &&
-        c.bulkheadReturnParentCabinetId === parentCabinet.cabinetId
-    )
-
     const frontEdgeOffsetZ = parentDepth - 16 // Front edge offset 16mm toward negative Z
     const returnDepth = frontEdgeOffsetZ // Extends to Z=0 (back wall)
     const returnHeight = bulkheadHeight // Same height as main bulkhead
-    const returnThickness = 16
+    const offsetX = effectiveWidth / 2 // Distance from center to edge
 
-    const childCabinets = allCabinets.filter(
-      (c) =>
-        c.parentCabinetId === parentCabinet.cabinetId &&
-        (c.cabinetType === "filler" || c.cabinetType === "panel") &&
-        c.hideLockIcons === true
-    )
-
-    const effectiveLeftEdge =
-      childCabinets.length > 0
-        ? Math.min(
-            parentWorldPos.x,
-            ...childCabinets.map((c) => c.group.position.x)
-          )
-        : parentWorldPos.x
-
-    const effectiveRightEdge =
-      childCabinets.length > 0
-        ? Math.max(
-            parentWorldPos.x + parentCabinet.carcass.dimensions.width,
-            ...childCabinets.map(
-              (c) => c.group.position.x + c.carcass.dimensions.width
-            )
-          )
-        : parentWorldPos.x + parentCabinet.carcass.dimensions.width
-
-    // Update left return bulkhead
-    const leftReturnCabinet = returnBulkheadCabinets.find(
-      (c) => c.bulkheadReturnSide === "left"
-    )
-    // Get bulkhead return reference from parent cabinet group
-    const bulkheadReturnLeft = (parentCabinet.group as any).bulkheadReturnLeft
-    if (leftReturnCabinet && bulkheadReturnLeft) {
+    // Update left return bulkhead if it exists
+    if (bulkheadCabinet.carcass?.bulkheadReturnLeft) {
       if (
         changes.heightChanged ||
         changes.depthChanged ||
-        changes.positionChanged
-      ) {
-        if (typeof bulkheadReturnLeft.updateDimensions === "function") {
-          bulkheadReturnLeft.updateDimensions(
-            returnHeight,
-            returnDepth,
-            parentTopY,
-            returnThickness
-          )
-        }
-      }
-
-      const returnLeftWorldPos = new THREE.Vector3(
-        effectiveLeftEdge + returnThickness / 2, // Left edge + (thickness/2) to extend toward positive X
-        parentTopY + returnHeight / 2,
-        parentWorldPos.z + frontEdgeOffsetZ / 2
-      )
-
-      if (
         changes.positionChanged ||
-        changes.heightChanged ||
-        changes.depthChanged
+        changes.widthChanged
       ) {
-        leftReturnCabinet.group.position.copy(returnLeftWorldPos)
-
-        if (leftReturnCabinet.carcass) {
-          leftReturnCabinet.carcass.dimensions.width = returnThickness
-          leftReturnCabinet.carcass.dimensions.height = returnHeight
-          leftReturnCabinet.carcass.dimensions.depth = returnDepth
-        }
+        bulkheadCabinet.carcass.updateBulkheadReturn(
+          "left",
+          returnHeight,
+          returnDepth,
+          offsetX
+        )
       }
     }
 
-    // Update right return bulkhead
-    const rightReturnCabinet = returnBulkheadCabinets.find(
-      (c) => c.bulkheadReturnSide === "right"
-    )
-    // Get bulkhead return reference from parent cabinet group
-    const bulkheadReturnRight = (parentCabinet.group as any).bulkheadReturnRight
-    if (rightReturnCabinet && bulkheadReturnRight) {
+    // Update right return bulkhead if it exists
+    if (bulkheadCabinet.carcass?.bulkheadReturnRight) {
       if (
         changes.heightChanged ||
         changes.depthChanged ||
-        changes.positionChanged
-      ) {
-        if (typeof bulkheadReturnRight.updateDimensions === "function") {
-          bulkheadReturnRight.updateDimensions(
-            returnHeight,
-            returnDepth,
-            parentTopY,
-            returnThickness
-          )
-        }
-      }
-
-      const returnRightWorldPos = new THREE.Vector3(
-        effectiveRightEdge - returnThickness / 2, // Right edge - (thickness/2) to extend toward negative X
-        parentTopY + returnHeight / 2,
-        parentWorldPos.z + frontEdgeOffsetZ / 2
-      )
-
-      if (
         changes.positionChanged ||
-        changes.heightChanged ||
-        changes.depthChanged
+        changes.widthChanged
       ) {
-        rightReturnCabinet.group.position.copy(returnRightWorldPos)
-
-        if (rightReturnCabinet.carcass) {
-          rightReturnCabinet.carcass.dimensions.width = returnThickness
-          rightReturnCabinet.carcass.dimensions.height = returnHeight
-          rightReturnCabinet.carcass.dimensions.depth = returnDepth
-        }
+        bulkheadCabinet.carcass.updateBulkheadReturn(
+          "right",
+          returnHeight,
+          returnDepth,
+          offsetX
+        )
       }
     }
   }
@@ -472,13 +390,14 @@ function reachesMiddleWallFromRight(
 /**
  * Updates return bulkheads for overhead cabinets based on adjacent cabinet positions
  * Creates or removes return bulkheads as needed when cabinets are snapped
+ * Returns are now managed through the bulkhead's CarcassAssembly
  */
 export function updateReturnBulkheads(
   overheadCabinet: CabinetData,
   allCabinets: CabinetData[],
   wallDimensions: WallDimensions,
-  addCabinet: (cabinet: CabinetData) => void,
-  deleteCabinet: (cabinetId: string) => void
+  _addCabinet: (cabinet: CabinetData) => void,
+  _deleteCabinet: (cabinetId: string) => void
 ) {
   if (
     overheadCabinet.cabinetType !== "top" &&
@@ -529,237 +448,86 @@ export function updateReturnBulkheads(
   const currentCabinetDepth = overheadCabinet.carcass.dimensions.depth
 
   // Determine if left return should exist based on depth comparison rule
-  // Left return should be removed if:
-  // - Cabinet reaches left wall, OR
-  // - Cabinet reaches middle wall from left, OR
-  // - There's a left adjacent cabinet AND (current cabinet has smaller depth OR adjacent cabinet has bulkhead with smaller depth)
   let shouldHaveLeftReturn = !reachesLeft && !reachesMiddleFromLeft
   if (leftAdjacentCabinet) {
     const leftAdjacentDepth = leftAdjacentCabinet.carcass.dimensions.depth
-    // If current cabinet has smaller depth, remove its left return
-    // If current cabinet has larger depth, keep its left return (adjacent cabinet will remove its right return)
     if (currentCabinetDepth < leftAdjacentDepth) {
       shouldHaveLeftReturn = false
     }
-    // If depths are equal or current is larger, keep the return (will be handled when processing adjacent cabinet)
   }
 
   // Determine if right return should exist based on depth comparison rule
-  // Right return should be removed if:
-  // - Cabinet reaches right wall, OR
-  // - Cabinet reaches middle wall from right, OR
-  // - There's a right adjacent cabinet AND current cabinet has smaller depth
   let shouldHaveRightReturn = !reachesRight && !reachesMiddleFromRight
   if (rightAdjacentCabinet) {
     const rightAdjacentDepth = rightAdjacentCabinet.carcass.dimensions.depth
-    // If current cabinet has smaller depth, remove its right return
-    // If current cabinet has larger depth, keep its right return (adjacent cabinet will remove its left return)
     if (currentCabinetDepth < rightAdjacentDepth) {
       shouldHaveRightReturn = false
     }
-    // If depths are equal or current is larger, keep the return (will be handled when processing adjacent cabinet)
   }
 
-  // Get existing return bulkheads
-  const existingReturnBulkheads = allCabinets.filter(
+  // Calculate return dimensions
+  const cabinetTopY =
+    overheadCabinet.group.position.y + overheadCabinet.carcass.dimensions.height
+  const bulkheadHeight = Math.max(0, wallDimensions.height - cabinetTopY)
+  const frontEdgeOffsetZ = overheadCabinet.carcass.dimensions.depth - 16
+  const returnDepth = frontEdgeOffsetZ
+  const returnHeight = bulkheadHeight
+
+  // Calculate effective width for offset
+  const childCabinets = allCabinets.filter(
     (c) =>
-      c.cabinetType === "bulkhead" &&
-      c.bulkheadReturnParentCabinetId === overheadCabinet.cabinetId
+      c.parentCabinetId === overheadCabinet.cabinetId &&
+      (c.cabinetType === "filler" || c.cabinetType === "panel") &&
+      c.hideLockIcons === true
   )
 
-  const existingLeftReturn = existingReturnBulkheads.find(
-    (c) => c.bulkheadReturnSide === "left"
-  )
-  const existingRightReturn = existingReturnBulkheads.find(
-    (c) => c.bulkheadReturnSide === "right"
-  )
+  const cabinetWorldPos = new THREE.Vector3()
+  overheadCabinet.group.getWorldPosition(cabinetWorldPos)
+
+  let minX = cabinetWorldPos.x
+  let maxX = cabinetWorldPos.x + overheadCabinet.carcass.dimensions.width
+
+  childCabinets.forEach((child) => {
+    const childLeft = child.group.position.x
+    const childRight = child.group.position.x + child.carcass.dimensions.width
+    if (childLeft < minX) minX = childLeft
+    if (childRight > maxX) maxX = childRight
+  })
+
+  const effectiveWidth = maxX - minX
+  const offsetX = effectiveWidth / 2
+
+  // Check existing returns from carcass
+  const hasLeftReturn = !!bulkheadCabinet.carcass?.bulkheadReturnLeft
+  const hasRightReturn = !!bulkheadCabinet.carcass?.bulkheadReturnRight
 
   // Remove left return if it shouldn't exist
-  if (!shouldHaveLeftReturn && existingLeftReturn) {
-    // Get bulkhead return reference from parent cabinet group
-    const bulkheadReturn = (overheadCabinet.group as any).bulkheadReturnLeft
-    if (bulkheadReturn && typeof bulkheadReturn.dispose === "function") {
-      bulkheadReturn.dispose()
-    }
-    deleteCabinet(existingLeftReturn.cabinetId)
-    delete (overheadCabinet.group as any).bulkheadReturnLeft
-    delete (overheadCabinet.group as any).bulkheadReturnLeftCabinetData
+  if (!shouldHaveLeftReturn && hasLeftReturn) {
+    bulkheadCabinet.carcass?.removeBulkheadReturn("left")
   }
 
   // Remove right return if it shouldn't exist
-  if (!shouldHaveRightReturn && existingRightReturn) {
-    // Get bulkhead return reference from parent cabinet group
-    const bulkheadReturn = (overheadCabinet.group as any).bulkheadReturnRight
-    if (bulkheadReturn && typeof bulkheadReturn.dispose === "function") {
-      bulkheadReturn.dispose()
-    }
-    deleteCabinet(existingRightReturn.cabinetId)
-    delete (overheadCabinet.group as any).bulkheadReturnRight
-    delete (overheadCabinet.group as any).bulkheadReturnRightCabinetData
+  if (!shouldHaveRightReturn && hasRightReturn) {
+    bulkheadCabinet.carcass?.removeBulkheadReturn("right")
   }
 
-  // Create left return if needed and doesn't exist
-  if (shouldHaveLeftReturn && !existingLeftReturn) {
-    import("../../../carcass/parts/BulkheadReturn").then(
-      ({ BulkheadReturn }) => {
-        const cabinetTopY =
-          overheadCabinet.group.position.y +
-          overheadCabinet.carcass.dimensions.height
-        const bulkheadHeight = Math.max(0, wallDimensions.height - cabinetTopY)
-        const frontEdgeOffsetZ = overheadCabinet.carcass.dimensions.depth - 16
-        const returnDepth = frontEdgeOffsetZ
-        const returnHeight = bulkheadHeight
-        const returnThickness = 16
-
-        const childCabinets = allCabinets.filter(
-          (c) =>
-            c.parentCabinetId === overheadCabinet.cabinetId &&
-            (c.cabinetType === "filler" || c.cabinetType === "panel") &&
-            c.hideLockIcons === true
-        )
-
-        const cabinetWorldPos = new THREE.Vector3()
-        overheadCabinet.group.getWorldPosition(cabinetWorldPos)
-
-        const effectiveLeftEdge =
-          childCabinets.length > 0
-            ? Math.min(
-                cabinetWorldPos.x,
-                ...childCabinets.map((c) => c.group.position.x)
-              )
-            : cabinetWorldPos.x
-
-        const bulkheadReturnLeft = new BulkheadReturn({
-          height: returnHeight,
-          depth: returnDepth,
-          material: overheadCabinet.carcass.config.material.getMaterial(),
-        })
-
-        const returnLeftWorldPos = new THREE.Vector3(
-          effectiveLeftEdge + returnThickness / 2,
-          cabinetTopY + returnHeight / 2,
-          cabinetWorldPos.z + frontEdgeOffsetZ / 2
-        )
-
-        bulkheadReturnLeft.group.position.copy(returnLeftWorldPos)
-        bulkheadReturnLeft.group.name = `bulkheadReturnLeft_${overheadCabinet.cabinetId}`
-
-        const returnLeftDummyCarcass = {
-          dimensions: {
-            width: returnThickness,
-            height: returnHeight,
-            depth: returnDepth,
-          },
-          config: overheadCabinet.carcass.config,
-          updateDimensions: () => {},
-          updateKickerHeight: () => {},
-          updateKickerFace: () => {},
-        } as any
-
-        const returnLeftCabinetData: CabinetData = {
-          group: bulkheadReturnLeft.group,
-          carcass: returnLeftDummyCarcass,
-          cabinetType: "bulkhead",
-          subcategoryId: overheadCabinet.subcategoryId,
-          cabinetId: `bulkheadReturnLeft_${
-            overheadCabinet.cabinetId
-          }_${Date.now()}`,
-          viewId: overheadCabinet.viewId,
-          bulkheadReturnParentCabinetId: overheadCabinet.cabinetId,
-          bulkheadReturnSide: "left",
-          hideLockIcons: true,
-        }
-
-        addCabinet(returnLeftCabinetData)
-        ;(overheadCabinet.group as any).bulkheadReturnLeft = bulkheadReturnLeft
-        ;(overheadCabinet.group as any).bulkheadReturnLeftCabinetData =
-          returnLeftCabinetData
-      }
+  // Add left return if needed and doesn't exist
+  if (shouldHaveLeftReturn && !hasLeftReturn) {
+    bulkheadCabinet.carcass?.addBulkheadReturn(
+      "left",
+      returnHeight,
+      returnDepth,
+      offsetX
     )
   }
 
-  // Create right return if needed and doesn't exist
-  if (shouldHaveRightReturn && !existingRightReturn) {
-    import("../../../carcass/parts/BulkheadReturn").then(
-      ({ BulkheadReturn }) => {
-        const cabinetTopY =
-          overheadCabinet.group.position.y +
-          overheadCabinet.carcass.dimensions.height
-        const bulkheadHeight = Math.max(0, wallDimensions.height - cabinetTopY)
-        const frontEdgeOffsetZ = overheadCabinet.carcass.dimensions.depth - 16
-        const returnDepth = frontEdgeOffsetZ
-        const returnHeight = bulkheadHeight
-        const returnThickness = 16
-
-        const childCabinets = allCabinets.filter(
-          (c) =>
-            c.parentCabinetId === overheadCabinet.cabinetId &&
-            (c.cabinetType === "filler" || c.cabinetType === "panel") &&
-            c.hideLockIcons === true
-        )
-
-        const cabinetWorldPos = new THREE.Vector3()
-        overheadCabinet.group.getWorldPosition(cabinetWorldPos)
-
-        const cabinetMaxX =
-          cabinetWorldPos.x + overheadCabinet.carcass.dimensions.width
-        const effectiveRightEdge =
-          childCabinets.length > 0
-            ? Math.max(
-                cabinetMaxX,
-                ...childCabinets.map(
-                  (c) => c.group.position.x + c.carcass.dimensions.width
-                )
-              )
-            : cabinetMaxX
-
-        const bulkheadReturnRight = new BulkheadReturn({
-          height: returnHeight,
-          depth: returnDepth,
-          material: overheadCabinet.carcass.config.material.getMaterial(),
-        })
-
-        const returnRightWorldPos = new THREE.Vector3(
-          effectiveRightEdge - returnThickness / 2,
-          cabinetTopY + returnHeight / 2,
-          cabinetWorldPos.z + frontEdgeOffsetZ / 2
-        )
-
-        bulkheadReturnRight.group.position.copy(returnRightWorldPos)
-        bulkheadReturnRight.group.name = `bulkheadReturnRight_${overheadCabinet.cabinetId}`
-
-        const returnRightDummyCarcass = {
-          dimensions: {
-            width: returnThickness,
-            height: returnHeight,
-            depth: returnDepth,
-          },
-          config: overheadCabinet.carcass.config,
-          updateDimensions: () => {},
-          updateKickerHeight: () => {},
-          updateKickerFace: () => {},
-        } as any
-
-        const returnRightCabinetData: CabinetData = {
-          group: bulkheadReturnRight.group,
-          carcass: returnRightDummyCarcass,
-          cabinetType: "bulkhead",
-          subcategoryId: overheadCabinet.subcategoryId,
-          cabinetId: `bulkheadReturnRight_${
-            overheadCabinet.cabinetId
-          }_${Date.now()}`,
-          viewId: overheadCabinet.viewId,
-          bulkheadReturnParentCabinetId: overheadCabinet.cabinetId,
-          bulkheadReturnSide: "right",
-          hideLockIcons: true,
-        }
-
-        addCabinet(returnRightCabinetData)
-        ;(overheadCabinet.group as any).bulkheadReturnRight =
-          bulkheadReturnRight
-        ;(overheadCabinet.group as any).bulkheadReturnRightCabinetData =
-          returnRightCabinetData
-      }
+  // Add right return if needed and doesn't exist
+  if (shouldHaveRightReturn && !hasRightReturn) {
+    bulkheadCabinet.carcass?.addBulkheadReturn(
+      "right",
+      returnHeight,
+      returnDepth,
+      offsetX
     )
   }
 }

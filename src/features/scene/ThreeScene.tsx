@@ -739,46 +739,15 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     )
 
     if (existingBulkheadCabinet) {
-      // Dispose the bulkhead face via carcass
-      const bulkheadFace = existingBulkheadCabinet.carcass?.bulkheadFace
-      if (bulkheadFace && typeof bulkheadFace.dispose === 'function') {
-        bulkheadFace.dispose()
-      }
+      // Dispose entire bulkhead carcass (includes face and returns)
+      // CarcassAssembly.dispose() handles all cleanup
+      existingBulkheadCabinet.carcass?.dispose()
 
       // Remove bulkhead using deleteCabinet method
       deleteCabinet(existingBulkheadCabinet.cabinetId)
 
       // Clean up references on parent cabinet group
-      delete (cabinet.group as any).bulkheadFace
       delete (cabinet.group as any).bulkheadCabinetData
-
-      // Also remove return bulkheads if they exist
-      const existingReturnBulkheadCabinets = cabinets.filter(
-        (c) => c.cabinetType === 'bulkhead' && c.bulkheadReturnParentCabinetId === cabinetId
-      )
-      existingReturnBulkheadCabinets.forEach((returnCabinet) => {
-        // Dispose the return mesh group
-        if (returnCabinet.group) {
-          returnCabinet.group.traverse((child) => {
-            if (child instanceof THREE.Mesh) {
-              child.geometry?.dispose()
-              if (Array.isArray(child.material)) {
-                child.material.forEach(m => m.dispose())
-              } else if (child.material) {
-                child.material.dispose()
-              }
-            }
-          })
-        }
-        deleteCabinet(returnCabinet.cabinetId)
-        if (returnCabinet.bulkheadReturnSide === 'left') {
-          delete (cabinet.group as any).bulkheadReturnLeft
-          delete (cabinet.group as any).bulkheadReturnLeftCabinetData
-        } else if (returnCabinet.bulkheadReturnSide === 'right') {
-          delete (cabinet.group as any).bulkheadReturnRight
-          delete (cabinet.group as any).bulkheadReturnRightCabinetData
-        }
-      })
     }
   }, [cabinets, deleteCabinet])
 
@@ -801,11 +770,8 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
 
     const subcategoryId = productEntry.subCategoryId
 
-    // Import BulkheadReturn and helper functions dynamically for returns (main bulkhead uses factory)
-    Promise.all([
-      import('../carcass/parts/BulkheadReturn'),
-      import('./utils/handlers/bulkheadPositionHandler')
-    ]).then(([{ BulkheadReturn }, { hasLeftAdjacentCabinet, hasRightAdjacentCabinet }]) => {
+    // Import helper functions dynamically
+    import('./utils/handlers/bulkheadPositionHandler').then(({ hasLeftAdjacentCabinet, hasRightAdjacentCabinet }) => {
       // Check if bulkhead already exists
       const existingBulkheadCabinet = cabinets.find(
         (c) => c.cabinetType === 'bulkhead' && c.bulkheadParentCabinetId === cabinetId
@@ -863,21 +829,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
       bulkheadCabinetData.group.position.copy(bulkheadWorldPos)
       bulkheadCabinetData.group.name = `bulkhead_${parentCabinet.cabinetId}`
 
-      // Add additional properties for the bulkhead cabinet
-      const extendedBulkheadData: CabinetData = {
-        ...bulkheadCabinetData,
-        viewId: parentCabinet.viewId,
-        bulkheadParentCabinetId: cabinetId,
-        hideLockIcons: true,
-      }
-
-      // Add to scene and cabinets array
-      addCabinet(extendedBulkheadData)
-
-        // Store reference on parent cabinet
-        ; (parentCabinet.group as any).bulkheadCabinetData = extendedBulkheadData
-
-      // For overhead and tall cabinets, check if we need return bulkheads
+      // For overhead and tall cabinets, add return bulkheads via CarcassAssembly
       if (parentCabinet.cabinetType === 'top' || parentCabinet.cabinetType === 'tall') {
         const leftAdjacentCabinet = hasLeftAdjacentCabinet(parentCabinet, cabinets)
         const rightAdjacentCabinet = hasRightAdjacentCabinet(parentCabinet, cabinets)
@@ -898,92 +850,31 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         const frontEdgeOffsetZ = parentCabinet.carcass.dimensions.depth - 16
         const returnDepth = frontEdgeOffsetZ
         const returnHeight = bulkheadHeight
-        const returnThickness = 16
+        const offsetX = effectiveWidth / 2 // Distance from center to edge
 
-        // Create left return bulkhead if needed
+        // Add returns via CarcassAssembly methods (returns are part of the bulkhead carcass)
         if (needsLeftReturn) {
-          const bulkheadReturnLeft = new BulkheadReturn({
-            height: returnHeight,
-            depth: returnDepth,
-            material: parentCabinet.carcass.config.material.getMaterial(),
-          })
-
-          const returnLeftWorldPos = new THREE.Vector3(
-            minX + returnThickness / 2,
-            cabinetTopY + returnHeight / 2,
-            cabinetWorldPos.z + frontEdgeOffsetZ / 2
-          )
-
-          bulkheadReturnLeft.group.position.copy(returnLeftWorldPos)
-          bulkheadReturnLeft.group.name = `bulkheadReturnLeft_${parentCabinet.cabinetId}`
-
-          // Create return bulkhead using factory method
-          const returnLeftCabinetData = createCabinetEntry("bulkhead", subcategoryId, {
-            productId,
-            customDimensions: {
-              width: returnThickness,
-              height: returnHeight,
-              depth: returnDepth,
-            },
-          })
-
-          // Override the group with the BulkheadReturn group and add properties
-          const extendedReturnLeftData: CabinetData = {
-            ...returnLeftCabinetData,
-            group: bulkheadReturnLeft.group,
-            viewId: parentCabinet.viewId,
-            bulkheadReturnParentCabinetId: cabinetId,
-            bulkheadReturnSide: 'left',
-            hideLockIcons: true,
-          }
-
-          addCabinet(extendedReturnLeftData)
-            ; (parentCabinet.group as any).bulkheadReturnLeft = bulkheadReturnLeft
-            ; (parentCabinet.group as any).bulkheadReturnLeftCabinetData = extendedReturnLeftData
+          bulkheadCabinetData.carcass.addBulkheadReturn('left', returnHeight, returnDepth, offsetX)
         }
 
-        // Create right return bulkhead if needed
         if (needsRightReturn) {
-          const bulkheadReturnRight = new BulkheadReturn({
-            height: returnHeight,
-            depth: returnDepth,
-            material: parentCabinet.carcass.config.material.getMaterial(),
-          })
-
-          const returnRightWorldPos = new THREE.Vector3(
-            maxX - returnThickness / 2,
-            cabinetTopY + returnHeight / 2,
-            cabinetWorldPos.z + frontEdgeOffsetZ / 2
-          )
-
-          bulkheadReturnRight.group.position.copy(returnRightWorldPos)
-          bulkheadReturnRight.group.name = `bulkheadReturnRight_${parentCabinet.cabinetId}`
-
-          // Create return bulkhead using factory method
-          const returnRightCabinetData = createCabinetEntry("bulkhead", subcategoryId, {
-            productId,
-            customDimensions: {
-              width: returnThickness,
-              height: returnHeight,
-              depth: returnDepth,
-            },
-          })
-
-          // Override the group with the BulkheadReturn group and add properties
-          const extendedReturnRightData: CabinetData = {
-            ...returnRightCabinetData,
-            group: bulkheadReturnRight.group,
-            viewId: parentCabinet.viewId,
-            bulkheadReturnParentCabinetId: cabinetId,
-            bulkheadReturnSide: 'right',
-            hideLockIcons: true,
-          }
-
-          addCabinet(extendedReturnRightData)
-            ; (parentCabinet.group as any).bulkheadReturnRight = bulkheadReturnRight
-            ; (parentCabinet.group as any).bulkheadReturnRightCabinetData = extendedReturnRightData
+          bulkheadCabinetData.carcass.addBulkheadReturn('right', returnHeight, returnDepth, offsetX)
         }
       }
+
+      // Add additional properties for the bulkhead cabinet
+      const extendedBulkheadData: CabinetData = {
+        ...bulkheadCabinetData,
+        viewId: parentCabinet.viewId,
+        bulkheadParentCabinetId: cabinetId,
+        hideLockIcons: true,
+      }
+
+      // Add to scene and cabinets array
+      addCabinet(extendedBulkheadData)
+
+        // Store reference on parent cabinet
+        ; (parentCabinet.group as any).bulkheadCabinetData = extendedBulkheadData
     })
   }, [cabinets, wsProducts, wallDimensions, addCabinet])
 

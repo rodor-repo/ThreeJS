@@ -12,6 +12,7 @@ import { CarcassFront } from "./parts/CarcassFront"
 import { DrawerHeightManager } from "./parts/DrawerHeightManager"
 import { KickerFace } from "./parts/KickerFace"
 import { BulkheadFace } from "./parts/BulkheadFace"
+import { BulkheadReturn } from "./parts/BulkheadReturn"
 import { CarcassMaterial, CarcassMaterialData } from "./Material"
 import { DoorMaterial } from "./DoorMaterial"
 import { MaterialLoader } from "./MaterialLoader"
@@ -92,6 +93,8 @@ export class CarcassAssembly {
   // Kicker and bulkhead specific parts
   private _kickerFace?: KickerFace // For kicker type cabinet
   private _bulkheadFace?: BulkheadFace // For bulkhead type cabinet
+  private _bulkheadReturnLeft?: BulkheadReturn // Left return for bulkhead cabinet
+  private _bulkheadReturnRight?: BulkheadReturn // Right return for bulkhead cabinet
 
   public productId!: string
   public cabinetId!: string
@@ -109,6 +112,20 @@ export class CarcassAssembly {
    */
   public get bulkheadFace(): BulkheadFace | undefined {
     return this._bulkheadFace
+  }
+
+  /**
+   * Get the left bulkhead return if this is a bulkhead cabinet
+   */
+  public get bulkheadReturnLeft(): BulkheadReturn | undefined {
+    return this._bulkheadReturnLeft
+  }
+
+  /**
+   * Get the right bulkhead return if this is a bulkhead cabinet
+   */
+  public get bulkheadReturnRight(): BulkheadReturn | undefined {
+    return this._bulkheadReturnRight
   }
 
   constructor(
@@ -355,6 +372,103 @@ export class CarcassAssembly {
 
     // Position at origin
     this.group.position.set(0, 0, 0)
+  }
+
+  /**
+   * Add a bulkhead return panel (left or right side)
+   * Returns are perpendicular panels that extend from the bulkhead face to the back wall
+   * @param side - 'left' or 'right' side
+   * @param height - Height of the return (same as bulkhead face height)
+   * @param depth - Depth of the return (from front edge to back wall)
+   * @param offsetX - X offset from bulkhead center to position the return
+   */
+  public addBulkheadReturn(
+    side: "left" | "right",
+    height: number,
+    depth: number,
+    offsetX: number
+  ): void {
+    if (this.cabinetType !== "bulkhead") return
+
+    const thickness = 16 // Standard return thickness
+
+    const bulkheadReturn = new BulkheadReturn({
+      height,
+      depth,
+      thickness,
+      material: this.config.material.getMaterial(),
+    })
+
+    // Position the return relative to the bulkhead face
+    // The bulkhead face is centered at origin, returns are positioned at left/right edges
+    // offsetX is the distance from center to the edge where return should be placed
+    if (side === "left") {
+      bulkheadReturn.group.position.x = -offsetX + thickness / 2
+      this._bulkheadReturnLeft = bulkheadReturn
+    } else {
+      bulkheadReturn.group.position.x = offsetX - thickness / 2
+      this._bulkheadReturnRight = bulkheadReturn
+    }
+
+    // Position in Z: return extends from front edge (where bulkhead face is) toward back wall
+    // The return's center.z should be at half the depth, offset from the face
+    bulkheadReturn.group.position.z = -depth / 2
+
+    // Y position same as bulkhead face (centered vertically)
+    bulkheadReturn.group.position.y = 0
+
+    this.group.add(bulkheadReturn.group)
+  }
+
+  /**
+   * Remove a bulkhead return panel
+   * @param side - 'left' or 'right' side
+   */
+  public removeBulkheadReturn(side: "left" | "right"): void {
+    if (this.cabinetType !== "bulkhead") return
+
+    if (side === "left" && this._bulkheadReturnLeft) {
+      this.group.remove(this._bulkheadReturnLeft.group)
+      this._bulkheadReturnLeft.dispose()
+      this._bulkheadReturnLeft = undefined
+    } else if (side === "right" && this._bulkheadReturnRight) {
+      this.group.remove(this._bulkheadReturnRight.group)
+      this._bulkheadReturnRight.dispose()
+      this._bulkheadReturnRight = undefined
+    }
+  }
+
+  /**
+   * Update a bulkhead return panel dimensions
+   * @param side - 'left' or 'right' side
+   * @param height - New height
+   * @param depth - New depth
+   * @param offsetX - New X offset from center
+   */
+  public updateBulkheadReturn(
+    side: "left" | "right",
+    height: number,
+    depth: number,
+    offsetX: number
+  ): void {
+    if (this.cabinetType !== "bulkhead") return
+
+    const thickness = 16
+    const bulkheadReturn =
+      side === "left" ? this._bulkheadReturnLeft : this._bulkheadReturnRight
+
+    if (!bulkheadReturn) return
+
+    // Update dimensions
+    bulkheadReturn.updateDimensions(height, depth, 0, thickness)
+
+    // Update position
+    if (side === "left") {
+      bulkheadReturn.group.position.x = -offsetX + thickness / 2
+    } else {
+      bulkheadReturn.group.position.x = offsetX - thickness / 2
+    }
+    bulkheadReturn.group.position.z = -depth / 2
   }
 
   private createEndPanels(): void {
@@ -1099,6 +1213,26 @@ export class CarcassAssembly {
     if (this.fillerReturn) {
       this.fillerReturn.dispose()
       this.fillerReturn = undefined
+    }
+
+    // Dispose bulkhead specific parts
+    if (this._bulkheadFace) {
+      this._bulkheadFace.dispose()
+      this._bulkheadFace = undefined
+    }
+    if (this._bulkheadReturnLeft) {
+      this._bulkheadReturnLeft.dispose()
+      this._bulkheadReturnLeft = undefined
+    }
+    if (this._bulkheadReturnRight) {
+      this._bulkheadReturnRight.dispose()
+      this._bulkheadReturnRight = undefined
+    }
+
+    // Dispose kicker specific parts
+    if (this._kickerFace) {
+      this._kickerFace.dispose()
+      this._kickerFace = undefined
     }
 
     // Dispose traditional carcass parts (only if they exist)

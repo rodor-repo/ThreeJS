@@ -80,11 +80,6 @@ export function createCabinetDimensionLines(
 ): THREE.Group {
   const group = new THREE.Group()
   
-  // Skip dimension lines for return bulkheads (left and right)
-  if (cabinet.cabinetType === 'bulkhead' && cabinet.bulkheadReturnSide) {
-    return group // Return empty group, no dimension lines
-  }
-  
   const color = DIMENSION_CONSTANTS.colors.cabinet
   const arrowColor = DIMENSION_CONSTANTS.colors.arrow
   const lineWidth = DIMENSION_CONSTANTS.defaults.lineWidth

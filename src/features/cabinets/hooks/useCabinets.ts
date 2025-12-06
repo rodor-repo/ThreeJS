@@ -77,7 +77,31 @@ export const useCabinets = (
 
   const clearCabinets = useCallback(() => {
     if (!sceneRef.current) return
-    cabinets.forEach((c) => sceneRef.current!.remove(c.group))
+    
+    // Properly dispose of each cabinet's resources
+    cabinets.forEach((c) => {
+      // Remove from scene
+      sceneRef.current!.remove(c.group)
+      
+      // Dispose of geometry and materials to free GPU memory
+      c.group.traverse((child) => {
+        const anyChild = child as any
+        if (anyChild.geometry) {
+          anyChild.geometry.dispose()
+        }
+        if (anyChild.material) {
+          if (Array.isArray(anyChild.material)) {
+            anyChild.material.forEach((m: THREE.Material) => m.dispose())
+          } else {
+            (anyChild.material as THREE.Material).dispose()
+          }
+        }
+      })
+      
+      // Clean up cabinet panel state
+      cabinetPanelState.delete(c.cabinetId)
+    })
+    
     setCabinets([])
     setCabinetCounter(0)
     setSortNumberCounter(1) // Reset sort number counter
@@ -260,7 +284,7 @@ export const useCabinets = (
         setShowProductPanel(false)
       }
     },
-    [sceneRef, cabinets, selectedCabinet]
+    [sceneRef, cabinets, selectedCabinets]
   )
 
   return {

@@ -387,6 +387,25 @@ export const useSceneInteractions = (
               clampedY,
               cabinetInView.group.position.z
             )
+
+            // Update child cabinets (fillers/panels) when cabinet in view moves
+            updateChildCabinets(cabinetInView, cabinets, {
+              positionChanged: true
+            })
+
+            // Update kicker position when cabinet in view moves
+            if (cabinetInView.cabinetType === 'base' || cabinetInView.cabinetType === 'tall') {
+              updateKickerPosition(cabinetInView, cabinets, {
+                positionChanged: true
+              })
+            }
+
+            // Update bulkhead position when cabinet in view moves
+            if (cabinetInView.cabinetType === 'base' || cabinetInView.cabinetType === 'top' || cabinetInView.cabinetType === 'tall') {
+              updateBulkheadPosition(cabinetInView, cabinets, wallDimensions, {
+                positionChanged: true
+              })
+            }
           }
         })
 

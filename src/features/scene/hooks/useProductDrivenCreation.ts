@@ -95,6 +95,7 @@ export const useProductDrivenCreation = ({
       wardrobe: "wardrobe",
       bulkhead: "bulkhead",
       kicker: "kicker",
+      benchtop: "benchtop",
     }
 
     const cabinetType = legacyCategoryMap[type3D] || "base"

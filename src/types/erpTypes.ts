@@ -214,7 +214,7 @@ export type WsProducts = {
       indexPhotoAlt?: string
 
       // 3D related
-      type3D?: "base" | "tall" | "overhead" | "panel" | "filler" | "wardrobe" | "kicker" | "bulkhead"
+      type3D?: "base" | "tall" | "overhead" | "panel" | "filler" | "wardrobe" | "kicker" | "bulkhead" | "benchtop"
       features3D?: ("fingerPull90" | "fingerPullBevel" | "drawer")[]
     }
   }

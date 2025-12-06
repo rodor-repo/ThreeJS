@@ -40,6 +40,7 @@ export type CabinetType =
   | "wardrobe"
   | "kicker"
   | "bulkhead"
+  | "benchtop"
 
 export type CabinetData = {
   group: THREE.Group

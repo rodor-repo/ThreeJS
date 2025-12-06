@@ -24,6 +24,7 @@ const defaultDimensions: Defaults = {
   kicker: { width: 600, height: 150, depth: 16 },
   // Bulkhead: width = cabinet width, height = gap to ceiling, depth = thickness (16mm)
   bulkhead: { width: 600, height: 200, depth: 16 },
+  benchtop: { width: 2000, height: 40, depth: 600 }, // Standard benchtop size
 }
 
 export const createCabinet = (

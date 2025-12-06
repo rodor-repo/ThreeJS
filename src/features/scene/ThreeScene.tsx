@@ -673,9 +673,6 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
 
     kickerCabinet.group.position.copy(kickerWorldPos)
     kickerCabinet.group.name = `kicker_${parentCabinet.cabinetId}`
-
-      // Store reference on parent cabinet
-      ; (parentCabinet.group as any).kickerCabinetData = kickerCabinet
   }, [cabinets, wsProducts, createCabinet])
 
   // Handle kicker face removal for a specific cabinet
@@ -706,10 +703,6 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
 
       // Remove kicker using deleteCabinet method
       deleteCabinet(existingKickerCabinet.cabinetId)
-
-      // Clean up references on parent cabinet group
-      delete (cabinet.group as any).kickerFace
-      delete (cabinet.group as any).kickerCabinetData
     }
   }, [cabinets, deleteCabinet])
 
@@ -739,9 +732,6 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
 
       // Remove bulkhead using deleteCabinet method
       deleteCabinet(existingBulkheadCabinet.cabinetId)
-
-      // Clean up references on parent cabinet group
-      delete (cabinet.group as any).bulkheadCabinetData
     }
   }, [cabinets, deleteCabinet])
 
@@ -862,9 +852,6 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
           bulkheadCabinet.carcass.addBulkheadReturn('right', returnHeight, returnDepth, offsetX)
         }
       }
-
-      // Store reference on parent cabinet
-      ; (parentCabinet.group as any).bulkheadCabinetData = bulkheadCabinet
     })
   }, [cabinets, wsProducts, wallDimensions, createCabinet])
 

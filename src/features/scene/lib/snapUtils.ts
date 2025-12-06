@@ -2,6 +2,20 @@ import type { CabinetData } from "../types"
 import { WALL_THICKNESS } from "./sceneUtils"
 
 /**
+ * Cabinet types that should be excluded from snap detection.
+ * Kickers and bulkheads are "accessory" cabinets that follow their parent cabinets
+ * and should not be snap targets themselves.
+ */
+const EXCLUDED_SNAP_TYPES = ["kicker", "bulkhead"] as const
+
+/**
+ * Checks if a cabinet should be excluded from snap detection
+ */
+function isExcludedFromSnap(cabinet: CabinetData): boolean {
+  return EXCLUDED_SNAP_TYPES.includes(cabinet.cabinetType as typeof EXCLUDED_SNAP_TYPES[number])
+}
+
+/**
  * Represents a potential snap point that a cabinet can snap to
  */
 export type SnapPoint = {
@@ -72,7 +86,11 @@ export function calculateSnapPosition(
 ): SnapResult {
   // Filter out the dragged cabinet from others using cabinetId
   // to handle stale references
-  const others = otherCabinets.filter((cab) => cab.cabinetId !== draggedCabinet.cabinetId)
+  // Also filter out kickers and bulkheads - they are "accessory" cabinets that follow their parents
+  // and should not be snap targets themselves
+  const others = otherCabinets.filter(
+    (cab) => cab.cabinetId !== draggedCabinet.cabinetId && !isExcludedFromSnap(cab)
+  )
 
   // Use provided allCabinets or fall back to others + dragged
   const fullCabinetsList = allCabinets || [draggedCabinet, ...others]

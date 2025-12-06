@@ -12,7 +12,14 @@ const EXCLUDED_SNAP_TYPES = ["kicker", "bulkhead"] as const
  * Checks if a cabinet should be excluded from snap detection
  */
 function isExcludedFromSnap(cabinet: CabinetData): boolean {
-  return EXCLUDED_SNAP_TYPES.includes(cabinet.cabinetType as typeof EXCLUDED_SNAP_TYPES[number])
+  if (EXCLUDED_SNAP_TYPES.includes(cabinet.cabinetType as typeof EXCLUDED_SNAP_TYPES[number])) {
+    return true
+  }
+  // Exclude child fillers/panels from being snap targets themselves
+  if (cabinet.parentCabinetId && (cabinet.cabinetType === 'filler' || cabinet.cabinetType === 'panel')) {
+    return true
+  }
+  return false
 }
 
 /**
@@ -112,7 +119,8 @@ export function calculateSnapPosition(
       targetX,
       targetY,
       additionalWalls,
-      config
+      config,
+      fullCabinetsList
     )
     snapPoints.push(...wallSnapPoints)
   }
@@ -180,6 +188,44 @@ export function calculateSnapPosition(
 }
 
 /**
+ * Get the effective bounds of a cabinet relative to its own position, considering child fillers/panels
+ * Returns offsets from the cabinet's origin (x=0)
+ */
+function getCabinetRelativeEffectiveBounds(cabinet: CabinetData, allCabinets: CabinetData[]): { leftOffset: number; rightOffset: number } {
+  const parentWidth = cabinet.carcass.dimensions.width
+  
+  let minRelLeft = 0
+  let maxRelRight = parentWidth
+
+  // Find child fillers/panels
+  for (const c of allCabinets) {
+    if (
+      c.parentCabinetId === cabinet.cabinetId &&
+      (c.cabinetType === 'filler' || c.cabinetType === 'panel') &&
+      c.hideLockIcons === true
+    ) {
+      const childWidth = c.carcass.dimensions.width
+      
+      // Calculate relative position based on side
+      // This is more robust than using group.position which might be lagging during drag
+      if (c.parentSide === 'left') {
+        const relX = -childWidth
+        if (relX < minRelLeft) {
+          minRelLeft = relX
+        }
+      } else if (c.parentSide === 'right') {
+        const relX = parentWidth + childWidth
+        if (relX > maxRelRight) {
+          maxRelRight = relX
+        }
+      }
+    }
+  }
+
+  return { leftOffset: minRelLeft, rightOffset: maxRelRight }
+}
+
+/**
  * Get the effective left edge (lowest X) of a cabinet, considering child fillers/panels
  * Optimized to avoid unnecessary filtering
  */
@@ -194,7 +240,9 @@ export function getEffectiveLeftEdge(cabinet: CabinetData, allCabinets: CabinetD
       (c.cabinetType === 'filler' || c.cabinetType === 'panel') &&
       c.hideLockIcons === true
     ) {
-      const childLeft = c.group.position.x
+      // Calculate based on parent position and child width
+      // More robust than using child position directly
+      const childLeft = cabinet.group.position.x - c.carcass.dimensions.width
       if (childLeft < minLeft) {
         minLeft = childLeft
       }
@@ -220,7 +268,8 @@ export function getEffectiveRightEdge(cabinet: CabinetData, allCabinets: Cabinet
       (c.cabinetType === 'filler' || c.cabinetType === 'panel') &&
       c.hideLockIcons === true
     ) {
-      const childRight = c.group.position.x + c.carcass.dimensions.width
+      // Calculate based on parent position and child width
+      const childRight = cabinetRight + c.carcass.dimensions.width
       if (childRight > maxRight) {
         maxRight = childRight
       }
@@ -242,22 +291,19 @@ function detectSnapPoints(
   allCabinets: CabinetData[]
 ): SnapPoint[] {
   const snapPoints: SnapPoint[] = []
-  const draggedWidth = draggedCabinet.carcass.dimensions.width
   const draggedHeight = draggedCabinet.carcass.dimensions.height
 
   // Calculate dragged cabinet edges at target position
   // Use effective edges that consider child fillers/panels for the dragged cabinet
-  // Note: We use targetX for the base position, but need to account for children
-  // For now, use the base position - children will move with parent during drag
-  const draggedLeft = targetX
-  const draggedRight = targetX + draggedWidth
+  const { leftOffset, rightOffset } = getCabinetRelativeEffectiveBounds(draggedCabinet, allCabinets)
+  
+  const draggedLeft = targetX + leftOffset
+  const draggedRight = targetX + rightOffset
   const draggedBottom = targetY
   const draggedTop = targetY + draggedHeight
 
   for (const other of otherCabinets) {
-    const otherX = other.group.position.x
     const otherY = other.group.position.y
-    const otherWidth = other.carcass.dimensions.width
     const otherHeight = other.carcass.dimensions.height
 
     // Use effective edges that consider child fillers/panels
@@ -274,7 +320,7 @@ function detectSnapPoints(
       if (leftToRightDist <= config.threshold) {
         snapPoints.push({
           type: "edge-right",
-          position: { x: otherRight },
+          position: { x: otherRight - leftOffset },
           distance: leftToRightDist,
           targetCabinet: other,
         })
@@ -286,7 +332,7 @@ function detectSnapPoints(
       if (rightToLeftDist <= config.threshold) {
         snapPoints.push({
           type: "edge-left",
-          position: { x: otherLeft - draggedWidth },
+          position: { x: otherLeft - rightOffset },
           distance: rightToLeftDist,
           targetCabinet: other,
         })
@@ -331,14 +377,15 @@ function detectWallSnapPoints(
   targetX: number,
   targetY: number,
   additionalWalls: Array<{ id: string; length: number; distanceFromLeft: number; thickness?: number }>,
-  config: SnapConfig
+  config: SnapConfig,
+  allCabinets: CabinetData[]
 ): SnapPoint[] {
   const snapPoints: SnapPoint[] = []
-  const draggedWidth = draggedCabinet.carcass.dimensions.width
 
   // Calculate dragged cabinet edges at target position
-  const draggedLeft = targetX
-  const draggedRight = targetX + draggedWidth
+  const { leftOffset, rightOffset } = getCabinetRelativeEffectiveBounds(draggedCabinet, allCabinets)
+  const draggedLeft = targetX + leftOffset
+  const draggedRight = targetX + rightOffset
 
   for (const wall of additionalWalls) {
     // Wall thickness defaults to WALL_THICKNESS if not specified
@@ -354,7 +401,7 @@ function detectWallSnapPoints(
       if (leftToRightDist <= config.threshold) {
         snapPoints.push({
           type: "edge-right",
-          position: { x: wallRight },
+          position: { x: wallRight - leftOffset },
           distance: leftToRightDist,
           targetCabinet: draggedCabinet, // Use dragged cabinet as placeholder (walls don't have CabinetData)
         })
@@ -366,7 +413,7 @@ function detectWallSnapPoints(
       if (rightToLeftDist <= config.threshold) {
         snapPoints.push({
           type: "edge-left",
-          position: { x: wallLeft - draggedWidth },
+          position: { x: wallLeft - rightOffset },
           distance: rightToLeftDist,
           targetCabinet: draggedCabinet, // Use dragged cabinet as placeholder (walls don't have CabinetData)
         })
@@ -425,18 +472,16 @@ function checkOverlap(
   minGap: number,
   allCabinets: CabinetData[]
 ): boolean {
-  const draggedWidth = draggedCabinet.carcass.dimensions.width
   const draggedHeight = draggedCabinet.carcass.dimensions.height
 
-  const draggedLeft = x - minGap
-  const draggedRight = x + draggedWidth + minGap
+  const { leftOffset, rightOffset } = getCabinetRelativeEffectiveBounds(draggedCabinet, allCabinets)
+  const draggedLeft = x + leftOffset - minGap
+  const draggedRight = x + rightOffset + minGap
   const draggedBottom = y - minGap
   const draggedTop = y + draggedHeight + minGap
 
   for (const other of otherCabinets) {
-    const otherX = other.group.position.x
     const otherY = other.group.position.y
-    const otherWidth = other.carcass.dimensions.width
     const otherHeight = other.carcass.dimensions.height
 
     // Use effective edges that consider child fillers/panels

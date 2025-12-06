@@ -20,6 +20,10 @@ const defaultDimensions: Defaults = {
   // width = panel thickness (16mm), height = panel height, depth = panel face width (100mm)
   // For L-shape filler: width = face panel width (the gap), depth is ignored (return is always 40mm total)
   filler: { width: 16, height: 720, depth: 100 },
+  // Kicker: width = cabinet width, height = kicker height (leg height), depth = thickness (16mm)
+  kicker: { width: 600, height: 150, depth: 16 },
+  // Bulkhead: width = cabinet width, height = gap to ceiling, depth = thickness (16mm)
+  bulkhead: { width: 600, height: 200, depth: 16 },
 }
 
 export const createCabinet = (
@@ -163,6 +167,32 @@ export const createCabinet = (
           drawerQuantity: opts?.wardrobeDrawerQuantity ?? 0, // Default 2 drawers
           wardrobeDrawerHeight: opts?.wardrobeDrawerHeight ?? 220, // Fixed 220mm drawer height
           wardrobeDrawerBuffer: opts?.wardrobeDrawerBuffer ?? 50, // 50mm buffer
+        },
+        productId,
+        cabinetId
+      )
+      break
+    case "kicker":
+      carcass = CarcassAssembly.createKicker(
+        dimensions,
+        {
+          shelfCount: 0,
+          shelfSpacing: 0,
+          doorEnabled: false,
+          drawerEnabled: false,
+        },
+        productId,
+        cabinetId
+      )
+      break
+    case "bulkhead":
+      carcass = CarcassAssembly.createBulkhead(
+        dimensions,
+        {
+          shelfCount: 0,
+          shelfSpacing: 0,
+          doorEnabled: false,
+          drawerEnabled: false,
         },
         productId,
         cabinetId

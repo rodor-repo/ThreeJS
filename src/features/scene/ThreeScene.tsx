@@ -40,7 +40,6 @@ import { handleProductDimensionChange } from './utils/handlers/productDimensionH
 import { handleDeleteCabinet } from './utils/handlers/deleteCabinetHandler'
 import { createCabinet as createCabinetEntry } from '../cabinets/factory/cabinetFactory'
 import { updateChildCabinets } from './utils/handlers/childCabinetHandler'
-import { updateKickerPosition } from './utils/handlers/kickerPositionHandler'
 
 interface ThreeSceneProps {
   wallDimensions: WallDims
@@ -429,7 +428,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
 
     // Determine filler type from product name (only for fillers)
     const fillerType = cabinetType === 'filler' && (productName?.toLowerCase().includes("l shape") || productName?.toLowerCase().includes("l-shape"))
-      ? "l-shape" 
+      ? "l-shape"
       : "linear"
 
     // Get filler subcategory (find first filler subcategory)
@@ -450,7 +449,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     // Determine filler return position for L-Shape fillers
     // When added to LEFT side: return should be on RIGHT side of filler (toward cabinet)
     // When added to RIGHT side: return should be on LEFT side of filler (toward cabinet)
-    const fillerReturnPosition = cabinetType === 'filler' && fillerType === 'l-shape' 
+    const fillerReturnPosition = cabinetType === 'filler' && fillerType === 'l-shape'
       ? (side === 'left' ? 'right' : 'left')
       : undefined
 
@@ -465,8 +464,8 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     newCabinet.parentSide = side
 
     // Check if parent is overhead cabinet with overhang doors
-    const isOverheadWithOverhang = parentCabinet.cabinetType === 'top' && 
-                                    parentCabinet.carcass.config.overhangDoor === true
+    const isOverheadWithOverhang = parentCabinet.cabinetType === 'top' &&
+      parentCabinet.carcass.config.overhangDoor === true
     const overhangAmount = 20 // 20mm overhang extension
 
     // Update dimensions to match parent cabinet height
@@ -488,17 +487,17 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
       // For END/Side Panels: depth = parent depth + 20mm (extend in positive Z)
       // For other panels: depth = panel face width (600mm default)
       const parentDepth = parentCabinet.carcass.dimensions.depth
-      
+
       // Check if this is an END Panel or Side Panel by checking product name or subcategory
       const productNameLower = productName?.toLowerCase() || ''
       const subcategoryName = subcategoryData?.subCategory?.toLowerCase() || ''
-      const isEndPanel = productNameLower.includes("end") || 
-                         productNameLower.includes("side panel") ||
-                         subcategoryName.includes("side-panel") ||
-                         subcategoryName.includes("side panel")
-      
+      const isEndPanel = productNameLower.includes("end") ||
+        productNameLower.includes("side panel") ||
+        subcategoryName.includes("side-panel") ||
+        subcategoryName.includes("side panel")
+
       const panelDepth = isEndPanel ? parentDepth + 20 : 600 // END/Side Panel: parent depth + 20mm, others: 600mm
-      
+
       newCabinet.carcass.updateDimensions({
         width: 16, // Panel thickness
         height: finalHeight, // Match parent cabinet height (with overhang extension if applicable)
@@ -570,7 +569,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         updateCabinetLock(newCabinet.cabinetId, false, true) // Left lock OFF, Right lock ON
       }
     }
-    
+
     // Update bulkhead if parent has one (bulkhead width needs to include new child)
     if (parentCabinet.cabinetType === 'top' || parentCabinet.cabinetType === 'tall') {
       import('./utils/handlers/bulkheadPositionHandler').then(({ updateBulkheadPosition }) => {
@@ -585,426 +584,408 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     }
   }, [cabinets, wsProducts, sceneRef, createCabinet, updateCabinetViewId, updateCabinetLock, wallDimensions])
 
-  // Handle kicker face toggle for a specific cabinet
+  // Handle kicker selection from modal - creates kicker with proper product association
+  const handleKickerSelect = useCallback((cabinetId: string, productId: string) => {
+    if (!wsProducts) return
+
+    const parentCabinet = cabinets.find(c => c.cabinetId === cabinetId)
+    if (!parentCabinet || (parentCabinet.cabinetType !== 'base' && parentCabinet.cabinetType !== 'tall')) {
+      return
+    }
+
+    // Get product info from wsProducts
+    const productEntry = wsProducts.products[productId]
+    if (!productEntry) return
+
+    const designId = productEntry.designId
+    const designEntry = wsProducts.designs[designId || ""]
+    if (!designEntry || designEntry.type3D !== 'kicker') return
+
+    const subcategoryId = productEntry.subCategoryId
+
+    // Check if kicker already exists
+    const existingKickerCabinet = cabinets.find(
+      (c) => c.cabinetType === 'kicker' && c.kickerParentCabinetId === cabinetId
+    )
+
+    if (existingKickerCabinet) {
+      // Kicker already exists, don't create another one
+      return
+    }
+
+    // Get kicker height from cabinet's Y position
+    const kickerHeight = Math.max(0, parentCabinet.group.position.y)
+
+    // Calculate effective kicker width including children
+    const parentX = parentCabinet.group.position.x
+    const parentWidth = parentCabinet.carcass.dimensions.width
+
+    let minX = parentX
+    let maxX = parentX + parentWidth
+
+    // Find all child fillers/panels that have "off the floor" > 0
+    const childCabinets = cabinets.filter(
+      (c) =>
+        c.parentCabinetId === cabinetId &&
+        (c.cabinetType === 'filler' || c.cabinetType === 'panel') &&
+        c.hideLockIcons === true &&
+        c.group.position.y > 0
+    )
+
+    childCabinets.forEach((child) => {
+      const childLeftX = child.group.position.x
+      const childRightX = childLeftX + child.carcass.dimensions.width
+      if (childLeftX < minX) minX = childLeftX
+      if (childRightX > maxX) maxX = childRightX
+    })
+
+    const effectiveWidth = maxX - minX
+    const effectiveLeftX = minX
+
+    // Create kicker using the proper factory method (imported at top of file)
+    const kickerCabinetData = createCabinetEntry("kicker", subcategoryId, {
+      productId,
+      customDimensions: {
+        width: effectiveWidth,
+        height: kickerHeight,
+        depth: parentCabinet.carcass.dimensions.depth,
+      },
+    })
+
+    // Calculate world position for kicker
+    const cabinetWorldPos = new THREE.Vector3()
+    parentCabinet.group.getWorldPosition(cabinetWorldPos)
+
+    const kickerLocalX = effectiveWidth / 2
+    const kickerLocalY = -kickerHeight / 2
+    const kickerLocalZ = parentCabinet.carcass.dimensions.depth - 70 + 16 / 2
+
+    const kickerWorldPos = new THREE.Vector3(
+      effectiveLeftX + kickerLocalX,
+      cabinetWorldPos.y + kickerLocalY,
+      cabinetWorldPos.z + kickerLocalZ
+    )
+
+    kickerCabinetData.group.position.copy(kickerWorldPos)
+    kickerCabinetData.group.name = `kicker_${parentCabinet.cabinetId}`
+
+    // Add additional properties for the kicker cabinet
+    const extendedKickerData: CabinetData = {
+      ...kickerCabinetData,
+      viewId: parentCabinet.viewId,
+      kickerParentCabinetId: cabinetId,
+      hideLockIcons: true,
+    }
+
+    // Add to scene and cabinets array
+    addCabinet(extendedKickerData)
+
+      // Store reference on parent cabinet
+      ; (parentCabinet.group as any).kickerCabinetData = extendedKickerData
+  }, [cabinets, wsProducts, addCabinet])
+
+  // Handle kicker face removal for a specific cabinet
+  // Note: Kicker creation is handled by handleKickerSelect with product association
   const handleKickerToggle = useCallback((cabinetId: string, enabled: boolean) => {
+    if (enabled) {
+      // Creation is now handled by handleKickerSelect with proper product association
+      // This toggle only handles removal
+      return
+    }
+
     const cabinet = cabinets.find(c => c.cabinetId === cabinetId)
     if (!cabinet || (cabinet.cabinetType !== 'base' && cabinet.cabinetType !== 'tall')) {
       return
     }
 
-    // Import KickerFace dynamically
-    import('../carcass/parts/KickerFace').then(({ KickerFace }) => {
-      if (enabled) {
-        // Get kicker height from cabinet's Y position (Y position = kicker height set in view settings)
-        // Kicker height is always >= 0 (cannot go negative)
-        const kickerHeight = Math.max(0, cabinet.group.position.y)
+    // Remove kicker face from this cabinet
+    const existingKickerCabinet = cabinets.find(
+      (c) => c.cabinetType === 'kicker' && c.kickerParentCabinetId === cabinetId
+    )
 
-        // Check if kicker already exists as a separate CabinetData entry
-        const existingKickerCabinet = cabinets.find(
-          (c) => c.cabinetType === 'kicker' && c.kickerParentCabinetId === cabinetId
-        )
-
-        if (!existingKickerCabinet) {
-          // Calculate effective kicker width including children (only if "off the floor" > 0)
-          const parentX = cabinet.group.position.x
-          const parentWidth = cabinet.carcass.dimensions.width
-          const parentLeftX = parentX
-          const parentRightX = parentX + parentWidth
-
-          let minX = parentLeftX
-          let maxX = parentRightX
-
-          // Find all child fillers/panels that have "off the floor" > 0
-          const childCabinets = cabinets.filter(
-            (c) =>
-              c.parentCabinetId === cabinetId &&
-              (c.cabinetType === 'filler' || c.cabinetType === 'panel') &&
-              c.hideLockIcons === true &&
-              c.group.position.y > 0 // "Off the floor" is not zero
-          )
-
-          // Extend kicker width to include children
-          childCabinets.forEach((child) => {
-            const childLeftX = child.group.position.x
-            const childWidth = child.carcass.dimensions.width
-            const childRightX = childLeftX + childWidth
-
-            if (childLeftX < minX) {
-              minX = childLeftX
-            }
-            if (childRightX > maxX) {
-              maxX = childRightX
-            }
-          })
-
-          const effectiveWidth = maxX - minX
-          const effectiveLeftX = minX
-
-          // Create new kicker face with effective width
-          const kickerFace = new KickerFace({
-            width: effectiveWidth,
-            legHeight: kickerHeight,
-            depth: cabinet.carcass.dimensions.depth,
-            material: cabinet.carcass.config.material.getMaterial(),
-          })
-
-          // Calculate world position for kicker
-          // Kicker is positioned relative to cabinet, so we need to convert to world coordinates
-          const cabinetWorldPos = new THREE.Vector3()
-          cabinet.group.getWorldPosition(cabinetWorldPos)
-          
-          // Kicker local position relative to kicker's own center
-          // Kicker's center should be at effectiveLeftX + effectiveWidth / 2
-          const kickerLocalX = effectiveWidth / 2
-          const kickerLocalY = -kickerHeight / 2
-          const kickerLocalZ = cabinet.carcass.dimensions.depth - 70 + 16 / 2 // depth - zOffset + thickness/2
-          
-          
-          // Convert to world position
-          // World X = effectiveLeftX + kickerLocalX (to center the kicker at effectiveLeftX + width/2)
-          const kickerWorldPos = new THREE.Vector3(
-            effectiveLeftX + kickerLocalX,
-            cabinetWorldPos.y + kickerLocalY,
-            cabinetWorldPos.z + kickerLocalZ
-          )
-
-          // Set kicker group position in world space
-          kickerFace.group.position.copy(kickerWorldPos)
-          
-          // Name the group for easy identification
-          kickerFace.group.name = `kickerFace_${cabinet.cabinetId}`
-
-          // Create a dummy CarcassAssembly for the kicker (required by CabinetData)
-          // We'll use a minimal carcass that won't interfere with selection
-          const dummyCarcass = {
-            dimensions: {
-              width: effectiveWidth, // Use effective width including children
-              height: kickerHeight,
-              depth: 16, // kicker thickness
-            },
-            config: cabinet.carcass.config,
-            updateDimensions: () => {},
-            updateKickerHeight: () => {},
-            updateKickerFace: () => {},
-          } as any
-
-          // Create CabinetData entry for kicker
-          const kickerCabinetData: CabinetData = {
-            group: kickerFace.group,
-            carcass: dummyCarcass,
-            cabinetType: 'kicker',
-            subcategoryId: cabinet.subcategoryId,
-            cabinetId: `kicker_${cabinetId}_${Date.now()}`,
-            viewId: cabinet.viewId,
-            kickerFace: kickerFace,
-            kickerParentCabinetId: cabinetId,
-            hideLockIcons: true, // Hide lock icons for kickers
-          }
-
-          // Add to scene and cabinets array using addCabinet method
-          addCabinet(kickerCabinetData)
-
-          // Store reference on parent cabinet for easy lookup
-          ;(cabinet.group as any).kickerFace = kickerFace
-          ;(cabinet.group as any).kickerCabinetData = kickerCabinetData
-        } else {
-          // Update existing kicker face dimensions if cabinet changed
-          // Use updateKickerPosition to handle effective width including children
-          updateKickerPosition(cabinet, cabinets, {
-            dimensionsChanged: true,
-            kickerHeightChanged: true
-          })
-        }
-      } else {
-        // Remove kicker face from this cabinet
-        const existingKickerCabinet = cabinets.find(
-          (c) => c.cabinetType === 'kicker' && c.kickerParentCabinetId === cabinetId
-        )
-
-        if (existingKickerCabinet) {
-          // Dispose the kicker face
-          const kickerFace = existingKickerCabinet.kickerFace
-          if (kickerFace && typeof kickerFace.dispose === 'function') {
-            kickerFace.dispose()
-          }
-
-          // Remove kicker using deleteCabinet method
-          deleteCabinet(existingKickerCabinet.cabinetId)
-
-          // Clean up references
-          delete (cabinet.group as any).kickerFace
-          delete (cabinet.group as any).kickerCabinetData
-        }
+    if (existingKickerCabinet) {
+      // Dispose the kicker face via carcass
+      const kickerFace = existingKickerCabinet.carcass?.kickerFace
+      if (kickerFace && typeof kickerFace.dispose === 'function') {
+        kickerFace.dispose()
       }
-    })
-  }, [cabinets, sceneRef, addCabinet, deleteCabinet, setSelectedCabinets])
 
-  // Handle bulkhead toggle for base, overhead and tall cabinets
+      // Remove kicker using deleteCabinet method
+      deleteCabinet(existingKickerCabinet.cabinetId)
+
+      // Clean up references on parent cabinet group
+      delete (cabinet.group as any).kickerFace
+      delete (cabinet.group as any).kickerCabinetData
+    }
+  }, [cabinets, deleteCabinet])
+
+  // Handle bulkhead removal for base, overhead and tall cabinets
+  // Note: Bulkhead creation is handled by handleBulkheadSelect with product association
   const handleBulkheadToggle = useCallback((cabinetId: string, enabled: boolean) => {
+    if (enabled) {
+      // Creation is now handled by handleBulkheadSelect with proper product association
+      // This toggle only handles removal
+      return
+    }
+
     const cabinet = cabinets.find(c => c.cabinetId === cabinetId)
     if (!cabinet || (cabinet.cabinetType !== 'base' && cabinet.cabinetType !== 'top' && cabinet.cabinetType !== 'tall')) {
       return
     }
 
-    // Import BulkheadFace and BulkheadReturn dynamically
+    // Remove bulkhead from this cabinet
+    const existingBulkheadCabinet = cabinets.find(
+      (c) => c.cabinetType === 'bulkhead' && c.bulkheadParentCabinetId === cabinetId
+    )
+
+    if (existingBulkheadCabinet) {
+      // Dispose the bulkhead face via carcass
+      const bulkheadFace = existingBulkheadCabinet.carcass?.bulkheadFace
+      if (bulkheadFace && typeof bulkheadFace.dispose === 'function') {
+        bulkheadFace.dispose()
+      }
+
+      // Remove bulkhead using deleteCabinet method
+      deleteCabinet(existingBulkheadCabinet.cabinetId)
+
+      // Clean up references on parent cabinet group
+      delete (cabinet.group as any).bulkheadFace
+      delete (cabinet.group as any).bulkheadCabinetData
+
+      // Also remove return bulkheads if they exist
+      const existingReturnBulkheadCabinets = cabinets.filter(
+        (c) => c.cabinetType === 'bulkhead' && c.bulkheadReturnParentCabinetId === cabinetId
+      )
+      existingReturnBulkheadCabinets.forEach((returnCabinet) => {
+        // Dispose the return mesh group
+        if (returnCabinet.group) {
+          returnCabinet.group.traverse((child) => {
+            if (child instanceof THREE.Mesh) {
+              child.geometry?.dispose()
+              if (Array.isArray(child.material)) {
+                child.material.forEach(m => m.dispose())
+              } else if (child.material) {
+                child.material.dispose()
+              }
+            }
+          })
+        }
+        deleteCabinet(returnCabinet.cabinetId)
+        if (returnCabinet.bulkheadReturnSide === 'left') {
+          delete (cabinet.group as any).bulkheadReturnLeft
+          delete (cabinet.group as any).bulkheadReturnLeftCabinetData
+        } else if (returnCabinet.bulkheadReturnSide === 'right') {
+          delete (cabinet.group as any).bulkheadReturnRight
+          delete (cabinet.group as any).bulkheadReturnRightCabinetData
+        }
+      })
+    }
+  }, [cabinets, deleteCabinet])
+
+  // Handle bulkhead selection from modal - creates bulkhead with proper product association
+  const handleBulkheadSelect = useCallback((cabinetId: string, productId: string) => {
+    if (!wsProducts) return
+
+    const parentCabinet = cabinets.find(c => c.cabinetId === cabinetId)
+    if (!parentCabinet || (parentCabinet.cabinetType !== 'base' && parentCabinet.cabinetType !== 'top' && parentCabinet.cabinetType !== 'tall')) {
+      return
+    }
+
+    // Get product info from wsProducts
+    const productEntry = wsProducts.products[productId]
+    if (!productEntry) return
+
+    const designId = productEntry.designId
+    const designEntry = wsProducts.designs[designId || ""]
+    if (!designEntry || designEntry.type3D !== 'bulkhead') return
+
+    const subcategoryId = productEntry.subCategoryId
+
+    // Import BulkheadReturn and helper functions dynamically for returns (main bulkhead uses factory)
     Promise.all([
-      import('../carcass/parts/BulkheadFace'),
       import('../carcass/parts/BulkheadReturn'),
       import('./utils/handlers/bulkheadPositionHandler')
-    ]).then(([{ BulkheadFace }, { BulkheadReturn }, { hasLeftAdjacentCabinet, hasRightAdjacentCabinet }]) => {
-      if (enabled) {
-        // Check if bulkhead already exists as a separate CabinetData entry
-        const existingBulkheadCabinet = cabinets.find(
-          (c) => c.cabinetType === 'bulkhead' && c.bulkheadParentCabinetId === cabinetId
-        )
+    ]).then(([{ BulkheadReturn }, { hasLeftAdjacentCabinet, hasRightAdjacentCabinet }]) => {
+      // Check if bulkhead already exists
+      const existingBulkheadCabinet = cabinets.find(
+        (c) => c.cabinetType === 'bulkhead' && c.bulkheadParentCabinetId === cabinetId
+      )
 
-        if (!existingBulkheadCabinet) {
-          // Calculate effective width (cabinet + children)
-          const childCabinets = cabinets.filter(
-            (c) =>
-              c.parentCabinetId === cabinetId &&
-              (c.cabinetType === 'filler' || c.cabinetType === 'panel') &&
-              c.hideLockIcons === true
-          )
-          
-          let minX = cabinet.group.position.x
-          let maxX = cabinet.group.position.x + cabinet.carcass.dimensions.width
-          
-          childCabinets.forEach((child) => {
-            const childLeft = child.group.position.x
-            const childRight = child.group.position.x + child.carcass.dimensions.width
-            if (childLeft < minX) minX = childLeft
-            if (childRight > maxX) maxX = childRight
-          })
-          
-          const effectiveWidth = maxX - minX
-          
-          // Calculate height from cabinet top to back wall top
-          const cabinetTopY = cabinet.group.position.y + cabinet.carcass.dimensions.height
-          const bulkheadHeight = Math.max(0, wallDimensions.height - cabinetTopY)
+      if (existingBulkheadCabinet) {
+        // Bulkhead already exists, don't create another one
+        return
+      }
 
-          // Create new bulkhead face
-          const bulkheadFace = new BulkheadFace({
-            width: effectiveWidth,
-            height: bulkheadHeight,
-            depth: cabinet.carcass.dimensions.depth,
-            material: cabinet.carcass.config.material.getMaterial(),
-          })
+      // Calculate effective width (cabinet + children)
+      const childCabinets = cabinets.filter(
+        (c) =>
+          c.parentCabinetId === cabinetId &&
+          (c.cabinetType === 'filler' || c.cabinetType === 'panel') &&
+          c.hideLockIcons === true
+      )
 
-          // Calculate world position for bulkhead
-          const cabinetWorldPos = new THREE.Vector3()
-          cabinet.group.getWorldPosition(cabinetWorldPos)
-          
-          // Bulkhead local position relative to cabinet
-          const bulkheadLocalX = effectiveWidth / 2
-          const bulkheadLocalY = cabinet.carcass.dimensions.height + bulkheadHeight / 2
-          const bulkheadLocalZ = cabinet.carcass.dimensions.depth - 16 / 2 // depth - thickness/2
-          
-          // Convert to world position (accounting for effective width offset)
-          const bulkheadWorldPos = new THREE.Vector3(
-            minX + effectiveWidth / 2, // Center of effective width
-            cabinetTopY + bulkheadHeight / 2, // Top of cabinet + half bulkhead height
-            cabinetWorldPos.z + bulkheadLocalZ
-          )
+      let minX = parentCabinet.group.position.x
+      let maxX = parentCabinet.group.position.x + parentCabinet.carcass.dimensions.width
 
-          // Set bulkhead group position in world space
-          bulkheadFace.group.position.copy(bulkheadWorldPos)
-          
-          // Name the group for easy identification
-          bulkheadFace.group.name = `bulkheadFace_${cabinet.cabinetId}`
+      childCabinets.forEach((child) => {
+        const childLeft = child.group.position.x
+        const childRight = child.group.position.x + child.carcass.dimensions.width
+        if (childLeft < minX) minX = childLeft
+        if (childRight > maxX) maxX = childRight
+      })
 
-          // Create a dummy CarcassAssembly for the bulkhead (required by CabinetData)
-          const dummyCarcass = {
-            dimensions: {
-              width: effectiveWidth,
-              height: bulkheadHeight,
-              depth: 16, // bulkhead thickness
-            },
-            config: cabinet.carcass.config,
-            updateDimensions: () => {},
-            updateKickerHeight: () => {},
-            updateKickerFace: () => {},
-          } as any
+      const effectiveWidth = maxX - minX
 
-          // Create CabinetData entry for bulkhead
-          const bulkheadCabinetData: CabinetData = {
-            group: bulkheadFace.group,
-            carcass: dummyCarcass,
-            cabinetType: 'bulkhead',
-            subcategoryId: cabinet.subcategoryId,
-            cabinetId: `bulkhead_${cabinetId}_${Date.now()}`,
-            viewId: cabinet.viewId,
-            bulkheadFace: bulkheadFace,
-            bulkheadParentCabinetId: cabinetId,
-            hideLockIcons: true, // Hide lock icons for bulkheads
-          }
+      // Calculate height from cabinet top to back wall top
+      const cabinetTopY = parentCabinet.group.position.y + parentCabinet.carcass.dimensions.height
+      const bulkheadHeight = Math.max(0, wallDimensions.height - cabinetTopY)
 
-          // Add to scene and cabinets array using addCabinet method
-          addCabinet(bulkheadCabinetData)
+      // Create bulkhead using the proper factory method
+      const bulkheadCabinetData = createCabinetEntry("bulkhead", subcategoryId, {
+        productId,
+        customDimensions: {
+          width: effectiveWidth,
+          height: bulkheadHeight,
+          depth: parentCabinet.carcass.dimensions.depth,
+        },
+      })
 
-          // Store reference on parent cabinet for easy lookup
-          ;(cabinet.group as any).bulkheadFace = bulkheadFace
-          ;(cabinet.group as any).bulkheadCabinetData = bulkheadCabinetData
+      // Calculate world position for bulkhead
+      const cabinetWorldPos = new THREE.Vector3()
+      parentCabinet.group.getWorldPosition(cabinetWorldPos)
 
-          // For overhead and tall cabinets, check if we need return bulkheads (no adjacent cabinets on left/right)
-          // Apply depth comparison rule: cabinet with smaller depth loses its return
-          if (cabinet.cabinetType === 'top' || cabinet.cabinetType === 'tall') {
-            const leftAdjacentCabinet = hasLeftAdjacentCabinet(cabinet, cabinets)
-            const rightAdjacentCabinet = hasRightAdjacentCabinet(cabinet, cabinets)
-            const currentCabinetDepth = cabinet.carcass.dimensions.depth
-            
-            // Check if left return should exist (considering depth comparison)
-            let needsLeftReturn = leftAdjacentCabinet === null
-            if (leftAdjacentCabinet) {
-              const leftAdjacentDepth = leftAdjacentCabinet.carcass.dimensions.depth
-              // Only create left return if current cabinet has larger or equal depth
-              needsLeftReturn = currentCabinetDepth >= leftAdjacentDepth
-            }
-            
-            // Check if right return should exist (considering depth comparison)
-            let needsRightReturn = rightAdjacentCabinet === null
-            if (rightAdjacentCabinet) {
-              const rightAdjacentDepth = rightAdjacentCabinet.carcass.dimensions.depth
-              // Only create right return if current cabinet has larger or equal depth
-              needsRightReturn = currentCabinetDepth >= rightAdjacentDepth
-            }
-            const cabinetMaxX = cabinet.group.position.x + cabinet.carcass.dimensions.width
-            
-            // Calculate return bulkhead dimensions
-            const frontEdgeOffsetZ = cabinet.carcass.dimensions.depth - 16 // Front edge offset 16mm toward negative Z
-            const returnDepth = frontEdgeOffsetZ // Extends to Z=0 (back wall)
-            const returnHeight = bulkheadHeight
-            const returnThickness = 16
+      const bulkheadWorldPos = new THREE.Vector3(
+        minX + effectiveWidth / 2,
+        cabinetTopY + bulkheadHeight / 2,
+        cabinetWorldPos.z + parentCabinet.carcass.dimensions.depth - 16 / 2
+      )
 
-            // Create left return bulkhead if needed
-            if (needsLeftReturn) {
-              const bulkheadReturnLeft = new BulkheadReturn({
-                height: returnHeight,
-                depth: returnDepth,
-                material: cabinet.carcass.config.material.getMaterial(),
-              })
+      bulkheadCabinetData.group.position.copy(bulkheadWorldPos)
+      bulkheadCabinetData.group.name = `bulkhead_${parentCabinet.cabinetId}`
 
-              const returnLeftWorldPos = new THREE.Vector3(
-                minX + returnThickness / 2, // Left edge + half thickness (extends toward positive X)
-                cabinetTopY + returnHeight / 2,
-                cabinetWorldPos.z + frontEdgeOffsetZ / 2
-              )
+      // Add additional properties for the bulkhead cabinet
+      const extendedBulkheadData: CabinetData = {
+        ...bulkheadCabinetData,
+        viewId: parentCabinet.viewId,
+        bulkheadParentCabinetId: cabinetId,
+        hideLockIcons: true,
+      }
 
-              bulkheadReturnLeft.group.position.copy(returnLeftWorldPos)
-              bulkheadReturnLeft.group.name = `bulkheadReturnLeft_${cabinet.cabinetId}`
+      // Add to scene and cabinets array
+      addCabinet(extendedBulkheadData)
 
-              const returnLeftDummyCarcass = {
-                dimensions: { width: returnThickness, height: returnHeight, depth: returnDepth },
-                config: cabinet.carcass.config,
-                updateDimensions: () => {},
-                updateKickerHeight: () => {},
-                updateKickerFace: () => {},
-              } as any
+        // Store reference on parent cabinet
+        ; (parentCabinet.group as any).bulkheadCabinetData = extendedBulkheadData
 
-              const returnLeftCabinetData: CabinetData = {
-                group: bulkheadReturnLeft.group,
-                carcass: returnLeftDummyCarcass,
-                cabinetType: 'bulkhead',
-                subcategoryId: cabinet.subcategoryId,
-                cabinetId: `bulkheadReturnLeft_${cabinetId}_${Date.now()}`,
-                viewId: cabinet.viewId,
-                bulkheadReturn: bulkheadReturnLeft,
-                bulkheadReturnParentCabinetId: cabinetId,
-                bulkheadReturnSide: 'left',
-                hideLockIcons: true,
-              }
+      // For overhead and tall cabinets, check if we need return bulkheads
+      if (parentCabinet.cabinetType === 'top' || parentCabinet.cabinetType === 'tall') {
+        const leftAdjacentCabinet = hasLeftAdjacentCabinet(parentCabinet, cabinets)
+        const rightAdjacentCabinet = hasRightAdjacentCabinet(parentCabinet, cabinets)
+        const currentCabinetDepth = parentCabinet.carcass.dimensions.depth
 
-              addCabinet(returnLeftCabinetData)
-              ;(cabinet.group as any).bulkheadReturnLeft = bulkheadReturnLeft
-              ;(cabinet.group as any).bulkheadReturnLeftCabinetData = returnLeftCabinetData
-            }
-
-            // Create right return bulkhead if needed
-            if (needsRightReturn) {
-              const bulkheadReturnRight = new BulkheadReturn({
-                height: returnHeight,
-                depth: returnDepth,
-                material: cabinet.carcass.config.material.getMaterial(),
-              })
-
-              const returnRightWorldPos = new THREE.Vector3(
-                maxX - returnThickness / 2, // Right edge - half thickness (extends toward negative X)
-                cabinetTopY + returnHeight / 2,
-                cabinetWorldPos.z + frontEdgeOffsetZ / 2
-              )
-
-              bulkheadReturnRight.group.position.copy(returnRightWorldPos)
-              bulkheadReturnRight.group.name = `bulkheadReturnRight_${cabinet.cabinetId}`
-
-              const returnRightDummyCarcass = {
-                dimensions: { width: returnThickness, height: returnHeight, depth: returnDepth },
-                config: cabinet.carcass.config,
-                updateDimensions: () => {},
-                updateKickerHeight: () => {},
-                updateKickerFace: () => {},
-              } as any
-
-              const returnRightCabinetData: CabinetData = {
-                group: bulkheadReturnRight.group,
-                carcass: returnRightDummyCarcass,
-                cabinetType: 'bulkhead',
-                subcategoryId: cabinet.subcategoryId,
-                cabinetId: `bulkheadReturnRight_${cabinetId}_${Date.now()}`,
-                viewId: cabinet.viewId,
-                bulkheadReturn: bulkheadReturnRight,
-                bulkheadReturnParentCabinetId: cabinetId,
-                bulkheadReturnSide: 'right',
-                hideLockIcons: true,
-              }
-
-              addCabinet(returnRightCabinetData)
-              ;(cabinet.group as any).bulkheadReturnRight = bulkheadReturnRight
-              ;(cabinet.group as any).bulkheadReturnRightCabinetData = returnRightCabinetData
-            }
-          }
+        let needsLeftReturn = leftAdjacentCabinet === null
+        if (leftAdjacentCabinet) {
+          const leftAdjacentDepth = leftAdjacentCabinet.carcass.dimensions.depth
+          needsLeftReturn = currentCabinetDepth >= leftAdjacentDepth
         }
-      } else {
-        // Remove bulkhead from this cabinet
-        const existingBulkheadCabinet = cabinets.find(
-          (c) => c.cabinetType === 'bulkhead' && c.bulkheadParentCabinetId === cabinetId
-        )
 
-        if (existingBulkheadCabinet) {
-          // Dispose the bulkhead face
-          const bulkheadFace = existingBulkheadCabinet.bulkheadFace
-          if (bulkheadFace && typeof bulkheadFace.dispose === 'function') {
-            bulkheadFace.dispose()
+        let needsRightReturn = rightAdjacentCabinet === null
+        if (rightAdjacentCabinet) {
+          const rightAdjacentDepth = rightAdjacentCabinet.carcass.dimensions.depth
+          needsRightReturn = currentCabinetDepth >= rightAdjacentDepth
+        }
+
+        const frontEdgeOffsetZ = parentCabinet.carcass.dimensions.depth - 16
+        const returnDepth = frontEdgeOffsetZ
+        const returnHeight = bulkheadHeight
+        const returnThickness = 16
+
+        // Create left return bulkhead if needed
+        if (needsLeftReturn) {
+          const bulkheadReturnLeft = new BulkheadReturn({
+            height: returnHeight,
+            depth: returnDepth,
+            material: parentCabinet.carcass.config.material.getMaterial(),
+          })
+
+          const returnLeftWorldPos = new THREE.Vector3(
+            minX + returnThickness / 2,
+            cabinetTopY + returnHeight / 2,
+            cabinetWorldPos.z + frontEdgeOffsetZ / 2
+          )
+
+          bulkheadReturnLeft.group.position.copy(returnLeftWorldPos)
+          bulkheadReturnLeft.group.name = `bulkheadReturnLeft_${parentCabinet.cabinetId}`
+
+          // Create return bulkhead using factory method
+          const returnLeftCabinetData = createCabinetEntry("bulkhead", subcategoryId, {
+            productId,
+            customDimensions: {
+              width: returnThickness,
+              height: returnHeight,
+              depth: returnDepth,
+            },
+          })
+
+          // Override the group with the BulkheadReturn group and add properties
+          const extendedReturnLeftData: CabinetData = {
+            ...returnLeftCabinetData,
+            group: bulkheadReturnLeft.group,
+            viewId: parentCabinet.viewId,
+            bulkheadReturnParentCabinetId: cabinetId,
+            bulkheadReturnSide: 'left',
+            hideLockIcons: true,
           }
 
-          // Remove bulkhead using deleteCabinet method
-          deleteCabinet(existingBulkheadCabinet.cabinetId)
+          addCabinet(extendedReturnLeftData)
+            ; (parentCabinet.group as any).bulkheadReturnLeft = bulkheadReturnLeft
+            ; (parentCabinet.group as any).bulkheadReturnLeftCabinetData = extendedReturnLeftData
+        }
 
-          // Clean up references
-          delete (cabinet.group as any).bulkheadFace
-          delete (cabinet.group as any).bulkheadCabinetData
-
-          // Also remove return bulkheads if they exist
-          const existingReturnBulkheadCabinets = cabinets.filter(
-            (c) => c.cabinetType === 'bulkhead' && c.bulkheadReturnParentCabinetId === cabinetId
-          )
-          existingReturnBulkheadCabinets.forEach((returnCabinet) => {
-            const bulkheadReturn = returnCabinet.bulkheadReturn
-            if (bulkheadReturn && typeof bulkheadReturn.dispose === 'function') {
-              bulkheadReturn.dispose()
-            }
-            deleteCabinet(returnCabinet.cabinetId)
-            if (returnCabinet.bulkheadReturnSide === 'left') {
-              delete (cabinet.group as any).bulkheadReturnLeft
-              delete (cabinet.group as any).bulkheadReturnLeftCabinetData
-            } else if (returnCabinet.bulkheadReturnSide === 'right') {
-              delete (cabinet.group as any).bulkheadReturnRight
-              delete (cabinet.group as any).bulkheadReturnRightCabinetData
-            }
+        // Create right return bulkhead if needed
+        if (needsRightReturn) {
+          const bulkheadReturnRight = new BulkheadReturn({
+            height: returnHeight,
+            depth: returnDepth,
+            material: parentCabinet.carcass.config.material.getMaterial(),
           })
+
+          const returnRightWorldPos = new THREE.Vector3(
+            maxX - returnThickness / 2,
+            cabinetTopY + returnHeight / 2,
+            cabinetWorldPos.z + frontEdgeOffsetZ / 2
+          )
+
+          bulkheadReturnRight.group.position.copy(returnRightWorldPos)
+          bulkheadReturnRight.group.name = `bulkheadReturnRight_${parentCabinet.cabinetId}`
+
+          // Create return bulkhead using factory method
+          const returnRightCabinetData = createCabinetEntry("bulkhead", subcategoryId, {
+            productId,
+            customDimensions: {
+              width: returnThickness,
+              height: returnHeight,
+              depth: returnDepth,
+            },
+          })
+
+          // Override the group with the BulkheadReturn group and add properties
+          const extendedReturnRightData: CabinetData = {
+            ...returnRightCabinetData,
+            group: bulkheadReturnRight.group,
+            viewId: parentCabinet.viewId,
+            bulkheadReturnParentCabinetId: cabinetId,
+            bulkheadReturnSide: 'right',
+            hideLockIcons: true,
+          }
+
+          addCabinet(extendedReturnRightData)
+            ; (parentCabinet.group as any).bulkheadReturnRight = bulkheadReturnRight
+            ; (parentCabinet.group as any).bulkheadReturnRightCabinetData = extendedReturnRightData
         }
       }
     })
-  }, [cabinets, sceneRef, wallDimensions, addCabinet, deleteCabinet, setSelectedCabinets])
+  }, [cabinets, wsProducts, wallDimensions, addCabinet])
 
   const propagateLockToPairedCabinets = useCallback(
     (sourceCabinetId: string, leftLock: boolean, rightLock: boolean) => {
@@ -1250,28 +1231,30 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
 
       {/* Cabinet Lock Icons - appear on double-click */}
       {/* Don't show icons for fillers/panels added from modal (marked with hideLockIcons) */}
-      {cabinetWithLockIcons && 
-       !cabinetWithLockIcons.hideLockIcons && (
-        <CabinetLockIcons
-          cabinet={cabinetWithLockIcons}
-          camera={cameraRef.current}
-          allCabinets={cabinets}
-          onClose={() => setCabinetWithLockIcons(null)}
-          onLockChange={(cabinetId, leftLock, rightLock) => {
-            // Update the cabinet's lock state
-            updateCabinetLock(cabinetId, leftLock, rightLock)
-            propagateLockToPairedCabinets(cabinetId, leftLock, rightLock)
-            // Update cabinetWithLockIcons if it's the one being changed
-            if (cabinetWithLockIcons?.cabinetId === cabinetId) {
-              setCabinetWithLockIcons(prev => prev ? { ...prev, leftLock, rightLock } : null)
-            }
-          }}
-          onKickerToggle={handleKickerToggle}
-          onBulkheadToggle={handleBulkheadToggle}
-          wsProducts={wsProducts}
-          onFillerSelect={handleFillerSelect}
-        />
-      )}
+      {cabinetWithLockIcons &&
+        !cabinetWithLockIcons.hideLockIcons && (
+          <CabinetLockIcons
+            cabinet={cabinetWithLockIcons}
+            camera={cameraRef.current}
+            allCabinets={cabinets}
+            onClose={() => setCabinetWithLockIcons(null)}
+            onLockChange={(cabinetId, leftLock, rightLock) => {
+              // Update the cabinet's lock state
+              updateCabinetLock(cabinetId, leftLock, rightLock)
+              propagateLockToPairedCabinets(cabinetId, leftLock, rightLock)
+              // Update cabinetWithLockIcons if it's the one being changed
+              if (cabinetWithLockIcons?.cabinetId === cabinetId) {
+                setCabinetWithLockIcons(prev => prev ? { ...prev, leftLock, rightLock } : null)
+              }
+            }}
+            onKickerToggle={handleKickerToggle}
+            onBulkheadToggle={handleBulkheadToggle}
+            wsProducts={wsProducts}
+            onFillerSelect={handleFillerSelect}
+            onKickerSelect={handleKickerSelect}
+            onBulkheadSelect={handleBulkheadSelect}
+          />
+        )}
 
       {/* CabinetsInfoPanel hidden per user request */}
       {/* <CabinetsInfoPanel cabinets={cabinets} /> */}
@@ -1513,7 +1496,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
           if (selectedCabinet) {
             // Update overhang door setting
             selectedCabinet.carcass.updateOverhangDoor(overhang);
-            
+
             // Update child cabinets (fillers/panels) when overhang changes
             if (selectedCabinet.cabinetType === 'top') {
               updateChildCabinets(selectedCabinet, cabinets, {

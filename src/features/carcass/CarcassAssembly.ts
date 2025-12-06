@@ -10,6 +10,8 @@ import { CarcassDrawer } from "./parts/CarcassDrawer"
 import { CarcassPanel } from "./parts/CarcassPanel"
 import { CarcassFront } from "./parts/CarcassFront"
 import { DrawerHeightManager } from "./parts/DrawerHeightManager"
+import { KickerFace } from "./parts/KickerFace"
+import { BulkheadFace } from "./parts/BulkheadFace"
 import { CarcassMaterial, CarcassMaterialData } from "./Material"
 import { DoorMaterial } from "./DoorMaterial"
 import { MaterialLoader } from "./MaterialLoader"
@@ -87,9 +89,27 @@ export class CarcassAssembly {
   private frontPanel?: CarcassFront // For filler type cabinet (main panel)
   private fillerReturn?: CarcassPanel // For L-shape filler (return panel)
 
+  // Kicker and bulkhead specific parts
+  private _kickerFace?: KickerFace // For kicker type cabinet
+  private _bulkheadFace?: BulkheadFace // For bulkhead type cabinet
+
   public productId!: string
   public cabinetId!: string
   public defaultDimValuesApplied: boolean = false
+
+  /**
+   * Get the kicker face if this is a kicker cabinet
+   */
+  public get kickerFace(): KickerFace | undefined {
+    return this._kickerFace
+  }
+
+  /**
+   * Get the bulkhead face if this is a bulkhead cabinet
+   */
+  public get bulkheadFace(): BulkheadFace | undefined {
+    return this._bulkheadFace
+  }
 
   constructor(
     cabinetType: CabinetType,
@@ -144,6 +164,16 @@ export class CarcassAssembly {
 
     if (this.cabinetType === "filler") {
       this.buildFillerCabinet()
+      return
+    }
+
+    if (this.cabinetType === "kicker") {
+      this.buildKickerCabinet()
+      return
+    }
+
+    if (this.cabinetType === "bulkhead") {
+      this.buildBulkheadCabinet()
       return
     }
 
@@ -283,6 +313,48 @@ export class CarcassAssembly {
 
     // Position entire filler assembly at z=400mm
     this.group.position.set(0, 0, fillerZPosition)
+  }
+
+  /**
+   * Build a kicker cabinet - a single kicker face panel
+   * Kicker is a decorative panel that sits at the bottom front of base cabinets
+   * - dimensions.width = kicker width (X axis)
+   * - dimensions.height = kicker height (Y axis, typically 100-150mm)
+   * - dimensions.depth = kicker depth (Z axis, for positioning)
+   */
+  private buildKickerCabinet(): void {
+    this._kickerFace = new KickerFace({
+      width: this.dimensions.width,
+      legHeight: this.dimensions.height, // Use height as the kicker height
+      depth: this.dimensions.depth,
+      material: this.config.material.getMaterial(),
+    })
+
+    this.group.add(this._kickerFace.mesh)
+
+    // Position at origin
+    this.group.position.set(0, 0, 0)
+  }
+
+  /**
+   * Build a bulkhead cabinet - a single bulkhead face panel
+   * Bulkhead is a decorative panel that fills the gap above top cabinets
+   * - dimensions.width = bulkhead width (X axis)
+   * - dimensions.height = bulkhead height (Y axis)
+   * - dimensions.depth = bulkhead depth (Z axis, for positioning)
+   */
+  private buildBulkheadCabinet(): void {
+    this._bulkheadFace = new BulkheadFace({
+      width: this.dimensions.width,
+      height: this.dimensions.height,
+      depth: this.dimensions.depth,
+      material: this.config.material.getMaterial(),
+    })
+
+    this.group.add(this._bulkheadFace.mesh)
+
+    // Position at origin
+    this.group.position.set(0, 0, 0)
   }
 
   private createEndPanels(): void {
@@ -684,6 +756,16 @@ export class CarcassAssembly {
       return
     }
 
+    if (this.cabinetType === "kicker") {
+      this.updateKickerDimensions()
+      return
+    }
+
+    if (this.cabinetType === "bulkhead") {
+      this.updateBulkheadDimensions()
+      return
+    }
+
     const thickness = this.getThickness()
     const { panelWidth, effectiveDepth } = this.calculateCommonPanelDimensions()
 
@@ -816,6 +898,35 @@ export class CarcassAssembly {
           this.dimensions.width // panel thickness (filler width)
         )
       }
+    }
+  }
+
+  /**
+   * Update dimensions for kicker cabinet
+   * Kicker uses width for X, height for Y (kicker height), depth for positioning
+   */
+  private updateKickerDimensions(): void {
+    if (this._kickerFace) {
+      this._kickerFace.updateDimensions(
+        this.dimensions.width,
+        this.dimensions.height, // legHeight
+        this.dimensions.depth
+      )
+    }
+  }
+
+  /**
+   * Update dimensions for bulkhead cabinet
+   * Bulkhead uses width for X, height for Y (bulkhead height), depth for positioning
+   */
+  private updateBulkheadDimensions(): void {
+    if (this._bulkheadFace) {
+      this._bulkheadFace.updateDimensions(
+        this.dimensions.width,
+        this.dimensions.height,
+        this.dimensions.depth,
+        0 // cabinetTopY - this will be set properly by position handler
+      )
     }
   }
 
@@ -1826,6 +1937,44 @@ export class CarcassAssembly {
         fillerType: "l-shape",
         fillerReturnPosition: returnPosition,
       },
+      productId,
+      cabinetId
+    )
+  }
+
+  /**
+   * Create a kicker cabinet - a single kicker face panel
+   * @param dimensions - width = kicker width, height = kicker height, depth = kicker depth
+   */
+  static createKicker(
+    dimensions: CarcassDimensions,
+    config: Partial<CarcassConfig>,
+    productId: string,
+    cabinetId: string
+  ): CarcassAssembly {
+    return new CarcassAssembly(
+      "kicker",
+      dimensions,
+      config,
+      productId,
+      cabinetId
+    )
+  }
+
+  /**
+   * Create a bulkhead cabinet - a single bulkhead face panel
+   * @param dimensions - width = bulkhead width, height = bulkhead height, depth = bulkhead depth
+   */
+  static createBulkhead(
+    dimensions: CarcassDimensions,
+    config: Partial<CarcassConfig>,
+    productId: string,
+    cabinetId: string
+  ): CarcassAssembly {
+    return new CarcassAssembly(
+      "bulkhead",
+      dimensions,
+      config,
       productId,
       cabinetId
     )

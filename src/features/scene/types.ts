@@ -61,19 +61,13 @@ export type CabinetData = {
   /** Parent cabinet ID - used for fillers/panels added from modal to track parent-child relationship */
   parentCabinetId?: string
   /** Side relative to parent ('left' | 'right') - used for fillers/panels added from modal */
-  parentSide?: 'left' | 'right'
-  /** For kicker type: reference to the KickerFace instance */
-  kickerFace?: any // KickerFace instance
+  parentSide?: "left" | "right"
   /** For kicker type: parent cabinet ID that this kicker belongs to */
   kickerParentCabinetId?: string
-  /** For bulkhead type: reference to the BulkheadFace instance */
-  bulkheadFace?: any // BulkheadFace instance
   /** For bulkhead type: parent cabinet ID that this bulkhead belongs to */
   bulkheadParentCabinetId?: string
-  /** For bulkhead return type: reference to the BulkheadReturn instance */
-  bulkheadReturn?: any // BulkheadReturn instance
   /** For bulkhead return type: parent cabinet ID that this bulkhead return belongs to */
   bulkheadReturnParentCabinetId?: string
   /** For bulkhead return type: side ('left' | 'right') */
-  bulkheadReturnSide?: 'left' | 'right'
+  bulkheadReturnSide?: "left" | "right"
 }

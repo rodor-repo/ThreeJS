@@ -4,6 +4,8 @@ import * as THREE from 'three'
 import type { CabinetData } from '../types'
 import type { WsProducts } from '@/types/erpTypes'
 import { FillersModal } from './FillersModal'
+import { KickersModal } from './KickersModal'
+import { BulkheadsModal } from './BulkheadsModal'
 
 type Props = {
   cabinet: CabinetData
@@ -15,11 +17,13 @@ type Props = {
   onBulkheadToggle?: (cabinetId: string, enabled: boolean) => void
   wsProducts?: WsProducts | null
   onFillerSelect?: (cabinetId: string, productId: string, side: 'left' | 'right') => void
+  onKickerSelect?: (cabinetId: string, productId: string) => void
+  onBulkheadSelect?: (cabinetId: string, productId: string) => void
 }
 
-export const CabinetLockIcons: React.FC<Props> = ({ cabinet, camera, allCabinets, onClose, onLockChange, onKickerToggle, onBulkheadToggle, wsProducts, onFillerSelect }) => {
+export const CabinetLockIcons: React.FC<Props> = ({ cabinet, camera, allCabinets, onClose, onLockChange, onKickerToggle, onBulkheadToggle, wsProducts, onFillerSelect, onKickerSelect, onBulkheadSelect }) => {
   const [positions, setPositions] = useState({ center: { x: 0, y: 0 }, left: { x: 0, y: 0 }, right: { x: 0, y: 0 } })
-  
+
   // Lock states - use cabinet's lock state, default to unlocked (false)
   const isLeftLocked = cabinet.leftLock ?? false
   const isRightLocked = cabinet.rightLock ?? false
@@ -60,11 +64,17 @@ export const CabinetLockIcons: React.FC<Props> = ({ cabinet, camera, allCabinets
     allCabinets,
   ])
   const [isUOn, setIsUOn] = useState(false)
-  
+
   // Modal state for Fillers
   const [showFillersModal, setShowFillersModal] = useState(false)
   const [fillerSide, setFillerSide] = useState<'left' | 'right' | null>(null)
-  
+
+  // Modal state for Kickers
+  const [showKickersModal, setShowKickersModal] = useState(false)
+
+  // Modal state for Bulkheads
+  const [showBulkheadsModal, setShowBulkheadsModal] = useState(false)
+
   // Initialize K state based on whether kicker exists as a separate CabinetData entry
   const [isKOn, setIsKOn] = useState(() => {
     if (cabinet.cabinetType === 'base' || cabinet.cabinetType === 'tall') {
@@ -143,7 +153,7 @@ export const CabinetLockIcons: React.FC<Props> = ({ cabinet, camera, allCabinets
     // Update on window resize and animation frame for smooth updates
     const handleResize = () => updatePositions()
     window.addEventListener('resize', handleResize)
-    
+
     // Update positions on animation frame for smooth tracking
     let animationFrameId: number
     const animate = () => {
@@ -176,41 +186,14 @@ export const CabinetLockIcons: React.FC<Props> = ({ cabinet, camera, allCabinets
 
       {/* F Icon above Left Lock - Toggleable */}
       {showLetterIcons && (
-      <div
-        className={`fixed z-50 bg-white rounded-full shadow-lg border-2 transition-colors cursor-pointer flex items-center justify-center ${
-          isFLeftOn 
-            ? 'border-blue-600 hover:border-blue-700' 
-            : 'border-gray-300 hover:border-gray-400'
-        }`}
-        style={{
-          left: `${positions.left.x}px`,
-          top: `${positions.left.y - 35}px`,
-          transform: 'translate(-50%, -50%)',
-          pointerEvents: 'auto',
-          width: '29px',
-          height: '29px',
-        }}
-        onClick={(e) => {
-          e.stopPropagation()
-          setIsFLeftOn(prev => !prev)
-          setFillerSide('left')
-          setShowFillersModal(true)
-        }}
-      >
-        <span className={`font-bold text-sm ${isFLeftOn ? 'text-blue-600' : 'text-gray-400'}`}>F</span>
-      </div>
-      )}
-
-      {/* Left Lock Icon - Always shown */}
         <div
-          className={`fixed z-50 bg-white rounded-full p-1.5 shadow-lg border-2 transition-colors cursor-pointer flex items-center justify-center ${
-            isLeftLocked 
-              ? 'border-blue-600 hover:border-blue-700' 
+          className={`fixed z-50 bg-white rounded-full shadow-lg border-2 transition-colors cursor-pointer flex items-center justify-center ${isFLeftOn
+              ? 'border-blue-600 hover:border-blue-700'
               : 'border-gray-300 hover:border-gray-400'
-          }`}
+            }`}
           style={{
             left: `${positions.left.x}px`,
-            top: `${positions.left.y}px`,
+            top: `${positions.left.y - 35}px`,
             transform: 'translate(-50%, -50%)',
             pointerEvents: 'auto',
             width: '29px',
@@ -218,28 +201,52 @@ export const CabinetLockIcons: React.FC<Props> = ({ cabinet, camera, allCabinets
           }}
           onClick={(e) => {
             e.stopPropagation()
-            const newLeftLock = !isLeftLocked
-            if (onLockChange) {
-              onLockChange(cabinet.cabinetId, newLeftLock, isRightLocked)
-            }
+            setIsFLeftOn(prev => !prev)
+            setFillerSide('left')
+            setShowFillersModal(true)
           }}
-          title={isLeftLocked ? "Unlock left edge (allow extension in negative X)" : "Lock left edge (freeze left side, extend only in positive X)"}
         >
-          {isLeftLocked ? (
-            <Lock size={16} className="text-blue-600" />
-          ) : (
-            <Unlock size={16} className="text-gray-500" />
-          )}
+          <span className={`font-bold text-sm ${isFLeftOn ? 'text-blue-600' : 'text-gray-400'}`}>F</span>
         </div>
+      )}
+
+      {/* Left Lock Icon - Always shown */}
+      <div
+        className={`fixed z-50 bg-white rounded-full p-1.5 shadow-lg border-2 transition-colors cursor-pointer flex items-center justify-center ${isLeftLocked
+            ? 'border-blue-600 hover:border-blue-700'
+            : 'border-gray-300 hover:border-gray-400'
+          }`}
+        style={{
+          left: `${positions.left.x}px`,
+          top: `${positions.left.y}px`,
+          transform: 'translate(-50%, -50%)',
+          pointerEvents: 'auto',
+          width: '29px',
+          height: '29px',
+        }}
+        onClick={(e) => {
+          e.stopPropagation()
+          const newLeftLock = !isLeftLocked
+          if (onLockChange) {
+            onLockChange(cabinet.cabinetId, newLeftLock, isRightLocked)
+          }
+        }}
+        title={isLeftLocked ? "Unlock left edge (allow extension in negative X)" : "Lock left edge (freeze left side, extend only in positive X)"}
+      >
+        {isLeftLocked ? (
+          <Lock size={16} className="text-blue-600" />
+        ) : (
+          <Unlock size={16} className="text-gray-500" />
+        )}
+      </div>
 
       {/* B Icon above Center Lock - Toggleable, for Base, Tall and Top (Overhead) cabinets */}
       {showLetterIcons && (cabinet.cabinetType === 'base' || cabinet.cabinetType === 'tall' || cabinet.cabinetType === 'top') && (
         <div
-          className={`fixed z-50 bg-white rounded-full shadow-lg border-2 transition-colors cursor-pointer flex items-center justify-center ${
-            isBOn 
-              ? 'border-blue-600 hover:border-blue-700' 
+          className={`fixed z-50 bg-white rounded-full shadow-lg border-2 transition-colors cursor-pointer flex items-center justify-center ${isBOn
+              ? 'border-blue-600 hover:border-blue-700'
               : 'border-gray-300 hover:border-gray-400'
-          }`}
+            }`}
           style={{
             left: `${positions.center.x}px`,
             top: `${positions.center.y - 35}px`,
@@ -250,10 +257,15 @@ export const CabinetLockIcons: React.FC<Props> = ({ cabinet, camera, allCabinets
           }}
           onClick={(e) => {
             e.stopPropagation()
-            const newBState = !isBOn
-            setIsBOn(newBState)
-            if (onBulkheadToggle) {
-              onBulkheadToggle(cabinet.cabinetId, newBState)
+            if (isBOn) {
+              // Bulkhead exists - remove it
+              setIsBOn(false)
+              if (onBulkheadToggle) {
+                onBulkheadToggle(cabinet.cabinetId, false)
+              }
+            } else {
+              // Bulkhead doesn't exist - open modal to select product
+              setShowBulkheadsModal(true)
             }
           }}
         >
@@ -263,11 +275,10 @@ export const CabinetLockIcons: React.FC<Props> = ({ cabinet, camera, allCabinets
 
       {/* Center Lock Icon */}
       <div
-        className={`fixed z-50 bg-white rounded-full p-1.5 shadow-lg border-2 transition-colors cursor-pointer flex items-center justify-center ${
-          isCenterLocked 
-            ? 'border-blue-600 hover:border-blue-700' 
+        className={`fixed z-50 bg-white rounded-full p-1.5 shadow-lg border-2 transition-colors cursor-pointer flex items-center justify-center ${isCenterLocked
+            ? 'border-blue-600 hover:border-blue-700'
             : 'border-gray-300 hover:border-gray-400'
-        }`}
+          }`}
         style={{
           left: `${positions.center.x}px`,
           top: `${positions.center.y}px`,
@@ -292,11 +303,10 @@ export const CabinetLockIcons: React.FC<Props> = ({ cabinet, camera, allCabinets
       {/* K Icon below Center Lock - Toggleable, only for Base and Tall cabinets */}
       {showLetterIcons && (cabinet.cabinetType === 'base' || cabinet.cabinetType === 'tall') && (
         <div
-          className={`fixed z-50 bg-white rounded-full shadow-lg border-2 transition-colors cursor-pointer flex items-center justify-center ${
-            isKOn 
-              ? 'border-blue-600 hover:border-blue-700' 
+          className={`fixed z-50 bg-white rounded-full shadow-lg border-2 transition-colors cursor-pointer flex items-center justify-center ${isKOn
+              ? 'border-blue-600 hover:border-blue-700'
               : 'border-gray-300 hover:border-gray-400'
-          }`}
+            }`}
           style={{
             left: `${positions.center.x}px`,
             top: `${positions.center.y + 35}px`,
@@ -307,10 +317,15 @@ export const CabinetLockIcons: React.FC<Props> = ({ cabinet, camera, allCabinets
           }}
           onClick={(e) => {
             e.stopPropagation()
-            const newKState = !isKOn
-            setIsKOn(newKState)
-            if (onKickerToggle) {
-              onKickerToggle(cabinet.cabinetId, newKState)
+            if (isKOn) {
+              // Kicker exists - remove it
+              setIsKOn(false)
+              if (onKickerToggle) {
+                onKickerToggle(cabinet.cabinetId, false)
+              }
+            } else {
+              // Kicker doesn't exist - open modal to select product
+              setShowKickersModal(true)
             }
           }}
         >
@@ -321,11 +336,10 @@ export const CabinetLockIcons: React.FC<Props> = ({ cabinet, camera, allCabinets
       {/* U Icon below Center Lock - Toggleable, only for Top (Overhead) cabinets */}
       {showLetterIcons && cabinet.cabinetType === 'top' && (
         <div
-          className={`fixed z-50 bg-white rounded-full shadow-lg border-2 transition-colors cursor-pointer flex items-center justify-center ${
-            isUOn 
-              ? 'border-blue-600 hover:border-blue-700' 
+          className={`fixed z-50 bg-white rounded-full shadow-lg border-2 transition-colors cursor-pointer flex items-center justify-center ${isUOn
+              ? 'border-blue-600 hover:border-blue-700'
               : 'border-gray-300 hover:border-gray-400'
-          }`}
+            }`}
           style={{
             left: `${positions.center.x}px`,
             top: `${positions.center.y + 35}px`,
@@ -345,41 +359,14 @@ export const CabinetLockIcons: React.FC<Props> = ({ cabinet, camera, allCabinets
 
       {/* F Icon above Right Lock - Toggleable */}
       {showLetterIcons && (
-      <div
-        className={`fixed z-50 bg-white rounded-full shadow-lg border-2 transition-colors cursor-pointer flex items-center justify-center ${
-          isFRightOn 
-            ? 'border-blue-600 hover:border-blue-700' 
-            : 'border-gray-300 hover:border-gray-400'
-        }`}
-        style={{
-          left: `${positions.right.x}px`,
-          top: `${positions.right.y - 35}px`,
-          transform: 'translate(-50%, -50%)',
-          pointerEvents: 'auto',
-          width: '29px',
-          height: '29px',
-        }}
-        onClick={(e) => {
-          e.stopPropagation()
-          setIsFRightOn(prev => !prev)
-          setFillerSide('right')
-          setShowFillersModal(true)
-        }}
-      >
-        <span className={`font-bold text-sm ${isFRightOn ? 'text-blue-600' : 'text-gray-400'}`}>F</span>
-      </div>
-      )}
-
-      {/* Right Lock Icon - Always shown */}
         <div
-          className={`fixed z-50 bg-white rounded-full p-1.5 shadow-lg border-2 transition-colors cursor-pointer flex items-center justify-center ${
-            isRightLocked 
-              ? 'border-blue-600 hover:border-blue-700' 
+          className={`fixed z-50 bg-white rounded-full shadow-lg border-2 transition-colors cursor-pointer flex items-center justify-center ${isFRightOn
+              ? 'border-blue-600 hover:border-blue-700'
               : 'border-gray-300 hover:border-gray-400'
-          }`}
+            }`}
           style={{
             left: `${positions.right.x}px`,
-            top: `${positions.right.y}px`,
+            top: `${positions.right.y - 35}px`,
             transform: 'translate(-50%, -50%)',
             pointerEvents: 'auto',
             width: '29px',
@@ -387,19 +374,44 @@ export const CabinetLockIcons: React.FC<Props> = ({ cabinet, camera, allCabinets
           }}
           onClick={(e) => {
             e.stopPropagation()
-            const newRightLock = !isRightLocked
-            if (onLockChange) {
-              onLockChange(cabinet.cabinetId, isLeftLocked, newRightLock)
-            }
+            setIsFRightOn(prev => !prev)
+            setFillerSide('right')
+            setShowFillersModal(true)
           }}
-          title={isRightLocked ? "Unlock right edge (allow extension in positive X)" : "Lock right edge (freeze right side, extend only in negative X)"}
         >
-          {isRightLocked ? (
-            <Lock size={16} className="text-blue-600" />
-          ) : (
-            <Unlock size={16} className="text-gray-500" />
-          )}
+          <span className={`font-bold text-sm ${isFRightOn ? 'text-blue-600' : 'text-gray-400'}`}>F</span>
         </div>
+      )}
+
+      {/* Right Lock Icon - Always shown */}
+      <div
+        className={`fixed z-50 bg-white rounded-full p-1.5 shadow-lg border-2 transition-colors cursor-pointer flex items-center justify-center ${isRightLocked
+            ? 'border-blue-600 hover:border-blue-700'
+            : 'border-gray-300 hover:border-gray-400'
+          }`}
+        style={{
+          left: `${positions.right.x}px`,
+          top: `${positions.right.y}px`,
+          transform: 'translate(-50%, -50%)',
+          pointerEvents: 'auto',
+          width: '29px',
+          height: '29px',
+        }}
+        onClick={(e) => {
+          e.stopPropagation()
+          const newRightLock = !isRightLocked
+          if (onLockChange) {
+            onLockChange(cabinet.cabinetId, isLeftLocked, newRightLock)
+          }
+        }}
+        title={isRightLocked ? "Unlock right edge (allow extension in positive X)" : "Lock right edge (freeze right side, extend only in negative X)"}
+      >
+        {isRightLocked ? (
+          <Lock size={16} className="text-blue-600" />
+        ) : (
+          <Unlock size={16} className="text-gray-500" />
+        )}
+      </div>
 
       {/* Fillers Modal */}
       <FillersModal
@@ -415,6 +427,38 @@ export const CabinetLockIcons: React.FC<Props> = ({ cabinet, camera, allCabinets
           }
           setShowFillersModal(false)
           setFillerSide(null)
+        }}
+      />
+
+      {/* Kickers Modal */}
+      <KickersModal
+        isOpen={showKickersModal}
+        onClose={() => {
+          setShowKickersModal(false)
+        }}
+        wsProducts={wsProducts || null}
+        onProductSelect={(productId) => {
+          if (onKickerSelect) {
+            onKickerSelect(cabinet.cabinetId, productId)
+            setIsKOn(true)
+          }
+          setShowKickersModal(false)
+        }}
+      />
+
+      {/* Bulkheads Modal */}
+      <BulkheadsModal
+        isOpen={showBulkheadsModal}
+        onClose={() => {
+          setShowBulkheadsModal(false)
+        }}
+        wsProducts={wsProducts || null}
+        onProductSelect={(productId) => {
+          if (onBulkheadSelect) {
+            onBulkheadSelect(cabinet.cabinetId, productId)
+            setIsBOn(true)
+          }
+          setShowBulkheadsModal(false)
         }}
       />
     </>

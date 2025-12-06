@@ -21,7 +21,7 @@ function getEffectiveKickerWidth(
   const childCabinets = allCabinets.filter(
     (c) =>
       c.parentCabinetId === parentCabinet.cabinetId &&
-      (c.cabinetType === 'filler' || c.cabinetType === 'panel') &&
+      (c.cabinetType === "filler" || c.cabinetType === "panel") &&
       c.hideLockIcons === true &&
       c.group.position.y > 0 // "Off the floor" is not zero
   )
@@ -61,23 +61,32 @@ export const updateKickerPosition = (
 ) => {
   // Find kicker for this parent cabinet
   const kickerCabinet = allCabinets.find(
-    (c) => c.cabinetType === 'kicker' && c.kickerParentCabinetId === parentCabinet.cabinetId
+    (c) =>
+      c.cabinetType === "kicker" &&
+      c.kickerParentCabinetId === parentCabinet.cabinetId
   )
 
-  if (!kickerCabinet || !kickerCabinet.kickerFace) {
+  if (!kickerCabinet) {
     return
   }
 
-  const kickerFace = kickerCabinet.kickerFace
-  const parentX = parentCabinet.group.position.x
+  // Get kickerFace from carcass
+  const kickerFace = kickerCabinet.carcass?.kickerFace
+
+  if (!kickerFace) {
+    return
+  }
+
   const parentY = parentCabinet.group.position.y
   const parentZ = parentCabinet.group.position.z
-  const parentWidth = parentCabinet.carcass.dimensions.width
   const parentDepth = parentCabinet.carcass.dimensions.depth
   const kickerHeight = Math.max(0, parentY) // Kicker height = parent Y position
 
   // Calculate effective kicker width including children (only if "off the floor" > 0)
-  const { effectiveWidth, effectiveLeftX } = getEffectiveKickerWidth(parentCabinet, allCabinets)
+  const { effectiveWidth, effectiveLeftX } = getEffectiveKickerWidth(
+    parentCabinet,
+    allCabinets
+  )
 
   // Calculate kicker world position
   // Kicker's local origin is at its center
@@ -96,7 +105,7 @@ export const updateKickerPosition = (
 
   // Update kicker face dimensions if needed
   if (changes.dimensionsChanged || changes.kickerHeightChanged) {
-    if (typeof kickerFace.updateDimensions === 'function') {
+    if (typeof kickerFace.updateDimensions === "function") {
       kickerFace.updateDimensions(
         effectiveWidth, // Use effective width including children
         kickerHeight,
@@ -106,10 +115,14 @@ export const updateKickerPosition = (
   }
 
   // Update kicker world position
-  if (changes.positionChanged || changes.dimensionsChanged || changes.kickerHeightChanged) {
+  if (
+    changes.positionChanged ||
+    changes.dimensionsChanged ||
+    changes.kickerHeightChanged
+  ) {
     kickerCabinet.group.position.copy(kickerWorldPos)
-    
-    // Update dummy carcass dimensions for consistency
+
+    // Update carcass dimensions for consistency
     if (kickerCabinet.carcass) {
       kickerCabinet.carcass.dimensions.width = effectiveWidth
       kickerCabinet.carcass.dimensions.height = kickerHeight
@@ -117,4 +130,3 @@ export const updateKickerPosition = (
     }
   }
 }
-

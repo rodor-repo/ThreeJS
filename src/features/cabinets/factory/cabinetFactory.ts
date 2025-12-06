@@ -1,4 +1,3 @@
-import * as THREE from "three"
 import _ from "lodash"
 import {
   CarcassAssembly,
@@ -61,7 +60,8 @@ export const createCabinet = (
     depth: opts?.customDimensions?.depth ?? baseDims.depth,
   }
 
-  const cabinetId = `cabinet-${Date.now()}`
+  // Use lodash uniqueId + random suffix to avoid collisions when creating multiple cabinets quickly
+  const cabinetId = `${_.uniqueId("cabinet-")}-${Math.random().toString(36).slice(2, 8)}`
 
   let carcass: CarcassAssembly
   switch (type) {

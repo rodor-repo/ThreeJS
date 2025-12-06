@@ -39,6 +39,16 @@ export interface SavedCabinet {
   group?: Array<{ cabinetId: string; percentage: number }> // Grouped cabinets with their percentage portions
   sortNumber?: number // Sort number based on order cabinets were added to the scene
   syncCabinets?: string[] // Synced cabinets
+  /** Parent cabinet ID - used for fillers/panels added from modal */
+  parentCabinetId?: string
+  /** Side relative to parent ('left' | 'right') - used for fillers/panels added from modal */
+  parentSide?: 'left' | 'right'
+  /** Flag to hide lock icons - used for fillers/panels added from modal */
+  hideLockIcons?: boolean
+  /** For kicker type: parent cabinet ID that this kicker belongs to */
+  kickerParentCabinetId?: string
+  /** For bulkhead type: parent cabinet ID that this bulkhead belongs to */
+  bulkheadParentCabinetId?: string
 }
 
 export interface SavedView {

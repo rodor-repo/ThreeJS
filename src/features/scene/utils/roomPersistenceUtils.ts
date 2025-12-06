@@ -173,6 +173,12 @@ export function serializeRoom({
       group: cabinetGroups.get(cabinet.cabinetId) || undefined,
       sortNumber: cabinet.sortNumber,
       syncCabinets: cabinetSyncs?.get(cabinet.cabinetId) || undefined,
+      // Parent relationship properties for kickers, bulkheads, and fillers/panels
+      parentCabinetId: cabinet.parentCabinetId,
+      parentSide: cabinet.parentSide,
+      hideLockIcons: cabinet.hideLockIcons,
+      kickerParentCabinetId: cabinet.kickerParentCabinetId,
+      bulkheadParentCabinetId: cabinet.bulkheadParentCabinetId,
     }
   })
 
@@ -317,6 +323,7 @@ export async function restoreRoom({
       })
 
       const oldIdToNewId = new Map<string, string>()
+      const createdCabinets = new Map<string, CabinetData>()
 
       // Pass 1: Create cabinets and build ID map
       savedRoom.cabinets.forEach((savedCabinet) => {
@@ -335,6 +342,7 @@ export async function restoreRoom({
         }
 
         oldIdToNewId.set(savedCabinet.cabinetId, cabinetData.cabinetId)
+        createdCabinets.set(cabinetData.cabinetId, cabinetData)
 
         cabinetData.carcass.updateDimensions(savedCabinet.dimensions)
 
@@ -430,6 +438,50 @@ export async function restoreRoom({
 
         if (savedCabinet.sortNumber !== undefined) {
           cabinetData.sortNumber = savedCabinet.sortNumber
+        }
+
+        // Restore hideLockIcons flag (doesn't need ID mapping)
+        if (savedCabinet.hideLockIcons !== undefined) {
+          cabinetData.hideLockIcons = savedCabinet.hideLockIcons
+        }
+
+        // Restore parentSide (doesn't need ID mapping)
+        if (savedCabinet.parentSide !== undefined) {
+          cabinetData.parentSide = savedCabinet.parentSide
+        }
+      })
+
+      // Pass 1.5: Restore parent relationships using ID map
+      // These need to be done after all cabinets are created because they reference other cabinet IDs
+      savedRoom.cabinets.forEach((savedCabinet) => {
+        const newCabinetId = oldIdToNewId.get(savedCabinet.cabinetId)
+        if (!newCabinetId) return
+
+        const cabinetData = createdCabinets.get(newCabinetId)
+        if (!cabinetData) return
+
+        // Map parentCabinetId (for fillers/panels)
+        if (savedCabinet.parentCabinetId) {
+          const newParentId = oldIdToNewId.get(savedCabinet.parentCabinetId)
+          if (newParentId) {
+            cabinetData.parentCabinetId = newParentId
+          }
+        }
+
+        // Map kickerParentCabinetId
+        if (savedCabinet.kickerParentCabinetId) {
+          const newKickerParentId = oldIdToNewId.get(savedCabinet.kickerParentCabinetId)
+          if (newKickerParentId) {
+            cabinetData.kickerParentCabinetId = newKickerParentId
+          }
+        }
+
+        // Map bulkheadParentCabinetId
+        if (savedCabinet.bulkheadParentCabinetId) {
+          const newBulkheadParentId = oldIdToNewId.get(savedCabinet.bulkheadParentCabinetId)
+          if (newBulkheadParentId) {
+            cabinetData.bulkheadParentCabinetId = newBulkheadParentId
+          }
         }
       })
 

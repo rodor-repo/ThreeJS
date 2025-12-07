@@ -38,7 +38,7 @@ export default function Home() {
   const [selectedProductId, setSelectedProductId] = useState<string | undefined>(undefined)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [wsProducts, setWsProducts] = useState<WsProducts | null>(null)
-  const loadRoomRef = useRef<((savedRoom: SavedRoom) => void) | null>(null)
+  const loadRoomRef = useRef<((savedRoom: SavedRoom) => Promise<void>) | null>(null)
 
 
   const handleCategorySelect = (category: Category) => {
@@ -71,9 +71,9 @@ export default function Home() {
         onMenuStateChange={handleMenuStateChange}
         wsProducts={wsProducts}
         setWsProducts={setWsProducts}
-        onLoadRoom={(savedRoom) => {
+        onLoadRoom={async (savedRoom) => {
           if (loadRoomRef.current) {
-            loadRoomRef.current(savedRoom)
+            await loadRoomRef.current(savedRoom)
           }
         }}
       />

@@ -316,8 +316,8 @@ export const useSceneInteractions = (
         }
       }
       
-      // Update bulkhead position when parent cabinet moves
-      if (draggedCabinet.cabinetType === 'base' || draggedCabinet.cabinetType === 'top' || draggedCabinet.cabinetType === 'tall') {
+      // Update bulkhead position when parent cabinet moves (only for top and tall, not base)
+      if (draggedCabinet.cabinetType === 'top' || draggedCabinet.cabinetType === 'tall') {
         updateBulkheadPosition(draggedCabinet, cabinets, wallDimensions, {
           positionChanged: true
         })

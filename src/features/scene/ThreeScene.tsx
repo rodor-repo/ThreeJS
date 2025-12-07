@@ -29,9 +29,13 @@ import { ViewDetailDrawer } from './ui/ViewDetailDrawer'
 import { ProductsListDrawer } from './ui/ProductsListDrawer'
 import { SaveModal } from './ui/SaveModal'
 import { DeleteConfirmationModal } from './ui/DeleteConfirmationModal'
+import { NestingModal } from './ui/NestingModal'
 import { WsProducts } from '@/types/erpTypes'
 import type { ViewId } from '../cabinets/ViewManager'
 import type { SavedRoom } from '@/data/savedRooms'
+import { exportPartsToCSV } from '@/nesting/ExportPartExcel'
+import { extractPartsFromScene } from '@/nesting/nest-mapper'
+import { usePartData } from '@/nesting/usePartData'
 import { handleViewDimensionChange } from './utils/handlers/viewDimensionHandler'
 import { handleSplashbackHeightChange } from './utils/handlers/splashbackHandler'
 import { handleKickerHeightChange } from './utils/handlers/kickerHeightHandler'
@@ -49,7 +53,7 @@ interface ThreeSceneProps {
   selectedProductId?: string
   wsProducts?: WsProducts | null
   /** Callback to get the loadRoom function for restoring saved rooms */
-  onLoadRoomReady?: (loadRoom: (savedRoom: SavedRoom) => void) => void
+  onLoadRoomReady?: (loadRoom: (savedRoom: SavedRoom) => Promise<void>) => void
 }
 
 const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChange, selectedCategory, selectedSubcategory, isMenuOpen = false, selectedProductId, wsProducts, onLoadRoomReady }) => {
@@ -61,6 +65,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
   const [isOrthoView, setIsOrthoView] = useState(false) // Track ortho view state for UI
   const [cameraViewMode, setCameraViewMode] = useState<'x' | 'y' | 'z' | null>(null) // Track which ortho view is active
   const [showProductsDrawer, setShowProductsDrawer] = useState(false) // Control products list drawer
+  const [showNestingModal, setShowNestingModal] = useState(false) // Control nesting modal
   // Cabinet groups: Map of cabinetId -> array of { cabinetId, percentage }
   const [cabinetGroups, setCabinetGroups] = useState<Map<string, Array<{ cabinetId: string; percentage: number }>>>(new Map())
   // Cabinet sync relationships: Map of cabinetId -> array of synced cabinetIds
@@ -108,6 +113,10 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
 
   // View manager for grouping cabinets
   const viewManager = useViewManager(cabinets)
+
+  // Part data manager - tracks all part dimensions (X, Y, Z) for export
+  // Automatically updates when cabinets array changes
+  const partData = usePartData(cabinets, wsProducts)
 
   // Snap guides for visual feedback during cabinet dragging
   const { updateSnapGuides, clearSnapGuides } = useSnapGuides(sceneRef, wallDimensions)
@@ -716,7 +725,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     }
 
     const cabinet = cabinets.find(c => c.cabinetId === cabinetId)
-    if (!cabinet || (cabinet.cabinetType !== 'base' && cabinet.cabinetType !== 'top' && cabinet.cabinetType !== 'tall')) {
+    if (!cabinet || (cabinet.cabinetType !== 'top' && cabinet.cabinetType !== 'tall')) {
       return
     }
 
@@ -952,17 +961,83 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         </div>
       </div>
 
-      {/* Settings Icon - Bottom Right */}
-      <button
-        onClick={(e) => {
-          e.stopPropagation()
-          handleSettingsClick()
-        }}
-        className="absolute bottom-4 right-4 bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-full shadow-lg transition-colors duration-200 z-10"
-        title="Settings"
-      >
-        <Settings size={24} />
-      </button>
+      {/* Settings and Nesting Icons - Bottom Right */}
+      <div className="absolute bottom-4 right-4 flex gap-3 z-10">
+        {/* Export Button */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            if (cabinets.length === 0) {
+              alert('No cabinets in the scene to export.')
+              return
+            }
+            try {
+              // Get parts from PartDataManager (uses actual calculated part dimensions from part classes)
+              const partDataList = partData.getAllParts()
+              if (partDataList.length === 0) {
+                alert('No parts found to export.')
+                return
+              }
+
+              // Convert PartData to Part format for export
+              const parts = partDataList.map((part) => ({
+                id: part.partId,
+                label: `${part.cabinetType} ${part.cabinetId} - ${part.partName}`,
+                width: Math.max(part.dimX, part.dimY, part.dimZ), // Biggest dimension
+                height: [part.dimX, part.dimY, part.dimZ].sort((a, b) => b - a)[1], // Second biggest
+                materialId: part.materialId,
+                materialName: part.materialName,
+                materialColor: part.materialColor,
+                grainDirection: 'none' as const,
+                cabinetId: part.cabinetId,
+                cabinetType: part.cabinetType,
+                cabinetNumber: part.cabinetNumber,
+                cabinetName: part.cabinetName,
+                partName: part.partName,
+                originalWidth: Math.max(part.dimX, part.dimY, part.dimZ),
+                originalHeight: [part.dimX, part.dimY, part.dimZ].sort((a, b) => b - a)[1],
+                originalDimX: part.dimX,
+                originalDimY: part.dimY,
+                originalDimZ: part.dimZ,
+              }))
+
+              // Export to CSV
+              exportPartsToCSV(parts, `nesting-parts-export-${Date.now()}.csv`)
+            } catch (error) {
+              console.error('Error exporting parts:', error)
+              alert('Failed to export parts. Please check the console for details.')
+            }
+          }}
+          className="bg-green-700 hover:bg-green-800 text-white px-4 py-2 rounded-lg shadow-lg transition-colors duration-200 font-medium"
+          title="Export Parts to Excel/CSV"
+        >
+          Export
+        </button>
+
+        {/* Nesting Button */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            setShowNestingModal(true)
+          }}
+          className="bg-blue-900 hover:bg-blue-950 text-white px-4 py-2 rounded-lg shadow-lg transition-colors duration-200 font-medium"
+          title="Nesting"
+        >
+          Nesting
+        </button>
+
+        {/* Settings Icon */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            handleSettingsClick()
+          }}
+          className="bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-full shadow-lg transition-colors duration-200"
+          title="Settings"
+        >
+          <Settings size={24} />
+        </button>
+      </div>
 
       {/* Settings Sidebar */}
       <SettingsSidebar
@@ -1304,7 +1379,13 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
           })
         }}
 
-        onShelfCountChange={(newCount: number) => { if (selectedCabinet) selectedCabinet.carcass.updateConfig({ shelfCount: newCount }); }}
+        onShelfCountChange={(newCount: number) => {
+          if (selectedCabinet) {
+            selectedCabinet.carcass.updateConfig({ shelfCount: newCount })
+            // Update part data when shelf count changes
+            partData.updateCabinet(selectedCabinet)
+          }
+        }}
 
         onDimensionsChange={(newDimensions) => {
           if (selectedCabinet) {
@@ -1320,6 +1401,21 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
                 wallDimensions
               }
             )
+            // Update part data when dimensions change
+            // Update all affected cabinets (selected + synced + grouped)
+            const affectedCabinets = new Set<CabinetData>([selectedCabinet])
+            const syncCabinets = cabinetSyncs.get(selectedCabinet.cabinetId) || []
+            syncCabinets.forEach(id => {
+              const cab = cabinets.find(c => c.cabinetId === id)
+              if (cab) affectedCabinets.add(cab)
+            })
+            const groupCabinets = cabinetGroups.get(selectedCabinet.cabinetId) || []
+            groupCabinets.forEach(({ cabinetId }) => {
+              const cab = cabinets.find(c => c.cabinetId === cabinetId)
+              if (cab) affectedCabinets.add(cab)
+            })
+            affectedCabinets.forEach(cab => partData.updateCabinet(cab))
+
             // Debounced increment to trigger wall adjustments after dimension change
             debouncedIncrementDimensionVersion()
           }
@@ -1352,12 +1448,17 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
               transparent: true
             });
             selectedCabinet.carcass.updateDoorMaterial(doorMaterial);
+
+            // Update part data when door material changes
+            partData.updateCabinet(selectedCabinet)
           }
         }}
         onDoorCountChange={(count) => {
           if (selectedCabinet) {
             // Update door count
             selectedCabinet.carcass.updateDoorConfiguration(count);
+            // Update part data when door count changes
+            partData.updateCabinet(selectedCabinet)
           }
         }}
         onOverhangDoorToggle={(overhang) => {
@@ -1379,6 +1480,9 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
             // Toggle drawers on/off directly on the carcass
             selectedCabinet.carcass.updateDrawerEnabled(enabled);
 
+            // Update part data when drawer toggle changes
+            partData.updateCabinet(selectedCabinet)
+
             // Trigger re-render while preserving multi-selection
             setSelectedCabinets(prev => prev.map(cab => ({ ...cab })))
           }
@@ -1389,6 +1493,9 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
             // Update drawer quantity directly on the carcass
             selectedCabinet.carcass.updateDrawerQuantity(quantity);
 
+            // Update part data when drawer quantity changes
+            partData.updateCabinet(selectedCabinet)
+
             // Trigger re-render while preserving multi-selection
             setSelectedCabinets(prev => prev.map(cab => ({ ...cab })))
           }
@@ -1398,6 +1505,9 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
 
             // Update individual drawer height directly on the carcass
             selectedCabinet.carcass.updateDrawerHeight(index, height, changedId);
+
+            // Update part data when drawer height changes
+            partData.updateCabinet(selectedCabinet)
 
             // Trigger re-render while preserving multi-selection
             setSelectedCabinets(prev => prev.map(cab => ({ ...cab })))
@@ -1451,10 +1561,20 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
               setCabinetToDelete,
               allCabinets: cabinets
             })
+            // Remove cabinet from part data database
+            partData.removeCabinet(cabinetToDelete.cabinetId)
             closeDeleteModal()
           }
         }}
         itemName="the selected cabinet"
+      />
+
+      {/* Nesting Modal */}
+      <NestingModal
+        isOpen={showNestingModal}
+        onClose={() => setShowNestingModal(false)}
+        cabinets={cabinets}
+        wsProducts={wsProducts}
       />
 
       {/* Products List Drawer */}

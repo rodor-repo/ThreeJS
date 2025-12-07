@@ -2074,4 +2074,177 @@ export class CarcassAssembly {
       cabinetId
     )
   }
+
+  /**
+   * Get all part dimensions for export/nesting purposes
+   * Returns actual dimensions from part instances, not calculated from cabinet dimensions
+   */
+  public getPartDimensions(): Array<{
+    partName: string
+    dimX: number // X dimension (width/thickness)
+    dimY: number // Y dimension (height)
+    dimZ: number // Z dimension (depth/thickness)
+  }> {
+    const parts: Array<{
+      partName: string
+      dimX: number
+      dimY: number
+      dimZ: number
+    }> = []
+
+    const thickness = this.getThickness()
+
+    // Handle panel type
+    if (this.cabinetType === "panel" && this.panel) {
+      // CarcassPanel: Get actual dimensions from geometry
+      const panelGeometry = this.panel.mesh.geometry as THREE.BoxGeometry
+      parts.push({
+        partName: "Panel",
+        dimX: panelGeometry.parameters.width,
+        dimY: panelGeometry.parameters.height,
+        dimZ: panelGeometry.parameters.depth,
+      })
+      return parts
+    }
+
+    // Handle filler type
+    if (this.cabinetType === "filler") {
+      if (this.frontPanel) {
+        // CarcassFront: Get actual dimensions from geometry
+        const frontPanelGeometry = this.frontPanel.mesh
+          .geometry as THREE.BoxGeometry
+        parts.push({
+          partName: "Front Panel",
+          dimX: frontPanelGeometry.parameters.width,
+          dimY: frontPanelGeometry.parameters.height,
+          dimZ: frontPanelGeometry.parameters.depth,
+        })
+      }
+      if (this.fillerReturn) {
+        // CarcassPanel: Get actual dimensions from geometry
+        const returnGeometry = this.fillerReturn.mesh
+          .geometry as THREE.BoxGeometry
+        parts.push({
+          partName: "Return Panel",
+          dimX: returnGeometry.parameters.width,
+          dimY: returnGeometry.parameters.height,
+          dimZ: returnGeometry.parameters.depth,
+        })
+      }
+      return parts
+    }
+
+    // Traditional cabinet parts
+    // Get actual dimensions from geometry to ensure accuracy
+    // Left End: X=thickness, Y=height, Z=depth
+    const leftEndGeometry = this.leftEnd.mesh.geometry as THREE.BoxGeometry
+    parts.push({
+      partName: "Left Panel",
+      dimX: leftEndGeometry.parameters.width,
+      dimY: leftEndGeometry.parameters.height,
+      dimZ: leftEndGeometry.parameters.depth,
+    })
+
+    // Right End: X=thickness, Y=height, Z=depth
+    const rightEndGeometry = this.rightEnd.mesh.geometry as THREE.BoxGeometry
+    parts.push({
+      partName: "Right Panel",
+      dimX: rightEndGeometry.parameters.width,
+      dimY: rightEndGeometry.parameters.height,
+      dimZ: rightEndGeometry.parameters.depth,
+    })
+
+    // Back: X=width, Y=height, Z=thickness
+    const backGeometry = this.back.mesh.geometry as THREE.BoxGeometry
+    parts.push({
+      partName: "Back Panel",
+      dimX: backGeometry.parameters.width,
+      dimY: backGeometry.parameters.height,
+      dimZ: backGeometry.parameters.depth,
+    })
+
+    // Top: For base cabinets, this is actually a Base Rail
+    // Get actual dimensions from geometry to ensure accuracy
+    const topGeometry = this.top.mesh.geometry as THREE.BoxGeometry
+    const topDims = {
+      x: topGeometry.parameters.width,
+      y: topGeometry.parameters.height,
+      z: topGeometry.parameters.depth,
+    }
+
+    if (this.cabinetType === "base") {
+      // Base Rail - use actual geometry dimensions
+      parts.push({
+        partName: "Base Rail",
+        dimX: topDims.x,
+        dimY: topDims.y,
+        dimZ: topDims.z,
+      })
+    } else {
+      // Top/Tall cabinets - full top panel
+      parts.push({
+        partName: "Top Panel",
+        dimX: topDims.x,
+        dimY: topDims.y,
+        dimZ: topDims.z,
+      })
+    }
+
+    // Bottom: X=width, Y=thickness, Z=depth (only for base/tall/wardrobe)
+    // Note: bottom may not exist for top cabinets
+    if (
+      (this.cabinetType === "base" ||
+        this.cabinetType === "tall" ||
+        this.cabinetType === "wardrobe") &&
+      this.bottom
+    ) {
+      const bottomGeometry = this.bottom.mesh.geometry as THREE.BoxGeometry
+      parts.push({
+        partName: "Bottom Panel",
+        dimX: bottomGeometry.parameters.width,
+        dimY: bottomGeometry.parameters.height,
+        dimZ: bottomGeometry.parameters.depth,
+      })
+    }
+
+    // Shelves: Get actual dimensions from geometry to ensure accuracy
+    this.shelves.forEach((shelf, index) => {
+      const shelfGeometry = shelf.mesh.geometry as THREE.BoxGeometry
+      const shelfDims = {
+        x: shelfGeometry.parameters.width,
+        y: shelfGeometry.parameters.height,
+        z: shelfGeometry.parameters.depth,
+      }
+      parts.push({
+        partName: `Shelf ${index + 1}`,
+        dimX: shelfDims.x,
+        dimY: shelfDims.y,
+        dimZ: shelfDims.z,
+      })
+    })
+
+    // Doors: Get actual dimensions from geometry
+    this.doors.forEach((door, index) => {
+      const doorGeometry = door.mesh.geometry as THREE.BoxGeometry
+      parts.push({
+        partName: `Door ${index + 1}`,
+        dimX: doorGeometry.parameters.width,
+        dimY: doorGeometry.parameters.height,
+        dimZ: doorGeometry.parameters.depth,
+      })
+    })
+
+    // Drawer Fronts: Get actual dimensions from geometry
+    this.drawers.forEach((drawer, index) => {
+      const drawerGeometry = drawer.mesh.geometry as THREE.BoxGeometry
+      parts.push({
+        partName: `Drawer Front ${index + 1}`,
+        dimX: drawerGeometry.parameters.width,
+        dimY: drawerGeometry.parameters.height,
+        dimZ: drawerGeometry.parameters.depth,
+      })
+    })
+
+    return parts
+  }
 }

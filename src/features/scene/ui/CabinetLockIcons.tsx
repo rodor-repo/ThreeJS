@@ -29,12 +29,12 @@ export const CabinetLockIcons: React.FC<Props> = ({ cabinet, camera, allCabinets
   const isRightLocked = cabinet.rightLock ?? false
   const [isCenterLocked, setIsCenterLocked] = useState(false)
 
-  // Toggle states for letter icons (F, B, U, K)
+  // Toggle states for letter icons (F, B, U, K, T)
   const [isFLeftOn, setIsFLeftOn] = useState(false)
   const [isFRightOn, setIsFRightOn] = useState(false)
-  // Initialize B state based on whether bulkhead exists as a separate CabinetData entry
+  // Initialize B state based on whether bulkhead exists as a separate CabinetData entry (only for top and tall)
   const [isBOn, setIsBOn] = useState(() => {
-    if (cabinet.cabinetType === 'top' || cabinet.cabinetType === 'tall' || cabinet.cabinetType === 'base') {
+    if (cabinet.cabinetType === 'top' || cabinet.cabinetType === 'tall') {
       // Check if bulkhead exists as a separate CabinetData entry
       const existingBulkheadCabinet = allCabinets.find(
         (c) => c.cabinetType === 'bulkhead' && c.bulkheadParentCabinetId === cabinet.cabinetId
@@ -44,9 +44,9 @@ export const CabinetLockIcons: React.FC<Props> = ({ cabinet, camera, allCabinets
     return false
   })
 
-  // Sync B state with actual bulkhead existence when cabinet dimensions change
+  // Sync B state with actual bulkhead existence when cabinet dimensions change (only for top and tall)
   useEffect(() => {
-    if (cabinet.cabinetType === 'top' || cabinet.cabinetType === 'tall' || cabinet.cabinetType === 'base') {
+    if (cabinet.cabinetType === 'top' || cabinet.cabinetType === 'tall') {
       // Check if bulkhead exists as a separate CabinetData entry
       const existingBulkheadCabinet = allCabinets.find(
         (c) => c.cabinetType === 'bulkhead' && c.bulkheadParentCabinetId === cabinet.cabinetId
@@ -57,6 +57,7 @@ export const CabinetLockIcons: React.FC<Props> = ({ cabinet, camera, allCabinets
     }
   }, [
     cabinet.cabinetId,
+    cabinet.cabinetType,
     cabinet.carcass.dimensions.width,
     cabinet.carcass.dimensions.height,
     cabinet.carcass.dimensions.depth,
@@ -240,8 +241,25 @@ export const CabinetLockIcons: React.FC<Props> = ({ cabinet, camera, allCabinets
         )}
       </div>
 
-      {/* B Icon above Center Lock - Toggleable, for Base, Tall and Top (Overhead) cabinets */}
-      {showLetterIcons && (cabinet.cabinetType === 'base' || cabinet.cabinetType === 'tall' || cabinet.cabinetType === 'top') && (
+      {/* T Icon above Center Lock - For Base cabinets only (no functionality) */}
+      {showLetterIcons && cabinet.cabinetType === 'base' && (
+        <div
+          className="fixed z-50 bg-white rounded-full shadow-lg border-2 border-gray-300 flex items-center justify-center"
+          style={{
+            left: `${positions.center.x}px`,
+            top: `${positions.center.y - 35}px`,
+            transform: 'translate(-50%, -50%)',
+            pointerEvents: 'auto',
+            width: '29px',
+            height: '29px',
+          }}
+        >
+          <span className="font-bold text-sm text-gray-400">T</span>
+        </div>
+      )}
+
+      {/* B Icon above Center Lock - Toggleable, for Tall and Top (Overhead) cabinets only */}
+      {showLetterIcons && (cabinet.cabinetType === 'tall' || cabinet.cabinetType === 'top') && (
         <div
           className={`fixed z-50 bg-white rounded-full shadow-lg border-2 transition-colors cursor-pointer flex items-center justify-center ${isBOn
               ? 'border-blue-600 hover:border-blue-700'

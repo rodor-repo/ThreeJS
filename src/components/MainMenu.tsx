@@ -19,7 +19,7 @@ interface MainMenuProps {
   onMenuStateChange?: (isOpen: boolean) => void
   wsProducts: WsProducts | null
   setWsProducts: React.Dispatch<React.SetStateAction<WsProducts | null>>
-  onLoadRoom?: (savedRoom: import('@/data/savedRooms').SavedRoom) => void
+  onLoadRoom?: (savedRoom: import('@/data/savedRooms').SavedRoom) => Promise<void>
 }
 
 const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect: _onCategorySelect, onSubcategorySelect, selectedCategory: _selectedCategory, onMenuStateChange, wsProducts, setWsProducts, onLoadRoom }) => {
@@ -550,9 +550,9 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect: _onCategorySelect
                         >
                           <div className="flex items-center justify-between">
                             <div
-                              onClick={() => {
+                              onClick={async () => {
                                 if (onLoadRoom) {
-                                  onLoadRoom(room)
+                                  await onLoadRoom(room)
                                   // Close menu after loading
                                   setIsOpen(false)
                                   setSelectedTopLevelMenu(null)

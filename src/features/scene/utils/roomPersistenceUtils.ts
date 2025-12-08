@@ -11,7 +11,7 @@ import type { CabinetType, CarcassDimensions } from "@/features/carcass"
 import type { CabinetData, WallDimensions as WallDims } from "../types"
 import type { View, ViewId, ViewManager } from "@/features/cabinets/ViewManager"
 import { getClient } from "@/app/QueryProvider"
-import { getProductData } from "@/server/getProductData"
+import { getProductData, type MaterialOptionsResponse, type DefaultMaterialSelections } from "@/server/getProductData"
 import _ from "lodash"
 import toast from "react-hot-toast"
 
@@ -289,6 +289,23 @@ export async function restoreRoom({
     .map((c) => c.productId)
     .filter((id): id is string => !!id)
   await prefetchProductData(productIds)
+
+  // After prefetching, sync material options for all productIds (including cached ones)
+  const { getPartDataManager } = await import('@/nesting/PartDataManager')
+  const partDataManager = getPartDataManager()
+  const queryClient = getClient()
+  productIds.forEach(productId => {
+    const cached = queryClient.getQueryData(["productData", productId])
+    if (cached && typeof cached === 'object' && 'materialOptions' in cached && 'defaultMaterialSelections' in cached) {
+      const data = cached as { materialOptions: MaterialOptionsResponse, defaultMaterialSelections: DefaultMaterialSelections }
+      if (data.materialOptions) {
+        partDataManager.setMaterialOptions(productId, data.materialOptions)
+      }
+      if (data.defaultMaterialSelections) {
+        partDataManager.setDefaultMaterialSelections(productId, data.defaultMaterialSelections)
+      }
+    }
+  })
 
   return new Promise((resolve) => {
     setTimeout(() => {

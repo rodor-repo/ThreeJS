@@ -2134,6 +2134,50 @@ export class CarcassAssembly {
       return parts
     }
 
+    // Handle kicker type
+    if (this.cabinetType === "kicker" && this._kickerFace) {
+      const kickerGeometry = this._kickerFace.mesh.geometry as THREE.BoxGeometry
+      parts.push({
+        partName: "Kicker Face",
+        dimX: kickerGeometry.parameters.width,
+        dimY: kickerGeometry.parameters.height,
+        dimZ: kickerGeometry.parameters.depth,
+      })
+      return parts
+    }
+
+    // Handle bulkhead type
+    if (this.cabinetType === "bulkhead" && this._bulkheadFace) {
+      const bulkheadGeometry = this._bulkheadFace.mesh.geometry as THREE.BoxGeometry
+      parts.push({
+        partName: "Bulkhead Face",
+        dimX: bulkheadGeometry.parameters.width,
+        dimY: bulkheadGeometry.parameters.height,
+        dimZ: bulkheadGeometry.parameters.depth,
+      })
+      // Include returns if they exist
+      if (this._bulkheadReturnLeft) {
+        const returnGeometry = this._bulkheadReturnLeft.mesh.geometry as THREE.BoxGeometry
+        parts.push({
+          partName: "Bulkhead Return Left",
+          dimX: returnGeometry.parameters.width,
+          dimY: returnGeometry.parameters.height,
+          dimZ: returnGeometry.parameters.depth,
+        })
+      }
+      if (this._bulkheadReturnRight) {
+        const returnGeometry = this._bulkheadReturnRight.mesh.geometry as THREE.BoxGeometry
+        parts.push({
+          partName: "Bulkhead Return Right",
+          dimX: returnGeometry.parameters.width,
+          dimY: returnGeometry.parameters.height,
+          dimZ: returnGeometry.parameters.depth,
+        })
+      }
+      return parts
+    }
+
+
     // Traditional cabinet parts
     // Get actual dimensions from geometry to ensure accuracy
     // Left End: X=thickness, Y=height, Z=depth

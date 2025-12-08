@@ -103,6 +103,7 @@ const DynamicPanelWithQuery: React.FC<LocalProductPanelProps> = ({ isVisible, on
   return (
     <DynamicPanel
       key={productId}
+      productId={productId}
       isVisible={isVisible}
       onClose={onClose}
       wsProduct={wsProduct}
@@ -132,9 +133,9 @@ const DynamicPanelWithQuery: React.FC<LocalProductPanelProps> = ({ isVisible, on
 
 export const toNum = (v: number | string | undefined) => typeof v === 'number' ? v : Number(v)
 
-type DynamicPanelProps = LocalProductPanelProps & { loading?: boolean, error?: boolean, materialOptions?: MaterialOptionsResponse, defaultMaterialSelections?: DefaultMaterialSelections, threeJsGDs: Record<GDThreeJsType, string[]> | undefined, onGroupChange?: (cabinetId: string, groupCabinets: Array<{ cabinetId: string; percentage: number }>) => void, initialGroupData?: Array<{ cabinetId: string; percentage: number }>, onSyncChange?: (cabinetId: string, syncCabinets: string[]) => void, initialSyncData?: string[] }
+type DynamicPanelProps = LocalProductPanelProps & { productId?: string, loading?: boolean, error?: boolean, materialOptions?: MaterialOptionsResponse, defaultMaterialSelections?: DefaultMaterialSelections, threeJsGDs: Record<GDThreeJsType, string[]> | undefined, onGroupChange?: (cabinetId: string, groupCabinets: Array<{ cabinetId: string; percentage: number }>) => void, initialGroupData?: Array<{ cabinetId: string; percentage: number }>, onSyncChange?: (cabinetId: string, syncCabinets: string[]) => void, initialSyncData?: string[] }
 
-const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProduct, materialOptions, defaultMaterialSelections, selectedCabinet, onDimensionsChange, onMaterialChange, loading, error, threeJsGDs, onOverhangDoorToggle, onShelfCountChange, onDrawerHeightChange, onDrawerQuantityChange, onDoorCountChange, viewManager, onViewChange, allCabinets, onGroupChange, initialGroupData, onSyncChange, initialSyncData }) => {
+const DynamicPanel: React.FC<DynamicPanelProps> = ({ productId, isVisible, onClose, wsProduct, materialOptions, defaultMaterialSelections, selectedCabinet, onDimensionsChange, onMaterialChange, loading, error, threeJsGDs, onOverhangDoorToggle, onShelfCountChange, onDrawerHeightChange, onDrawerQuantityChange, onDoorCountChange, viewManager, onViewChange, allCabinets, onGroupChange, initialGroupData, onSyncChange, initialSyncData }) => {
 
 
   const [isExpanded, setIsExpanded] = useState(true)
@@ -176,7 +177,7 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
   // debounced inputs for price calculation
   type MaterialSel = { priceRangeId: string, colorId: string, finishId?: string }
   type PriceInputs = { dims: Record<string, number | string>, materialSelections: Record<string, MaterialSel> }
-  const [debouncedInputs, setDebouncedInputs] = useState<PriceInputs>({ dims: {}, materialSelections: {} })
+  const [debouncedInputs, setDebouncedInputs] = useState<PriceInputs>({ dims: values, materialSelections: materialSelections })
   // const lastInitRef = useRef<string | null>(null)
   const cabinetId = selectedCabinet?.cabinetId
   const hasInitializedRef = useRef<boolean>(false)
@@ -491,19 +492,26 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
   }, [values, materialSelections])
 
   // Price calculation via React Query keyed by all affecting inputs
-  const { data: priceData, isFetching: isPriceFetching, isError: isPriceError } = useQuery({
-    queryKey: ['wsProductPrice', wsProduct?.productId, debouncedInputs.dims, debouncedInputs.materialSelections],
+  // Use the explicit productId prop (from selectedCabinet) rather than wsProduct?.productId
+  // because wsProduct.productId may not exist in the API response structure
+  const effectiveProductId = productId || wsProduct?.productId
+  const { data: priceData, isFetching: isPriceFetching, isError: isPriceError, status: queryStatus, fetchStatus } = useQuery({
+    queryKey: ['wsProductPrice', effectiveProductId, debouncedInputs.dims, debouncedInputs.materialSelections],
     queryFn: async () => {
-      if (!wsProduct?.productId) throw new Error('No productId')
+      // wsProduct.productId check is redundant with enabled check but typescript needs it
+      if (!effectiveProductId) throw new Error('No productId')
       const payload: CalculatePriceRequest = {
-        productId: wsProduct.productId,
+        productId: effectiveProductId,
         dims: debouncedInputs.dims,
         materialSelections: debouncedInputs.materialSelections
       }
       const res = await calculateWsProductPrice(payload)
       return { amount: res.price }
     },
-    enabled: !!isVisible && !!wsProduct?.productId && Object.keys(debouncedInputs.dims || {}).length > 0,
+    // The query MUST be disabled until wsProduct is loaded. 
+    // Even if selectedCabinet has a productId, wsProduct needs to be fetched first 
+    // because that's what drives the inputs (dims/materials) used in the price calculation.
+    enabled: !!isVisible && !!effectiveProductId && !!wsProduct,
     staleTime: 10 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
     refetchOnWindowFocus: false
@@ -622,38 +630,48 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ isVisible, onClose, wsProdu
       <div className={`h-full transition-all duration-300 ease-in-out ${isExpanded ? 'w-80 sm:w-96 max-w-[90vw]' : 'w-0'} overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100`}>
         {/* Header */}
         <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3 min-w-0">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3 min-w-0 flex-1">
               {selectedCabinet?.sortNumber && (
-                <div className="flex items-center justify-center w-12 h-12 rounded-full bg-amber-100 border-2 border-amber-400 shadow-sm flex-shrink-0">
-                  <span className="text-xl font-extrabold text-amber-700">#{selectedCabinet.sortNumber}</span>
+                <div className="flex items-center justify-center w-10 h-10 rounded-full bg-amber-100 border-2 border-amber-400 shadow-sm flex-shrink-0 mt-1">
+                  <span className="text-lg font-extrabold text-amber-700">#{selectedCabinet.sortNumber}</span>
                 </div>
               )}
-              <div className="min-w-0">
-                <h2 className="text-lg font-semibold text-gray-800">Product Panel</h2>
-                {wsProduct && <p className="text-sm text-gray-600 mt-0.5 truncate" title={wsProduct.product}>{wsProduct.product}</p>}
+              <div className="min-w-0 flex-1">
+                <h2 className="text-lg font-semibold text-gray-800 leading-tight">Product Panel</h2>
+                {wsProduct && (
+                  <p className="text-sm text-gray-600 mt-1 break-words leading-snug" title={wsProduct.product}>
+                    {wsProduct.product}
+                  </p>
+                )}
+                <div className="mt-2 flex items-center gap-2 text-sm text-gray-700">
+                  {loading ? (
+                    <span className="text-blue-600 text-xs uppercase font-medium tracking-wide animate-pulse">Loading Product...</span>
+                  ) : error ? (
+                    <span className="text-red-600 font-medium">Product Error</span>
+                  ) : !wsProduct ? (
+                     <span className="text-amber-600 font-medium">No Product Data</span>
+                  ) : isPriceFetching ? (
+                    <span className="text-gray-500 text-xs uppercase font-medium tracking-wide">Updating Price…</span>
+                  ) : isPriceError ? (
+                    <span className="text-red-600 font-medium">Price N/A</span>
+                  ) : priceData && queryStatus === 'success' && priceData.amount > 0 ? (
+                    <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 font-bold">{`$${priceData.amount.toFixed(2)}`}</span>
+                  ) : (
+                    <span className="text-gray-400 italic text-xs">Calculating...</span>
+                  )}
+                </div>
               </div>
             </div>
-            <div className="flex items-center gap-3 flex-shrink-0">
-              <div className="flex items-center gap-2 text-sm text-gray-700">
-                {isPriceFetching ? (
-                  <span className="text-gray-500">Updating…</span>
-                ) : isPriceError ? (
-                  <span className="text-red-600">Price N/A</span>
-                ) : priceData ? (
-                  <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700">{`$${priceData.amount.toFixed(2)}`}</span>
-                ) : null}
-              </div>
-              <button
-                onClick={e => {
-                  e.stopPropagation()
-                  onClose()
-                }}
-                className="text-gray-500 hover:text-gray-700 transition-colors text-lg leading-none px-2"
-              >
-                ×
-              </button>
-            </div>
+            <button
+              onClick={e => {
+                e.stopPropagation()
+                onClose()
+              }}
+              className="text-gray-500 hover:text-gray-700 transition-colors text-xl leading-none px-2 py-1 -mr-2 -mt-1"
+            >
+              ×
+            </button>
           </div>
         </div>
 

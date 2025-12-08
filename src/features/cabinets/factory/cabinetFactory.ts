@@ -23,6 +23,8 @@ const defaultDimensions: Defaults = {
   kicker: { width: 600, height: 150, depth: 16 },
   // Bulkhead: width = cabinet width, height = gap to ceiling, depth = thickness (16mm)
   bulkhead: { width: 600, height: 200, depth: 16 },
+  // UnderPanel: width = cabinet width, height = thickness (16mm), depth = parent depth - 20
+  underPanel: { width: 600, height: 16, depth: 280 },
   benchtop: { width: 2000, height: 40, depth: 600 }, // Standard benchtop size
 }
 
@@ -188,6 +190,19 @@ export const createCabinet = (
       break
     case "bulkhead":
       carcass = CarcassAssembly.createBulkhead(
+        dimensions,
+        {
+          shelfCount: 0,
+          shelfSpacing: 0,
+          doorEnabled: false,
+          drawerEnabled: false,
+        },
+        productId,
+        cabinetId
+      )
+      break
+    case "underPanel":
+      carcass = CarcassAssembly.createUnderPanel(
         dimensions,
         {
           shelfCount: 0,

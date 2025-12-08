@@ -11,6 +11,7 @@ import { CarcassPanel } from "./parts/CarcassPanel"
 import { CarcassFront } from "./parts/CarcassFront"
 import { DrawerHeightManager } from "./parts/DrawerHeightManager"
 import { KickerFace } from "./parts/KickerFace"
+import { UnderPanelFace } from "./parts/UnderPanelFace"
 import { BulkheadFace } from "./parts/BulkheadFace"
 import { BulkheadReturn } from "./parts/BulkheadReturn"
 import { CarcassMaterial, CarcassMaterialData } from "./Material"
@@ -92,6 +93,7 @@ export class CarcassAssembly {
 
   // Kicker and bulkhead specific parts
   private _kickerFace?: KickerFace // For kicker type cabinet
+  private _underPanelFace?: UnderPanelFace // For underPanel type cabinet
   private _bulkheadFace?: BulkheadFace // For bulkhead type cabinet
   private _bulkheadReturnLeft?: BulkheadReturn // Left return for bulkhead cabinet
   private _bulkheadReturnRight?: BulkheadReturn // Right return for bulkhead cabinet
@@ -105,6 +107,13 @@ export class CarcassAssembly {
    */
   public get kickerFace(): KickerFace | undefined {
     return this._kickerFace
+  }
+
+  /**
+   * Get the underPanel face if this is an underPanel cabinet
+   */
+  public get underPanelFace(): UnderPanelFace | undefined {
+    return this._underPanelFace
   }
 
   /**
@@ -186,6 +195,11 @@ export class CarcassAssembly {
 
     if (this.cabinetType === "kicker") {
       this.buildKickerCabinet()
+      return
+    }
+
+    if (this.cabinetType === "underPanel") {
+      this.buildUnderPanelCabinet()
       return
     }
 
@@ -350,6 +364,27 @@ export class CarcassAssembly {
     this.group.add(this._kickerFace.mesh)
 
     // Position at origin
+    this.group.position.set(0, 0, 0)
+  }
+
+  /**
+   * Build an underPanel cabinet - a single under panel face
+   * UnderPanel sits below the overhead cabinets
+   * - dimensions.width = effective width (X axis)
+   * - dimensions.height = thickness (Y axis, typically 16mm)
+   * - dimensions.depth = actual depth (Z axis, parentDepth - 20)
+   */
+  private buildUnderPanelCabinet(): void {
+    this._underPanelFace = new UnderPanelFace({
+      width: this.dimensions.width,
+      depth: this.dimensions.depth,
+      thickness: this.dimensions.height, // Use height as thickness
+      material: this.config.material.getMaterial(),
+    })
+
+    this.group.add(this._underPanelFace.group)
+
+    // Position at origin (global positioning handled by handler)
     this.group.position.set(0, 0, 0)
   }
 
@@ -875,6 +910,11 @@ export class CarcassAssembly {
       return
     }
 
+    if (this.cabinetType === "underPanel") {
+      this.updateUnderPanelDimensions()
+      return
+    }
+
     if (this.cabinetType === "bulkhead") {
       this.updateBulkheadDimensions()
       return
@@ -1022,6 +1062,20 @@ export class CarcassAssembly {
         this.dimensions.width,
         this.dimensions.height, // legHeight
         this.dimensions.depth
+      )
+    }
+  }
+
+  /**
+   * Update dimensions for underPanel cabinet
+   * UnderPanel uses width for X, height for thickness, depth for Z
+   */
+  private updateUnderPanelDimensions(): void {
+    if (this._underPanelFace) {
+      this._underPanelFace.updateDimensions(
+        this.dimensions.width,
+        this.dimensions.depth,
+        this.dimensions.height // thickness
       )
     }
   }
@@ -1194,6 +1248,12 @@ export class CarcassAssembly {
     if (this._kickerFace) {
       this._kickerFace.dispose()
       this._kickerFace = undefined
+    }
+
+    // Dispose underPanel specific parts
+    if (this._underPanelFace) {
+      this._underPanelFace.dispose()
+      this._underPanelFace = undefined
     }
 
     // Dispose traditional carcass parts (only if they exist)
@@ -2057,6 +2117,25 @@ export class CarcassAssembly {
   }
 
   /**
+   * Create an underPanel cabinet - a single under panel face
+   * @param dimensions - width = effective width, height = thickness, depth = actual depth
+   */
+  static createUnderPanel(
+    dimensions: CarcassDimensions,
+    config: Partial<CarcassConfig>,
+    productId: string,
+    cabinetId: string
+  ): CarcassAssembly {
+    return new CarcassAssembly(
+      "underPanel",
+      dimensions,
+      config,
+      productId,
+      cabinetId
+    )
+  }
+
+  /**
    * Create a bulkhead cabinet - a single bulkhead face panel
    * @param dimensions - width = bulkhead width, height = bulkhead height, depth = bulkhead depth
    */
@@ -2142,6 +2221,19 @@ export class CarcassAssembly {
         dimX: kickerGeometry.parameters.width,
         dimY: kickerGeometry.parameters.height,
         dimZ: kickerGeometry.parameters.depth,
+      })
+      return parts
+    }
+
+    // Handle underPanel type
+    if (this.cabinetType === "underPanel" && this._underPanelFace) {
+      const underPanelGeometry = this._underPanelFace.mesh
+        .geometry as THREE.BoxGeometry
+      parts.push({
+        partName: "Under Panel",
+        dimX: underPanelGeometry.parameters.width,
+        dimY: underPanelGeometry.parameters.height,
+        dimZ: underPanelGeometry.parameters.depth,
       })
       return parts
     }

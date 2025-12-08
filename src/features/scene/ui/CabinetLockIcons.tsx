@@ -6,6 +6,7 @@ import type { WsProducts } from '@/types/erpTypes'
 import { FillersModal } from './FillersModal'
 import { KickersModal } from './KickersModal'
 import { BulkheadsModal } from './BulkheadsModal'
+import { UnderPanelsModal } from './UnderPanelsModal'
 
 type Props = {
   cabinet: CabinetData
@@ -15,13 +16,15 @@ type Props = {
   onLockChange?: (cabinetId: string, leftLock: boolean, rightLock: boolean) => void
   onKickerToggle?: (cabinetId: string, enabled: boolean) => void
   onBulkheadToggle?: (cabinetId: string, enabled: boolean) => void
+  onUnderPanelToggle?: (cabinetId: string, enabled: boolean) => void
   wsProducts?: WsProducts | null
   onFillerSelect?: (cabinetId: string, productId: string, side: 'left' | 'right') => void
   onKickerSelect?: (cabinetId: string, productId: string) => void
   onBulkheadSelect?: (cabinetId: string, productId: string) => void
+  onUnderPanelSelect?: (cabinetId: string, productId: string) => void
 }
 
-export const CabinetLockIcons: React.FC<Props> = ({ cabinet, camera, allCabinets, onClose, onLockChange, onKickerToggle, onBulkheadToggle, wsProducts, onFillerSelect, onKickerSelect, onBulkheadSelect }) => {
+export const CabinetLockIcons: React.FC<Props> = ({ cabinet, camera, allCabinets, onClose, onLockChange, onKickerToggle, onBulkheadToggle, onUnderPanelToggle, wsProducts, onFillerSelect, onKickerSelect, onBulkheadSelect, onUnderPanelSelect }) => {
   const [positions, setPositions] = useState({ center: { x: 0, y: 0 }, left: { x: 0, y: 0 }, right: { x: 0, y: 0 } })
 
   // Lock states - use cabinet's lock state, default to unlocked (false)
@@ -64,7 +67,39 @@ export const CabinetLockIcons: React.FC<Props> = ({ cabinet, camera, allCabinets
     cabinet.group.position.y,
     allCabinets,
   ])
-  const [isUOn, setIsUOn] = useState(false)
+  
+  // Initialize U state based on whether underPanel exists as a separate CabinetData entry (only for top cabinets)
+  const [isUOn, setIsUOn] = useState(() => {
+    if (cabinet.cabinetType === 'top') {
+      // Check if underPanel exists as a separate CabinetData entry
+      const existingUnderPanelCabinet = allCabinets.find(
+        (c) => c.cabinetType === 'underPanel' && c.underPanelParentCabinetId === cabinet.cabinetId
+      )
+      return !!existingUnderPanelCabinet
+    }
+    return false
+  })
+
+  // Sync U state with actual underPanel existence when cabinet dimensions change (only for top cabinets)
+  useEffect(() => {
+    if (cabinet.cabinetType === 'top') {
+      // Check if underPanel exists as a separate CabinetData entry
+      const existingUnderPanelCabinet = allCabinets.find(
+        (c) => c.cabinetType === 'underPanel' && c.underPanelParentCabinetId === cabinet.cabinetId
+      )
+      const underPanelExists = !!existingUnderPanelCabinet
+      // Sync state with actual underPanel existence
+      setIsUOn(underPanelExists)
+    }
+  }, [
+    cabinet.cabinetId,
+    cabinet.cabinetType,
+    cabinet.carcass.dimensions.width,
+    cabinet.carcass.dimensions.height,
+    cabinet.carcass.dimensions.depth,
+    cabinet.group.position.y,
+    allCabinets,
+  ])
 
   // Modal state for Fillers
   const [showFillersModal, setShowFillersModal] = useState(false)
@@ -75,6 +110,9 @@ export const CabinetLockIcons: React.FC<Props> = ({ cabinet, camera, allCabinets
 
   // Modal state for Bulkheads
   const [showBulkheadsModal, setShowBulkheadsModal] = useState(false)
+
+  // Modal state for UnderPanels
+  const [showUnderPanelsModal, setShowUnderPanelsModal] = useState(false)
 
   // Initialize K state based on whether kicker exists as a separate CabinetData entry
   const [isKOn, setIsKOn] = useState(() => {
@@ -368,7 +406,16 @@ export const CabinetLockIcons: React.FC<Props> = ({ cabinet, camera, allCabinets
           }}
           onClick={(e) => {
             e.stopPropagation()
-            setIsUOn(prev => !prev)
+            if (isUOn) {
+              // UnderPanel exists - remove it
+              setIsUOn(false)
+              if (onUnderPanelToggle) {
+                onUnderPanelToggle(cabinet.cabinetId, false)
+              }
+            } else {
+              // UnderPanel doesn't exist - open modal to select product
+              setShowUnderPanelsModal(true)
+            }
           }}
         >
           <span className={`font-bold text-sm ${isUOn ? 'text-blue-600' : 'text-gray-400'}`}>U</span>
@@ -477,6 +524,22 @@ export const CabinetLockIcons: React.FC<Props> = ({ cabinet, camera, allCabinets
             setIsBOn(true)
           }
           setShowBulkheadsModal(false)
+        }}
+      />
+
+      {/* UnderPanels Modal */}
+      <UnderPanelsModal
+        isOpen={showUnderPanelsModal}
+        onClose={() => {
+          setShowUnderPanelsModal(false)
+        }}
+        wsProducts={wsProducts || null}
+        onProductSelect={(productId) => {
+          if (onUnderPanelSelect) {
+            onUnderPanelSelect(cabinet.cabinetId, productId)
+            setIsUOn(true)
+          }
+          setShowUnderPanelsModal(false)
         }}
       />
     </>

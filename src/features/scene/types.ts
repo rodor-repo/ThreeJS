@@ -41,6 +41,7 @@ export type CabinetType =
   | "kicker"
   | "bulkhead"
   | "benchtop"
+  | "underPanel"
 
 export type CabinetData = {
   group: THREE.Group
@@ -67,4 +68,6 @@ export type CabinetData = {
   kickerParentCabinetId?: string
   /** For bulkhead type: parent cabinet ID that this bulkhead belongs to */
   bulkheadParentCabinetId?: string
+  /** For underPanel type: parent cabinet ID that this under panel belongs to */
+  underPanelParentCabinetId?: string
 }

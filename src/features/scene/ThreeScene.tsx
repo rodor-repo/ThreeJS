@@ -42,6 +42,7 @@ import { handleKickerHeightChange } from './utils/handlers/kickerHeightHandler'
 import { handleProductDimensionChange } from './utils/handlers/productDimensionHandler'
 import { handleDeleteCabinet } from './utils/handlers/deleteCabinetHandler'
 import { updateChildCabinets } from './utils/handlers/childCabinetHandler'
+import { updateUnderPanelPosition } from './utils/handlers/underPanelPositionHandler'
 
 interface ThreeSceneProps {
   wallDimensions: WallDims
@@ -716,33 +717,112 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
   }, [cabinets, deleteCabinet])
 
   // Handle bulkhead removal for base, overhead and tall cabinets
-  // Note: Bulkhead creation is handled by handleBulkheadSelect with product association
   const handleBulkheadToggle = useCallback((cabinetId: string, enabled: boolean) => {
-    if (enabled) {
-      // Creation is now handled by handleBulkheadSelect with proper product association
-      // This toggle only handles removal
-      return
-    }
+    if (enabled) return
 
     const cabinet = cabinets.find(c => c.cabinetId === cabinetId)
-    if (!cabinet || (cabinet.cabinetType !== 'top' && cabinet.cabinetType !== 'tall')) {
-      return
-    }
+    if (!cabinet || (cabinet.cabinetType !== 'top' && cabinet.cabinetType !== 'tall')) return
 
-    // Remove bulkhead from this cabinet
     const existingBulkheadCabinet = cabinets.find(
       (c) => c.cabinetType === 'bulkhead' && c.bulkheadParentCabinetId === cabinetId
     )
 
     if (existingBulkheadCabinet) {
-      // Dispose entire bulkhead carcass (includes face and returns)
-      // CarcassAssembly.dispose() handles all cleanup
       existingBulkheadCabinet.carcass?.dispose()
-
-      // Remove bulkhead using deleteCabinet method
       deleteCabinet(existingBulkheadCabinet.cabinetId)
     }
   }, [cabinets, deleteCabinet])
+
+  // Handle underPanel removal for top cabinets
+  const handleUnderPanelToggle = useCallback((cabinetId: string, enabled: boolean) => {
+    if (enabled) return
+
+    const cabinet = cabinets.find(c => c.cabinetId === cabinetId)
+    if (!cabinet || cabinet.cabinetType !== 'top') return
+
+    const existingUnderPanelCabinet = cabinets.find(
+      (c) => c.cabinetType === 'underPanel' && c.underPanelParentCabinetId === cabinetId
+    )
+
+    if (existingUnderPanelCabinet) {
+      existingUnderPanelCabinet.carcass?.dispose()
+      deleteCabinet(existingUnderPanelCabinet.cabinetId)
+    }
+  }, [cabinets, deleteCabinet])
+
+  // Handle underPanel selection from modal
+  const handleUnderPanelSelect = useCallback((cabinetId: string, productId: string) => {
+    if (!wsProducts) return
+
+    const parentCabinet = cabinets.find(c => c.cabinetId === cabinetId)
+    if (!parentCabinet || parentCabinet.cabinetType !== 'top') return
+
+    const productEntry = wsProducts.products[productId]
+    if (!productEntry) return
+
+    const designId = productEntry.designId
+    const designEntry = wsProducts.designs[designId || ""]
+    if (!designEntry || designEntry.type3D !== 'underPanel') return
+
+    const subcategoryId = productEntry.subCategoryId
+
+    const existingUnderPanelCabinet = cabinets.find(
+      (c) => c.cabinetType === 'underPanel' && c.underPanelParentCabinetId === cabinetId
+    )
+
+    if (existingUnderPanelCabinet) return
+
+    // Calculate effective width
+    const childCabinets = cabinets.filter(
+      (c) =>
+        c.parentCabinetId === cabinetId &&
+        (c.cabinetType === 'filler' || c.cabinetType === 'panel') &&
+        c.hideLockIcons === true
+    )
+
+    let minX = parentCabinet.group.position.x
+    let maxX = parentCabinet.group.position.x + parentCabinet.carcass.dimensions.width
+
+    childCabinets.forEach((child) => {
+      const childLeft = child.group.position.x
+      const childRight = child.group.position.x + child.carcass.dimensions.width
+      if (childLeft < minX) minX = childLeft
+      if (childRight > maxX) maxX = childRight
+    })
+
+    const effectiveWidth = maxX - minX
+    const parentDepth = parentCabinet.carcass.dimensions.depth
+    const targetDepth = parentDepth - 20
+
+    const underPanelCabinet = createCabinet("underPanel", subcategoryId, {
+      productId,
+      customDimensions: {
+        width: effectiveWidth,
+        height: 16, // thickness
+        depth: targetDepth,
+      },
+      additionalProps: {
+        viewId: parentCabinet.viewId,
+        underPanelParentCabinetId: cabinetId,
+        hideLockIcons: true,
+      }
+    })
+
+    if (!underPanelCabinet) return
+
+    const cabinetWorldPos = new THREE.Vector3()
+    parentCabinet.group.getWorldPosition(cabinetWorldPos)
+
+    const underPanelWorldPos = new THREE.Vector3(
+      minX,
+      parentCabinet.group.position.y,
+      parentCabinet.group.position.z
+    )
+
+    underPanelCabinet.group.position.copy(underPanelWorldPos)
+    underPanelCabinet.group.name = `underPanel_${parentCabinet.cabinetId}`
+
+  }, [cabinets, wsProducts, createCabinet])
 
   // Handle bulkhead selection from modal - creates bulkhead with proper product association
   const handleBulkheadSelect = useCallback((cabinetId: string, productId: string) => {
@@ -1192,10 +1272,12 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
             }}
             onKickerToggle={handleKickerToggle}
             onBulkheadToggle={handleBulkheadToggle}
+            onUnderPanelToggle={handleUnderPanelToggle}
             wsProducts={wsProducts}
             onFillerSelect={handleFillerSelect}
             onKickerSelect={handleKickerSelect}
             onBulkheadSelect={handleBulkheadSelect}
+            onUnderPanelSelect={handleUnderPanelSelect}
           />
         )}
 

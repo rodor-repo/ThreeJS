@@ -1,5 +1,6 @@
 import { CabinetData } from "../../types"
 import { updateKickerPosition } from "./kickerPositionHandler"
+import { updateUnderPanelPosition } from "./underPanelPositionHandler"
 
 /**
  * Updates child fillers/panels when parent cabinet dimensions change
@@ -210,6 +211,17 @@ export const updateChildCabinets = (
     (changes.widthChanged || changes.positionChanged)
   ) {
     updateKickerPosition(parentCabinet, cabinets, {
+      dimensionsChanged: true
+    })
+  }
+
+  // Update parent underPanel if parent is top and child dimensions/position changed
+  // (affects underPanel width extension)
+  if (
+    parentCabinet.cabinetType === 'top' &&
+    (changes.widthChanged || changes.positionChanged)
+  ) {
+    updateUnderPanelPosition(parentCabinet, cabinets, {
       dimensionsChanged: true
     })
   }

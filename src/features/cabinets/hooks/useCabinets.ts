@@ -150,7 +150,16 @@ export const useCabinets = (
           )
           .map((cab) => cab.cabinetId)
 
-        // Update parent cabinet and all its children (fillers/panels and kickers)
+        // Find all underPanels that belong to this parent
+        const underPanelCabinetIds = prev
+          .filter(
+            (cab) =>
+              cab.underPanelParentCabinetId === cabinetId &&
+              cab.cabinetType === 'underPanel'
+          )
+          .map((cab) => cab.cabinetId)
+
+        // Update parent cabinet and all its children (fillers/panels, kickers, and underPanels)
         return prev.map((cab) => {
           if (cab.cabinetId === cabinetId) {
             // Update parent cabinet
@@ -160,6 +169,9 @@ export const useCabinets = (
             return { ...cab, viewId }
           } else if (kickerCabinetIds.includes(cab.cabinetId)) {
             // Update kickers to match parent's viewId
+            return { ...cab, viewId }
+          } else if (underPanelCabinetIds.includes(cab.cabinetId)) {
+            // Update underPanels to match parent's viewId
             return { ...cab, viewId }
           }
           return cab
@@ -185,12 +197,23 @@ export const useCabinets = (
           )
           .map((cab) => cab.cabinetId)
 
+        // Find underPanel cabinet IDs from selected cabinets
+        const underPanelCabinetIds = prev
+          .filter(
+            (cab) =>
+              cab.underPanelParentCabinetId === cabinetId &&
+              cab.cabinetType === 'underPanel'
+          )
+          .map((cab) => cab.cabinetId)
+
         return prev.map((cab) => {
           if (cab.cabinetId === cabinetId) {
             return { ...cab, viewId }
           } else if (childCabinetIds.includes(cab.cabinetId)) {
             return { ...cab, viewId }
           } else if (kickerCabinetIds.includes(cab.cabinetId)) {
+            return { ...cab, viewId }
+          } else if (underPanelCabinetIds.includes(cab.cabinetId)) {
             return { ...cab, viewId }
           }
           return cab

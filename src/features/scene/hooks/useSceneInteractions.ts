@@ -8,6 +8,7 @@ import {
 } from "../lib/snapUtils"
 import { updateKickerPosition } from "../utils/handlers/kickerPositionHandler"
 import { updateBulkheadPosition, updateReturnBulkheads } from "../utils/handlers/bulkheadPositionHandler"
+import { updateUnderPanelPosition } from "../utils/handlers/underPanelPositionHandler"
 import type { ViewManager, ViewId } from "../../cabinets/ViewManager"
 import { updateChildCabinets } from "../utils/handlers/childCabinetHandler"
 
@@ -132,6 +133,14 @@ export const useSceneInteractions = (
         // to handle stale references from clickStartCabinetRef
         if (otherCabinet.cabinetId === cabinet.cabinetId) continue
 
+        // Skip underPanel cabinets that belong to this cabinet
+        // This prevents the cabinet from colliding with its own underPanel when moving down
+        if (
+          otherCabinet.cabinetType === "underPanel" &&
+          otherCabinet.underPanelParentCabinetId === cabinet.cabinetId
+        ) {
+          continue
+        }
 
         const otherX = otherCabinet.group.position.x
         const otherWidth = otherCabinet.carcass.dimensions.width
@@ -323,6 +332,13 @@ export const useSceneInteractions = (
         })
       }
 
+      // Update underPanel position when parent cabinet moves (only for top)
+      if (draggedCabinet.cabinetType === 'top') {
+        updateUnderPanelPosition(draggedCabinet, cabinets, {
+          positionChanged: true
+        })
+      }
+
       // Check all overhead and tall cabinets for return bulkhead updates when any cabinet moves
       // This ensures return bulkheads are created/removed when cabinets are snapped or reach walls
       cabinets.forEach((cabinet) => {
@@ -403,6 +419,13 @@ export const useSceneInteractions = (
             // Update bulkhead position when cabinet in view moves
             if (cabinetInView.cabinetType === 'base' || cabinetInView.cabinetType === 'top' || cabinetInView.cabinetType === 'tall') {
               updateBulkheadPosition(cabinetInView, cabinets, wallDimensions, {
+                positionChanged: true
+              })
+            }
+
+            // Update underPanel position when cabinet in view moves
+            if (cabinetInView.cabinetType === 'top') {
+              updateUnderPanelPosition(cabinetInView, cabinets, {
                 positionChanged: true
               })
             }

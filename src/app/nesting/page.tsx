@@ -59,7 +59,7 @@ export default function NestingPage() {
               console.log('Received nesting data via postMessage')
               try {
                 receivedData = event.data.data
-                console.log(`Received ${receivedData.length} bytes via postMessage`)
+                console.log(`Received ${receivedData?.length ?? 0} bytes via postMessage`)
                 window.removeEventListener('message', messageHandler)
               } catch (e) {
                 console.error('Error receiving data from postMessage:', e)

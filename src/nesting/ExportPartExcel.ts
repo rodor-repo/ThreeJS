@@ -51,44 +51,36 @@ function getOriginalDimensions(part: Part): {
 }
 
 /**
- * Get material name from MaterialLoader using material color
- * For doors/drawers/kickers, uses door materials; for others, uses carcass materials
- * Falls back to part's materialName if no match found
+ * Get material name from part data
+ * Prioritizes the part's materialName from PartDataManager (actual user selection)
+ * Falls back to MaterialLoader lookup by color if materialName is not set
  */
 function getMaterialName(
   materialColor: string,
   materialThickness: number,
   partName?: string,
-  fallbackMaterialName?: string
+  partMaterialName?: string
 ): string {
+  // Prioritize the actual material name from part data (from PartDataManager)
+  // This contains the user-selected color/finish from ProductPanel
+  if (partMaterialName && partMaterialName !== 'Unknown Material') {
+    return partMaterialName
+  }
+
   try {
-    // Determine if this is a door, drawer, or kicker part
+    // Fallback: Try MaterialLoader lookup by color
     const isDoor = partName?.includes('Door') || false
     const isDrawer = partName?.includes('Drawer') || partName?.includes('Drawer Front') || false
     const isKicker = partName?.includes('Kicker') || false
     
-    // For doors, drawers, and kickers, use door materials
     if (isDoor || isDrawer || isKicker) {
-      const doorMaterialName = MaterialLoader.findDoorMaterialNameByColor(materialColor, materialThickness)
-      // If we found a match (not the default), return it
-      if (doorMaterialName !== 'Door Material') {
-        return doorMaterialName
-      }
-      // Otherwise fall back to provided name
-      return fallbackMaterialName || doorMaterialName
+      return MaterialLoader.findDoorMaterialNameByColor(materialColor, materialThickness)
     }
     
-    // For carcass parts, use carcass materials
-    const carcassMaterialName = MaterialLoader.findCarcassMaterialNameByColor(materialColor, materialThickness)
-    // If we found a match (not the default), return it
-    if (carcassMaterialName !== 'Carcass Material') {
-      return carcassMaterialName
-    }
-    // Otherwise fall back to provided name
-    return fallbackMaterialName || carcassMaterialName
+    return MaterialLoader.findCarcassMaterialNameByColor(materialColor, materialThickness)
   } catch (error) {
     console.error('Error getting material name:', error)
-    return fallbackMaterialName || 'Unknown Material'
+    return 'Unknown Material'
   }
 }
 

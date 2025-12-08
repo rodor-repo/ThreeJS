@@ -4,6 +4,7 @@ import { X } from 'lucide-react'
 import type { CabinetData } from '../types'
 import type { WsProducts } from '@/types/erpTypes'
 import { MaterialLoader } from '@/features/carcass/MaterialLoader'
+import { getPartDataManager } from '@/nesting/PartDataManager'
 
 interface NestingModalProps {
   isOpen: boolean
@@ -35,16 +36,39 @@ export const NestingModal: React.FC<NestingModalProps> = ({
   const [hasGrainDirection, setHasGrainDirection] = useState<boolean>(false)
   const [cuttingToolsThick, setCuttingToolsThick] = useState<number>(10) // Default 10mm
 
-  // Get all materials from MaterialLoader
+  // Get all unique materials from cabinet parts (actual selected materials)
+  // Re-compute when modal opens (isOpen) to ensure fresh data from PartDataManager
   const materials = useMemo(() => {
-    const materialsList = MaterialLoader.getAllMaterialsWithNames()
-    // Debug: log materials to console
+    if (!isOpen) return [] // Don't compute if modal is closed
+    
+    const pdm = getPartDataManager()
+    const materialSet = new Map<string, { id: string, name: string }>()
+    
+    // Collect unique material names from all cabinet parts
+    cabinets.forEach(cab => {
+      const parts = pdm.getCabinetParts(cab.cabinetId)
+      parts.forEach(part => {
+        if (part.materialName && !materialSet.has(part.materialName)) {
+          // Use material name as both id and name for simplicity
+          const safeId = part.materialName.toLowerCase().replace(/[^a-z0-9]+/g, '-')
+          materialSet.set(part.materialName, {
+            id: safeId,
+            name: part.materialName
+          })
+        }
+      })
+    })
+    
+    const materialsList = Array.from(materialSet.values())
+    
+    // Fallback to MaterialLoader if no cabinet parts have materials
     if (materialsList.length === 0) {
-      console.log('NestingModal: No materials found from MaterialLoader.getAllMaterialsWithNames()')
-      console.log('Available material IDs:', MaterialLoader.getAvailableMaterialIds())
+      const fallbackList = MaterialLoader.getAllMaterialsWithNames()
+      return fallbackList.map(m => ({ id: m.id, name: m.name }))
     }
+    
     return materialsList
-  }, [])
+  }, [isOpen, cabinets])
 
   // Set default selected material when materials change
   useEffect(() => {

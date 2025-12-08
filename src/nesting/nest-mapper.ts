@@ -96,10 +96,10 @@ export function extractPartsFromScene(
         const cabinetData = cabinet as CabinetData
         const carcass = cabinetData.carcass
         dimensions = carcass.dimensions
-        const material = carcass.material
+        const config = carcass.config
+        const material = config.material
         materialColor = material?.getColour() || '#ffffff'
         materialThickness = material?.getThickness() || 16
-        const config = (carcass as any).config || {}
         doorEnabled = config.doorEnabled
         doorCount = config.doorCount
         drawerEnabled = config.drawerEnabled
@@ -114,8 +114,7 @@ export function extractPartsFromScene(
           !dimensions.width || dimensions.width <= 0 ||
           !dimensions.height || dimensions.height <= 0 ||
           !dimensions.depth || dimensions.depth <= 0) {
-        const cabId = (cabinet as any).cabinetId || 'unknown'
-        console.warn(`Skipping cabinet ${cabId} - invalid dimensions:`, dimensions)
+        console.warn(`Skipping cabinet ${cabinet.cabinetId} - invalid dimensions:`, dimensions)
         continue
       }
 
@@ -125,8 +124,7 @@ export function extractPartsFromScene(
         continue
       }
     } catch (error) {
-      const cabId = (cabinet as any).cabinetId || 'unknown'
-      console.error(`Error processing cabinet ${cabId}:`, error)
+      console.error(`Error processing cabinet ${cabinet.cabinetId ?? 'unknown'}:`, error)
       continue
     }
 

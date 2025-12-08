@@ -5,10 +5,10 @@
  */
 
 import type { CabinetData } from '@/features/scene/types'
-import type { CarcassAssembly } from '@/features/carcass/CarcassAssembly'
 import { MaterialLoader } from '@/features/carcass/MaterialLoader'
 import type { MaterialOptionsResponse, DefaultMaterialSelections } from '@/server/getProductData'
 import { cabinetPanelState } from '@/features/cabinets/ui/ProductPanel'
+import type { WsProducts } from '@/types/erpTypes'
 
 export interface PartData {
   partId: string
@@ -39,7 +39,7 @@ export interface CabinetPartData {
  */
 export class PartDataManager {
   private partDatabase: Map<string, CabinetPartData> = new Map()
-  private wsProducts: any = null // WsProducts | null
+  private wsProducts: WsProducts | null = null
   // Store materialOptions and defaultMaterialSelections per productId
   private materialOptionsMap: Map<string, MaterialOptionsResponse> = new Map()
   private defaultMaterialSelectionsMap: Map<string, DefaultMaterialSelections> = new Map()
@@ -50,20 +50,20 @@ export class PartDataManager {
    * Set wsProducts for product name lookup
    * Updates all existing cabinets with new product names
    */
-  public setWsProducts(wsProducts: any): void {
-    const wasChanged = this.wsProducts !== wsProducts
-    this.wsProducts = wsProducts
+  public setWsProducts(wsProducts: WsProducts | null | undefined): void {
+    const normalizedWsProducts = wsProducts ?? null
+    const wasChanged = this.wsProducts !== normalizedWsProducts
+    this.wsProducts = normalizedWsProducts
     
     // If wsProducts changed, update all existing cabinets to refresh their names
     if (wasChanged) {
-      const cabinetIds = Array.from(this.partDatabase.keys())
       // Note: We need the actual CabinetData objects to update, but we only have stored parts
       // So we'll update the stored cabinetName in each part
-      this.partDatabase.forEach((cabinetData, cabinetId) => {
+      this.partDatabase.forEach((cabinetData, _cabinetId) => {
         // Try to find product name from wsProducts
         // We need to reconstruct the cabinet info from stored data
         const firstPart = cabinetData.parts[0]
-        if (firstPart && wsProducts?.products) {
+        if (firstPart && normalizedWsProducts?.products) {
           // We don't have productId stored, so we can't update names here
           // The names will be updated on the next updateCabinetParts call
         }
@@ -101,7 +101,7 @@ export class PartDataManager {
     cabinetId: string,
     doorMaterialColor: string,
     doorMaterialThickness: number,
-    wsProducts?: any
+    _wsProducts?: unknown
   ): string {
     // Try to get color name from materialOptions
     if (productId) {
@@ -112,15 +112,18 @@ export class PartDataManager {
       const persistedState = cabinetPanelState.get(cabinetId)
       const materialSelections = persistedState?.materialSelections
 
-      if (materialOptions && wsProducts?.products?.[productId]?.materials) {
-        // Find door material ID from wsProduct.materials
-        // Look for materials with materialType === "Door"
-        const productMaterials = wsProducts.products[productId].materials
+      // materialOptions contains the material IDs as keys (e.g., "8258413213288-...")
+      // These same IDs are used as keys in materialSelections
+      // We need to find which materialId is the Door material by checking materialOptions structure
+      if (materialOptions) {
+        // Find door material ID by looking for one with "Door" in its material name
+        // materialOptions structure: { [materialId]: { material: string, priceRanges: {...} } }
         let doorMaterialId: string | undefined
 
-        for (const [materialId, material] of Object.entries(productMaterials)) {
-          // Check if this material is a door material by materialType
-          if ((material as any).materialType === 'Door') {
+        for (const [materialId, matOpts] of Object.entries(materialOptions)) {
+          // Check if this material name contains "Door"
+          const materialName = matOpts.material || ''
+          if (materialName.toLowerCase().includes('door')) {
             doorMaterialId = materialId
             break
           }
@@ -137,13 +140,20 @@ export class PartDataManager {
             if (colorId) {
               // Find the priceRange containing this colorId
               // First try the priceRangeId from selection, then search all priceRanges
-              const priceRangeId = selection?.priceRangeId
+              const priceRangeId = 'priceRangeId' in selection ? selection.priceRangeId : undefined
+              const finishId = 'finishId' in selection ? selection.finishId : undefined
+              
               if (priceRangeId && mOpts.priceRanges[priceRangeId]) {
                 const priceRange = mOpts.priceRanges[priceRangeId]
                 if (colorId in priceRange.colorOptions) {
                   const colorOption = priceRange.colorOptions[colorId]
                   if (colorOption?.color) {
-                    return colorOption.color
+                    // Include finish name if available
+                    let result = colorOption.color
+                    if (finishId && colorOption.finishes?.[finishId]?.finish) {
+                      result = `${colorOption.color} / ${colorOption.finishes[finishId].finish}`
+                    }
+                    return result
                   }
                 }
               }
@@ -153,7 +163,12 @@ export class PartDataManager {
                 if (colorId in priceRange.colorOptions) {
                   const colorOption = priceRange.colorOptions[colorId]
                   if (colorOption?.color) {
-                    return colorOption.color
+                    // Include finish name if available
+                    let result = colorOption.color
+                    if (finishId && colorOption.finishes?.[finishId]?.finish) {
+                      result = `${colorOption.color} / ${colorOption.finishes[finishId].finish}`
+                    }
+                    return result
                   }
                 }
               }
@@ -165,6 +180,86 @@ export class PartDataManager {
 
     // Fallback to MaterialLoader lookup by color
     return MaterialLoader.findDoorMaterialNameByColor(doorMaterialColor, doorMaterialThickness)
+  }
+
+  /**
+   * Get carcass color name from materialOptions using colorId
+   * Returns color name (with finish) if found, otherwise falls back to MaterialLoader lookup
+   */
+  private getCarcassColorName(
+    productId: string | undefined,
+    cabinetId: string,
+    carcassMaterialColor: string,
+    carcassMaterialThickness: number
+  ): string {
+    // Try to get color name from materialOptions
+    if (productId) {
+      const materialOptions = this.materialOptionsMap.get(productId)
+      const defaultMaterialSelections = this.defaultMaterialSelectionsMap.get(productId)
+      
+      // Get materialSelections from cabinetPanelState (ProductPanel's state)
+      const persistedState = cabinetPanelState.get(cabinetId)
+      const materialSelections = persistedState?.materialSelections
+
+      if (materialOptions) {
+        // Find carcass material ID by looking for one with "Carcass" in its material name
+        let carcassMaterialId: string | undefined
+
+        for (const [materialId, matOpts] of Object.entries(materialOptions)) {
+          const materialName = matOpts.material || ''
+          if (materialName.toLowerCase().includes('carcass')) {
+            carcassMaterialId = materialId
+            break
+          }
+        }
+
+        // If we found a carcass material ID, get its color name
+        if (carcassMaterialId) {
+          const mOpts = materialOptions[carcassMaterialId]
+          if (mOpts) {
+            // Get colorId from materialSelections (user selection) or defaultMaterialSelections (API default)
+            const selection = materialSelections?.[carcassMaterialId] || defaultMaterialSelections?.[carcassMaterialId]
+            const colorId = selection?.colorId
+
+            if (colorId) {
+              const priceRangeId = 'priceRangeId' in selection ? selection.priceRangeId : undefined
+              const finishId = 'finishId' in selection ? selection.finishId : undefined
+              
+              if (priceRangeId && mOpts.priceRanges[priceRangeId]) {
+                const priceRange = mOpts.priceRanges[priceRangeId]
+                if (colorId in priceRange.colorOptions) {
+                  const colorOption = priceRange.colorOptions[colorId]
+                  if (colorOption?.color) {
+                    let result = colorOption.color
+                    if (finishId && colorOption.finishes?.[finishId]?.finish) {
+                      result = `${colorOption.color} / ${colorOption.finishes[finishId].finish}`
+                    }
+                    return result
+                  }
+                }
+              }
+
+              // Search all priceRanges
+              for (const priceRange of Object.values(mOpts.priceRanges)) {
+                if (colorId in priceRange.colorOptions) {
+                  const colorOption = priceRange.colorOptions[colorId]
+                  if (colorOption?.color) {
+                    let result = colorOption.color
+                    if (finishId && colorOption.finishes?.[finishId]?.finish) {
+                      result = `${colorOption.color} / ${colorOption.finishes[finishId].finish}`
+                    }
+                    return result
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Fallback to MaterialLoader lookup by color
+    return MaterialLoader.findCarcassMaterialNameByColor(carcassMaterialColor, carcassMaterialThickness)
   }
 
   /**
@@ -205,8 +300,8 @@ export class PartDataManager {
       const carcass = cabinet.carcass
       const partDimensions = carcass.getPartDimensions()
       
-      // Get carcass material instance
-      const carcassMaterial = carcass.material
+      // Get carcass material instance from config
+      const carcassMaterial = carcass.config.material
       const carcassMaterialColor = carcassMaterial?.getColour() || '#ffffff'
       const carcassMaterialThickness = carcassMaterial?.getThickness() || 16
       
@@ -232,9 +327,11 @@ export class PartDataManager {
           materialColor = doorMaterialColor
           materialName = this.getDoorColorName(cabinet.productId, cabinet.cabinetId, doorMaterialColor, doorMaterialThickness, this.wsProducts)
         } else {
-          // Get material name from CarcassMaterial instance by matching color
+          // Get material name from CarcassMaterial instance
+          // First try to get color name from materialOptions using colorId
+          // Then fallback to MaterialLoader lookup by color
           materialColor = carcassMaterialColor
-          materialName = MaterialLoader.findCarcassMaterialNameByColor(carcassMaterialColor, carcassMaterialThickness)
+          materialName = this.getCarcassColorName(cabinet.productId, cabinet.cabinetId, carcassMaterialColor, carcassMaterialThickness)
         }
 
         return {

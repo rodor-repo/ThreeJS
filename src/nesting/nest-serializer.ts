@@ -51,8 +51,8 @@ export function serializeCabinetsForNesting(
   return cabinets.map((cabinet) => {
     const carcass = cabinet.carcass
     const dimensions = carcass.dimensions
-    const material = carcass.material
-    const config = (carcass as any).config || {}
+    const config = carcass.config
+    const material = config.material
     
     // Get part data from PartDataManager (includes standardized names and product names)
     const cabinetParts = partDataManager.getCabinetParts(cabinet.cabinetId)
@@ -93,8 +93,8 @@ export function serializeCabinetsForNesting(
  */
 export function deserializeCabinetsForNesting(
   serialized: SerializableCabinet[]
-): any[] {
+): SerializableCabinet[] {
   // Return as-is since mapper will work with the serialized format
-  return serialized as any[]
+  return serialized
 }
 

@@ -29,7 +29,7 @@ export function hasLeftAdjacentCabinet(
     const otherMaxX = other.group.position.x + other.carcass.dimensions.width
 
     // Use a small epsilon for floating point comparison
-    const EPSILON = 0.01
+    const EPSILON = 4.0
     if (Math.abs(otherMaxX - cabinetMinX) < EPSILON) {
       return other
     }
@@ -61,7 +61,7 @@ export function hasRightAdjacentCabinet(
     const otherMinX = other.group.position.x
 
     // Use a small epsilon for floating point comparison
-    const EPSILON = 0.01
+    const EPSILON = 4.0
     if (Math.abs(otherMinX - cabinetMaxX) < EPSILON) {
       return other
     }
@@ -449,7 +449,7 @@ export function updateReturnBulkheads(
   let shouldHaveLeftReturn = !reachesLeft && !reachesMiddleFromLeft
   if (leftAdjacentCabinet) {
     const leftAdjacentDepth = leftAdjacentCabinet.carcass.dimensions.depth
-    if (currentCabinetDepth < leftAdjacentDepth) {
+    if (currentCabinetDepth <= leftAdjacentDepth) {
       shouldHaveLeftReturn = false
     }
   }
@@ -458,7 +458,7 @@ export function updateReturnBulkheads(
   let shouldHaveRightReturn = !reachesRight && !reachesMiddleFromRight
   if (rightAdjacentCabinet) {
     const rightAdjacentDepth = rightAdjacentCabinet.carcass.dimensions.depth
-    if (currentCabinetDepth < rightAdjacentDepth) {
+    if (currentCabinetDepth <= rightAdjacentDepth) {
       shouldHaveRightReturn = false
     }
   }

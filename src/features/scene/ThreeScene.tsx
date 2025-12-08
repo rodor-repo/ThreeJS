@@ -918,13 +918,13 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         let needsLeftReturn = leftAdjacentCabinet === null
         if (leftAdjacentCabinet) {
           const leftAdjacentDepth = leftAdjacentCabinet.carcass.dimensions.depth
-          needsLeftReturn = currentCabinetDepth >= leftAdjacentDepth
+          needsLeftReturn = currentCabinetDepth > leftAdjacentDepth
         }
 
         let needsRightReturn = rightAdjacentCabinet === null
         if (rightAdjacentCabinet) {
           const rightAdjacentDepth = rightAdjacentCabinet.carcass.dimensions.depth
-          needsRightReturn = currentCabinetDepth >= rightAdjacentDepth
+          needsRightReturn = currentCabinetDepth > rightAdjacentDepth
         }
 
         const frontEdgeOffsetZ = parentCabinet.carcass.dimensions.depth - 16

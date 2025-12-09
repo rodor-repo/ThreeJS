@@ -19,12 +19,28 @@ type Props = {
   onUnderPanelToggle?: (cabinetId: string, enabled: boolean) => void
   wsProducts?: WsProducts | null
   onFillerSelect?: (cabinetId: string, productId: string, side: 'left' | 'right') => void
+  onFillerToggle?: (cabinetId: string, side: 'left' | 'right', enabled: boolean) => void
   onKickerSelect?: (cabinetId: string, productId: string) => void
   onBulkheadSelect?: (cabinetId: string, productId: string) => void
   onUnderPanelSelect?: (cabinetId: string, productId: string) => void
 }
 
-export const CabinetLockIcons: React.FC<Props> = ({ cabinet, camera, allCabinets, onClose, onLockChange, onKickerToggle, onBulkheadToggle, onUnderPanelToggle, wsProducts, onFillerSelect, onKickerSelect, onBulkheadSelect, onUnderPanelSelect }) => {
+export const CabinetLockIcons: React.FC<Props> = ({
+  cabinet,
+  camera,
+  allCabinets,
+  onClose,
+  onLockChange,
+  onKickerToggle,
+  onBulkheadToggle,
+  onUnderPanelToggle,
+  wsProducts,
+  onFillerSelect,
+  onFillerToggle,
+  onKickerSelect,
+  onBulkheadSelect,
+  onUnderPanelSelect
+}) => {
   const [positions, setPositions] = useState({ center: { x: 0, y: 0 }, left: { x: 0, y: 0 }, right: { x: 0, y: 0 } })
 
   // Lock states - use cabinet's lock state, default to unlocked (false)
@@ -150,6 +166,22 @@ export const CabinetLockIcons: React.FC<Props> = ({ cabinet, camera, allCabinets
   const showLeftLock = true
   const showRightLock = true
 
+  // Sync filler/panel state with actual children
+  useEffect(() => {
+    const childFillers = allCabinets.filter(
+      (c) =>
+        c.parentCabinetId === cabinet.cabinetId &&
+        (c.cabinetType === 'filler' || c.cabinetType === 'panel') &&
+        c.hideLockIcons === true
+    )
+
+    const leftExists = childFillers.some((c) => c.parentSide === 'left')
+    const rightExists = childFillers.some((c) => c.parentSide === 'right')
+
+    setIsFLeftOn(leftExists)
+    setIsFRightOn(rightExists)
+  }, [allCabinets, cabinet.cabinetId])
+
   // Update positions on camera/scene changes
   useEffect(() => {
     if (!camera) return
@@ -240,9 +272,16 @@ export const CabinetLockIcons: React.FC<Props> = ({ cabinet, camera, allCabinets
           }}
           onClick={(e) => {
             e.stopPropagation()
-            setIsFLeftOn(prev => !prev)
-            setFillerSide('left')
-            setShowFillersModal(true)
+            if (isFLeftOn) {
+              setIsFLeftOn(false)
+              if (onFillerToggle) {
+                onFillerToggle(cabinet.cabinetId, 'left', false)
+              }
+            } else {
+              setIsFLeftOn(true)
+              setFillerSide('left')
+              setShowFillersModal(true)
+            }
           }}
         >
           <span className={`font-bold text-sm ${isFLeftOn ? 'text-blue-600' : 'text-gray-400'}`}>F</span>
@@ -439,9 +478,16 @@ export const CabinetLockIcons: React.FC<Props> = ({ cabinet, camera, allCabinets
           }}
           onClick={(e) => {
             e.stopPropagation()
-            setIsFRightOn(prev => !prev)
-            setFillerSide('right')
-            setShowFillersModal(true)
+            if (isFRightOn) {
+              setIsFRightOn(false)
+              if (onFillerToggle) {
+                onFillerToggle(cabinet.cabinetId, 'right', false)
+              }
+            } else {
+              setIsFRightOn(true)
+              setFillerSide('right')
+              setShowFillersModal(true)
+            }
           }}
         >
           <span className={`font-bold text-sm ${isFRightOn ? 'text-blue-600' : 'text-gray-400'}`}>F</span>
@@ -489,6 +535,11 @@ export const CabinetLockIcons: React.FC<Props> = ({ cabinet, camera, allCabinets
         onProductSelect={(productId) => {
           if (fillerSide && onFillerSelect) {
             onFillerSelect(cabinet.cabinetId, productId, fillerSide)
+            if (fillerSide === 'left') {
+              setIsFLeftOn(true)
+            } else {
+              setIsFRightOn(true)
+            }
           }
           setShowFillersModal(false)
           setFillerSide(null)

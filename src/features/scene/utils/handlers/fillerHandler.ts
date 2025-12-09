@@ -2,6 +2,7 @@ import { MutableRefObject } from "react"
 import * as THREE from "three"
 import { WsProducts } from "@/types/erpTypes"
 import { CabinetData, CabinetType, WallDimensions } from "../../types"
+import { handleDeleteCabinet } from "./deleteCabinetHandler"
 
 type CreateCabinetFn = (
   cabinetType: CabinetType,
@@ -184,6 +185,53 @@ export const handleFillerSelect = (
         })
       }, 0)
     })
+  }
+}
+
+interface FillerToggleParams {
+  cabinets: CabinetData[]
+  viewManager: any
+  setCabinetGroups: (
+    update: (
+      prev: Map<string, Array<{ cabinetId: string; percentage: number }>>
+    ) => Map<string, Array<{ cabinetId: string; percentage: number }>>
+  ) => void
+  deleteCabinet: (id: string) => void
+  setCabinetToDelete: (cabinet: CabinetData | null) => void
+  removeCabinetParts?: (cabinetId: string) => void
+}
+
+/**
+ * Removes an existing filler/panel child on a given side of the parent cabinet.
+ */
+export const handleFillerToggle = (
+  cabinetId: string,
+  side: "left" | "right",
+  enabled: boolean,
+  params: FillerToggleParams
+) => {
+  if (enabled) return
+  const { cabinets, viewManager, setCabinetGroups, deleteCabinet, setCabinetToDelete, removeCabinetParts } = params
+
+  const childCabinet = cabinets.find(
+    (c) =>
+      c.parentCabinetId === cabinetId &&
+      (c.cabinetType === "filler" || c.cabinetType === "panel") &&
+      c.hideLockIcons === true &&
+      c.parentSide === side
+  )
+  if (!childCabinet) return
+
+  handleDeleteCabinet(childCabinet, {
+    viewManager,
+    setCabinetGroups,
+    deleteCabinet,
+    setCabinetToDelete,
+    allCabinets: cabinets,
+  })
+
+  if (removeCabinetParts) {
+    removeCabinetParts(childCabinet.cabinetId)
   }
 }
 

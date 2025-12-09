@@ -42,7 +42,7 @@ import { handleProductDimensionChange } from './utils/handlers/productDimensionH
 import { handleDeleteCabinet } from './utils/handlers/deleteCabinetHandler'
 import { updateChildCabinets } from './utils/handlers/childCabinetHandler'
 import { updateUnderPanelPosition } from './utils/handlers/underPanelPositionHandler'
-import { handleFillerSelect as handleFillerSelectHandler } from './utils/handlers/fillerHandler'
+import { handleFillerSelect as handleFillerSelectHandler, handleFillerToggle as handleFillerToggleHandler } from './utils/handlers/fillerHandler'
 import {
   handleKickerSelect as handleKickerSelectHandler,
   handleKickerToggle as handleKickerToggleHandler
@@ -362,6 +362,17 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     })
   }, [cabinets, wsProducts, sceneRef, createCabinet, updateCabinetViewId, updateCabinetLock, wallDimensions])
 
+  const handleFillerToggle = useCallback((cabinetId: string, side: 'left' | 'right', enabled: boolean) => {
+    handleFillerToggleHandler(cabinetId, side, enabled, {
+      cabinets,
+      viewManager,
+      setCabinetGroups,
+      deleteCabinet,
+      setCabinetToDelete,
+      removeCabinetParts: partData.removeCabinet
+    })
+  }, [cabinets, viewManager, setCabinetGroups, deleteCabinet, setCabinetToDelete, partData.removeCabinet])
+
   // Handle kicker selection from modal - creates kicker with proper product association
   const handleKickerSelect = useCallback((cabinetId: string, productId: string) => {
     handleKickerSelectHandler(cabinetId, productId, {
@@ -667,6 +678,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
             onUnderPanelToggle={handleUnderPanelToggle}
             wsProducts={wsProducts}
             onFillerSelect={handleFillerSelect}
+            onFillerToggle={handleFillerToggle}
             onKickerSelect={handleKickerSelect}
             onBulkheadSelect={handleBulkheadSelect}
             onUnderPanelSelect={handleUnderPanelSelect}

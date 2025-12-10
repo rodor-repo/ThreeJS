@@ -133,12 +133,9 @@ export const useSceneInteractions = (
         // to handle stale references from clickStartCabinetRef
         if (otherCabinet.cabinetId === cabinet.cabinetId) continue
 
-        // Skip underPanel cabinets that belong to this cabinet
-        // This prevents the cabinet from colliding with its own underPanel when moving down
-        if (
-          otherCabinet.cabinetType === "underPanel" &&
-          otherCabinet.underPanelParentCabinetId === cabinet.cabinetId
-        ) {
+        // Skip ALL underPanel cabinets - they are "accessory" cabinets that follow their parent
+        // and should not block movement of other cabinets
+        if (otherCabinet.cabinetType === "underPanel") {
           continue
         }
 

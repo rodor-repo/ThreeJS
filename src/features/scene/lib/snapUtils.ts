@@ -3,10 +3,10 @@ import { WALL_THICKNESS } from "./sceneUtils"
 
 /**
  * Cabinet types that should be excluded from snap detection.
- * Kickers and bulkheads are "accessory" cabinets that follow their parent cabinets
+ * Kickers, bulkheads, and underPanels are "accessory" cabinets that follow their parent cabinets
  * and should not be snap targets themselves.
  */
-const EXCLUDED_SNAP_TYPES = ["kicker", "bulkhead"] as const
+const EXCLUDED_SNAP_TYPES = ["kicker", "bulkhead", "underPanel"] as const
 
 /**
  * Checks if a cabinet should be excluded from snap detection

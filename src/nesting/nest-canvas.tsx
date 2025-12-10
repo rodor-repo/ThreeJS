@@ -33,15 +33,6 @@ export const NestCanvas: React.FC<NestCanvasProps> = ({
   const [hoveredPartId, setHoveredPartId] = useState<string | null>(null)
   const [initialZoomSet, setInitialZoomSet] = useState(false)
 
-  // Early return if no nesting result or sheets
-  if (!nestingResult || !nestingResult.sheets || nestingResult.sheets.length === 0) {
-    return (
-      <div className="w-full h-full flex items-center justify-center bg-gray-100">
-        <p className="text-gray-600">No sheet data available</p>
-      </div>
-    )
-  }
-
   const currentSheet = nestingResult.sheets[currentSheetIndex]
 
   // Calculate initial zoom and pan to fit horizontal sheet in viewport
@@ -74,15 +65,6 @@ export const NestCanvas: React.FC<NestCanvasProps> = ({
   useEffect(() => {
     setInitialZoomSet(false)
   }, [currentSheetIndex])
-
-  // Additional check for currentSheet (should not happen if sheets array is valid)
-  if (!currentSheet) {
-    return (
-      <div className="w-full h-full flex items-center justify-center bg-gray-100">
-        <p className="text-gray-600">No sheet data available</p>
-      </div>
-    )
-  }
 
   // Handle zoom with mouse wheel
   const handleWheel = useCallback((e: React.WheelEvent) => {
@@ -323,6 +305,24 @@ export const NestCanvas: React.FC<NestCanvasProps> = ({
     zoom,
     pan,
   ])
+
+  // Early return if no nesting result or sheets
+  if (!nestingResult || !nestingResult.sheets || nestingResult.sheets.length === 0) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-gray-100">
+        <p className="text-gray-600">No sheet data available</p>
+      </div>
+    )
+  }
+
+  // Additional check for currentSheet (should not happen if sheets array is valid)
+  if (!currentSheet) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-gray-100">
+        <p className="text-gray-600">No sheet data available</p>
+      </div>
+    )
+  }
 
   return (
     <div

@@ -15,7 +15,7 @@ export function hasLeftAdjacentCabinet(
   cabinet: CabinetData,
   allCabinets: CabinetData[]
 ): CabinetData | null {
-  const cabinetMinX = cabinet.group.position.x
+  const cabinetMinX = getEffectiveLeftEdge(cabinet, allCabinets)
 
   // Find all overhead and tall cabinets (excluding the current one)
   const adjacentCabinets = allCabinets.filter(
@@ -26,7 +26,7 @@ export function hasLeftAdjacentCabinet(
 
   // Check if any cabinet's max X equals this cabinet's min X
   for (const other of adjacentCabinets) {
-    const otherMaxX = other.group.position.x + other.carcass.dimensions.width
+    const otherMaxX = getEffectiveRightEdge(other, allCabinets)
 
     // Use a small epsilon for floating point comparison
     const EPSILON = 4.0
@@ -46,8 +46,7 @@ export function hasRightAdjacentCabinet(
   cabinet: CabinetData,
   allCabinets: CabinetData[]
 ): CabinetData | null {
-  const cabinetMaxX =
-    cabinet.group.position.x + cabinet.carcass.dimensions.width
+  const cabinetMaxX = getEffectiveRightEdge(cabinet, allCabinets)
 
   // Find all overhead and tall cabinets (excluding the current one)
   const adjacentCabinets = allCabinets.filter(
@@ -58,7 +57,7 @@ export function hasRightAdjacentCabinet(
 
   // Check if any cabinet's min X equals this cabinet's max X
   for (const other of adjacentCabinets) {
-    const otherMinX = other.group.position.x
+    const otherMinX = getEffectiveLeftEdge(other, allCabinets)
 
     // Use a small epsilon for floating point comparison
     const EPSILON = 4.0

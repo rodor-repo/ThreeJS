@@ -61,6 +61,26 @@ These hooks form the backbone of the 3D scene.
     - `constrained`: Limits movement to reasonable angles for room viewing.
     - `free`: Allows unrestricted 3D navigation.
 
+### 5. `useScenePanels`
+
+- **Location**: `src/features/scene/hooks/useScenePanels.ts`
+- **Purpose**: Centralizes **panel and modal visibility state**.
+- **Responsibilities**:
+  - Manages `SettingsSidebar`, `WallSettingsDrawer`, `ViewsListDrawer`, `ViewDetailDrawer`.
+  - Controls `SaveModal` / delete confirmation modal and selected view/cabinet.
+  - Applies wall settings (dimensions + color) via `applyDimensions`.
+  - Auto-closes panels when the main menu or `ProductPanel` is open.
+
+### 6. `useUndoRedo`
+
+- **Location**: `src/features/scene/hooks/useUndoRedo.ts`
+- **Purpose**: **Checkpoint-based undo/redo** for the whole room.
+- **Responsibilities**:
+  - Serializes the current scene into `SavedRoom` snapshots (manual + auto).
+  - Restores cabinets, views, wall dimensions/color, locks, and syncs.
+  - Exposes `undo`, `redo`, `jumpTo`, `createCheckpoint`, `deleteCheckpoint`, `resetHistory`.
+  - Drives the `HistoryControls` UI.
+
 ---
 
 ## Feature Hooks (Functionality)
@@ -117,13 +137,30 @@ These hooks add specific features to the scene.
   - Automatically expands the back wall length if a cabinet is dragged beyond the current wall limit.
   - Adjusts "Additional Walls" (internal partitions) to avoid collisions.
 
-### 7. `useProductDrivenCreation`
+### 7. `useWallTransparency`
+
+- **Location**: `src/features/scene/hooks/useWallTransparency.ts`
+- **Purpose**: Better visibility in **orthographic views**.
+- **Responsibilities**:
+  - Fades or hides back/side walls when viewing from X/Y directions.
+  - Adjusts additional internal walls based on camera view mode.
+
+### 8. `useProductDrivenCreation`
 
 - **Location**: `src/features/scene/hooks/useProductDrivenCreation.ts`
 - **Purpose**: Menu integration.
 - **Responsibilities**:
   - Watches for product selection in the UI menu.
   - Triggers `createCabinet` to add the corresponding 3D model to the scene.
+
+### 9. `usePartData`
+
+- **Location**: `src/nesting/usePartData.ts`
+- **Purpose**: Central **part database** for nesting/export.
+- **Responsibilities**:
+  - Tracks all parts for every cabinet (dimensions, material, cabinet meta).
+  - Auto-syncs when `cabinets` or `wsProducts` change.
+  - Powers CSV export and the nesting workflow (`NestingModal`).
 
 ---
 
@@ -166,6 +203,30 @@ Complex business logic is extracted into standalone handler functions to keep co
   - Removes cabinet from any Groups.
   - Calls the core `deleteCabinet` function to remove from scene.
 
+### 5. Filler / Panel Handlers
+
+- **Location**: `src/features/scene/utils/handlers/fillerHandler.ts`
+- **Purpose**: Side attachments.
+- **Logic**:
+  - `handleFillerSelect` creates fillers/panels linked to a parent cabinet (left/right), matching height and overhang rules.
+  - `handleFillerToggle` removes them cleanly and updates groups/part data.
+
+### 6. Bulkhead & Under-Panel Handlers
+
+- **Location**: `src/features/scene/utils/handlers/bulkheadHandler.ts`, `src/features/scene/utils/handlers/underPanelHandler.ts`
+- **Purpose**: Overhead structures.
+- **Logic**:
+  - `handleBulkheadSelect` / `handleBulkheadToggle` manage bulkheads tied to cabinets and wall geometry.
+  - `handleUnderPanelSelect` / `handleUnderPanelToggle` manage under-panels beneath top cabinets.
+
+### 7. `handleKickerHeightChange`
+
+- **Location**: `src/features/scene/utils/handlers/kickerHeightHandler.ts`
+- **Purpose**: View-wide kicker control.
+- **Logic**:
+  - Updates kicker height for all base/tall cabinets in a view.
+  - Propagates changes to child cabinets and kicker positions.
+
 ---
 
 ## UI Subcomponents
@@ -178,3 +239,11 @@ These React components overlay the 3D scene.
 - **`ViewsListDrawer` / `ViewDetailDrawer`**: Management UI for Views.
 - **`CameraControls`**: On-screen buttons for camera manipulation.
 - **`CabinetLockIcons`**: Visual toggles for locking cabinet sides (preventing movement/resize from that side).
+- **`ModeToggle`**: Switches between `user` and `admin` modes (for future behavior differences).
+- **`CartSection`**: Shows total price (from cabinet panel state) and exposes **Add to Cart** / **Products list** actions.
+- **`BottomRightActions`**: Quick actions for **Export parts (CSV)**, **Nesting**, and opening settings.
+- **`SaveModal` / `SaveButton`**: Save the current room using `useRoomPersistence`.
+- **`DeleteConfirmationModal`**: Confirms cabinet deletion requested via `useScenePanels`.
+- **`NestingModal`**: Configures sheet size/material/grain and opens the external nesting view using serialized part data.
+- **`ProductsListDrawer`**: Lists cabinets/products backing the price box.
+- **`HistoryControls`**: Floating undo/redo + checkpoint/history UI wired to `useUndoRedo`.

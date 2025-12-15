@@ -285,7 +285,8 @@ export const handleProductDimensionChange = (
       oldWidth,
       cabinets,
       cabinetGroups,
-      viewManager
+      viewManager,
+      wallDimensions
     )
   } else {
     // Width didn't change, just update other dimensions

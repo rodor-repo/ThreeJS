@@ -1,9 +1,7 @@
-import { CabinetData } from "../../types"
+import { CabinetData, WallDimensions } from "../../types"
 import { ViewId } from "../../../cabinets/ViewManager"
 import { areCabinetsPaired, clampPositionX } from "./sharedCabinetUtils"
-import { updateChildCabinets } from "./childCabinetHandler"
-import { updateKickerPosition } from "./kickerPositionHandler"
-import { updateUnderPanelPosition } from "./underPanelPositionHandler"
+import { updateAllDependentComponents } from "./dependentComponentsHandler"
 
 interface ViewManagerResult {
   getCabinetsInView: (viewId: ViewId) => string[]
@@ -20,7 +18,8 @@ export function repositionViewCabinets(
   oldWidth: number,
   cabinets: CabinetData[],
   cabinetGroups: Map<string, Array<{ cabinetId: string; percentage: number }>>,
-  viewManager: ViewManagerResult
+  viewManager: ViewManagerResult,
+  wallDimensions?: WallDimensions
 ): void {
   // Skip if cabinet doesn't belong to a view
   if (!changingCabinet.viewId || changingCabinet.viewId === "none") {
@@ -67,28 +66,11 @@ export function repositionViewCabinets(
           otherCabinet.group.position.z
         )
 
-        // Update child cabinets if position changed
-        if (Math.abs(clampedX - oldX) > 0.1) {
-          updateChildCabinets(otherCabinet, cabinets, {
+        // Update all dependent components if position changed
+        if (Math.abs(clampedX - oldX) > 0.1 && wallDimensions) {
+          updateAllDependentComponents(otherCabinet, cabinets, wallDimensions, {
             positionChanged: true,
           })
-
-          // Update kicker position for base/tall cabinets
-          if (
-            otherCabinet.cabinetType === "base" ||
-            otherCabinet.cabinetType === "tall"
-          ) {
-            updateKickerPosition(otherCabinet, cabinets, {
-              positionChanged: true,
-            })
-          }
-
-          // Update underPanel position for top cabinets
-          if (otherCabinet.cabinetType === "top") {
-            updateUnderPanelPosition(otherCabinet, cabinets, {
-              positionChanged: true,
-            })
-          }
         }
       }
     })
@@ -129,28 +111,11 @@ export function repositionViewCabinets(
           otherCabinet.group.position.z
         )
 
-        // Update child cabinets if position changed
-        if (Math.abs(clampedX - oldX) > 0.1) {
-          updateChildCabinets(otherCabinet, cabinets, {
+        // Update all dependent components if position changed
+        if (Math.abs(clampedX - oldX) > 0.1 && wallDimensions) {
+          updateAllDependentComponents(otherCabinet, cabinets, wallDimensions, {
             positionChanged: true,
           })
-
-          // Update kicker position for base/tall cabinets
-          if (
-            otherCabinet.cabinetType === "base" ||
-            otherCabinet.cabinetType === "tall"
-          ) {
-            updateKickerPosition(otherCabinet, cabinets, {
-              positionChanged: true,
-            })
-          }
-
-          // Update underPanel position for top cabinets
-          if (otherCabinet.cabinetType === "top") {
-            updateUnderPanelPosition(otherCabinet, cabinets, {
-              positionChanged: true,
-            })
-          }
         }
       }
     })
@@ -193,28 +158,11 @@ export function repositionViewCabinets(
           otherCabinet.group.position.z
         )
 
-        // Update child cabinets if position changed
-        if (Math.abs(clampedX - oldX) > 0.1) {
-          updateChildCabinets(otherCabinet, cabinets, {
+        // Update all dependent components if position changed
+        if (Math.abs(clampedX - oldX) > 0.1 && wallDimensions) {
+          updateAllDependentComponents(otherCabinet, cabinets, wallDimensions, {
             positionChanged: true,
           })
-
-          // Update kicker position for base/tall cabinets
-          if (
-            otherCabinet.cabinetType === "base" ||
-            otherCabinet.cabinetType === "tall"
-          ) {
-            updateKickerPosition(otherCabinet, cabinets, {
-              positionChanged: true,
-            })
-          }
-
-          // Update underPanel position for top cabinets
-          if (otherCabinet.cabinetType === "top") {
-            updateUnderPanelPosition(otherCabinet, cabinets, {
-              positionChanged: true,
-            })
-          }
         }
       }
       // Move cabinets on the RIGHT side by halfDelta (positive X direction)
@@ -229,31 +177,13 @@ export function repositionViewCabinets(
           otherCabinet.group.position.z
         )
 
-        // Update child cabinets if position changed
-        if (Math.abs(clampedX - oldX) > 0.1) {
-          updateChildCabinets(otherCabinet, cabinets, {
+        // Update all dependent components if position changed
+        if (Math.abs(clampedX - oldX) > 0.1 && wallDimensions) {
+          updateAllDependentComponents(otherCabinet, cabinets, wallDimensions, {
             positionChanged: true,
           })
-
-          // Update kicker position for base/tall cabinets
-          if (
-            otherCabinet.cabinetType === "base" ||
-            otherCabinet.cabinetType === "tall"
-          ) {
-            updateKickerPosition(otherCabinet, cabinets, {
-              positionChanged: true,
-            })
-          }
-
-          // Update underPanel position for top cabinets
-          if (otherCabinet.cabinetType === "top") {
-            updateUnderPanelPosition(otherCabinet, cabinets, {
-              positionChanged: true,
-            })
-          }
         }
       }
     })
   }
 }
-

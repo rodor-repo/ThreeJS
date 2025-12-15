@@ -179,6 +179,7 @@ export function serializeRoom({
       hideLockIcons: cabinet.hideLockIcons,
       kickerParentCabinetId: cabinet.kickerParentCabinetId,
       bulkheadParentCabinetId: cabinet.bulkheadParentCabinetId,
+      underPanelParentCabinetId: cabinet.underPanelParentCabinetId,
     }
   })
 
@@ -498,6 +499,14 @@ export async function restoreRoom({
           const newBulkheadParentId = oldIdToNewId.get(savedCabinet.bulkheadParentCabinetId)
           if (newBulkheadParentId) {
             cabinetData.bulkheadParentCabinetId = newBulkheadParentId
+          }
+        }
+
+        // Map underPanelParentCabinetId
+        if (savedCabinet.underPanelParentCabinetId) {
+          const newUnderPanelParentId = oldIdToNewId.get(savedCabinet.underPanelParentCabinetId)
+          if (newUnderPanelParentId) {
+            cabinetData.underPanelParentCabinetId = newUnderPanelParentId
           }
         }
       })

@@ -49,6 +49,8 @@ export interface SavedCabinet {
   kickerParentCabinetId?: string
   /** For bulkhead type: parent cabinet ID that this bulkhead belongs to */
   bulkheadParentCabinetId?: string
+  /** For underPanel type: parent cabinet ID that this under panel belongs to */
+  underPanelParentCabinetId?: string
 }
 
 export interface SavedView {

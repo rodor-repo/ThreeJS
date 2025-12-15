@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react"
+import type { CabinetData } from "@/features/scene/types"
 import type { WsProduct } from "@/types/erpTypes"
 import type {
   MaterialOptionsResponse,
@@ -13,6 +14,7 @@ import {
   buildDefaultValues,
   syncCabinetDimensionsToValues,
 } from "../utils/dimensionUtils"
+import { getPartDataManager } from "@/nesting/PartDataManager"
 
 /**
  * Initialization result containing all computed state
@@ -191,8 +193,6 @@ export function syncToPartDataManager(
 ): void {
   if (!productId) return
 
-  // Dynamic import to avoid circular dependencies
-  const { getPartDataManager } = require("@/nesting/PartDataManager")
   const partDataManager = getPartDataManager()
 
   // Sync material options and defaults
@@ -209,8 +209,8 @@ export function syncToPartDataManager(
     partDataManager.setMaterialSelections(cabinetId, materialSelections)
 
     // Update cabinet parts to refresh door color names
-    if (selectedCabinet) {
-      partDataManager.updateCabinetParts(selectedCabinet)
+    if (selectedCabinet?.carcass) {
+      partDataManager.updateCabinetParts(selectedCabinet as CabinetData)
     }
   }
 }
@@ -230,7 +230,6 @@ export function useMaterialSync(
   useEffect(() => {
     if (!productId || !materialOptions || !defaultMaterialSelections) return
 
-    const { getPartDataManager } = require("@/nesting/PartDataManager")
     const partDataManager = getPartDataManager()
     partDataManager.setMaterialOptions(productId, materialOptions)
     partDataManager.setDefaultMaterialSelections(
@@ -244,10 +243,11 @@ export function useMaterialSync(
     if (!cabinetId || !selectedCabinet || !materialSelections) return
     if (Object.keys(materialSelections).length === 0) return
 
-    const { getPartDataManager } = require("@/nesting/PartDataManager")
     const partDataManager = getPartDataManager()
     partDataManager.setMaterialSelections(cabinetId, materialSelections)
     // Update cabinet parts to refresh door color names
-    partDataManager.updateCabinetParts(selectedCabinet)
+    if (selectedCabinet.carcass) {
+      partDataManager.updateCabinetParts(selectedCabinet as CabinetData)
+    }
   }, [cabinetId, materialSelections, selectedCabinet])
 }

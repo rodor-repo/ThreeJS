@@ -301,6 +301,51 @@ export class CarcassDrawerManager {
           this.updateDrawerPositions()
       }
   }
+
+  /**
+   * Toggle drawer visibility on/off
+   */
+  public toggleDrawers(enabled: boolean): void {
+    const config = this.assembly.config
+    config.drawerEnabled = enabled
+
+    if (enabled) {
+      if (this.drawers.length === 0) {
+        if (this.assembly.cabinetType === "wardrobe") {
+          this.createWardrobeDrawers()
+        } else {
+          this.createDrawers()
+        }
+        this.assembly.addPartsToGroup(this.drawers)
+      }
+    } else {
+      this.assembly.removePartsFromGroup(this.drawers)
+      this.dispose()
+    }
+  }
+
+  /**
+   * Update drawer quantity, recreating drawers as needed
+   */
+  public updateQuantity(quantity: number): void {
+    const config = this.assembly.config
+    config.drawerQuantity = quantity
+    config.drawerHeights = [] // Reset heights for recalculation
+
+    // Remove existing drawers
+    this.assembly.removePartsFromGroup(this.drawers)
+    this.dispose()
+
+    // Recreate if enabled
+    if (config.drawerEnabled && quantity > 0) {
+      if (this.assembly.cabinetType === "wardrobe") {
+        this.createWardrobeDrawers()
+      } else {
+        this.createDrawers()
+      }
+      this.assembly.addPartsToGroup(this.drawers)
+    }
+  }
   
   public dispose(): void {
       this.drawers.forEach(d => d.dispose())

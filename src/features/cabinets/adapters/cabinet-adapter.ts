@@ -33,8 +33,8 @@ export const setDrawerHeight = (
 export const balanceDrawerHeights = (c: CarcassAssembly) =>
   c.balanceDrawerHeights()
 export const resetDrawerHeights = (c: CarcassAssembly) => {
-  const optimal = c.getOptimalDrawerHeights()
-  c.config.drawerHeights = [...optimal]
-  const qty = c.config.drawerQuantity || optimal.length
+  const heights = c.getDrawerHeights()
+  c.config.drawerHeights = [...heights]
+  const qty = c.config.drawerQuantity || heights.length
   c.updateDrawerQuantity(qty)
 }

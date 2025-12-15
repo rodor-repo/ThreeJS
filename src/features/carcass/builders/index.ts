@@ -3,13 +3,18 @@ import { CabinetBuilder } from "./CabinetBuilder"
 import { TraditionalCabinetBuilder } from "./TraditionalCabinetBuilder"
 import { PanelCabinetBuilder } from "./PanelCabinetBuilder"
 import { FillerCabinetBuilder } from "./FillerCabinetBuilder"
-import { KickerBuilder, UnderPanelBuilder, BulkheadBuilder } from "./SimplePanelBuilder"
+import {
+  KickerBuilder,
+  UnderPanelBuilder,
+  BulkheadBuilder,
+} from "./SimplePanelBuilder"
 
 export * from "./CabinetBuilder"
 export * from "./TraditionalCabinetBuilder"
 export * from "./PanelCabinetBuilder"
 export * from "./FillerCabinetBuilder"
 export * from "./SimplePanelBuilder"
+export * from "./builder-constants"
 
 export class BuilderRegistry {
   static getBuilder(type: CabinetType): CabinetBuilder {
@@ -30,9 +35,10 @@ export class BuilderRegistry {
       case "bulkhead":
         return new BulkheadBuilder()
       default:
-        console.warn(`Unknown cabinet type: ${type}, defaulting to TraditionalCabinetBuilder`)
+        console.warn(
+          `Unknown cabinet type: ${type}, defaulting to TraditionalCabinetBuilder`
+        )
         return new TraditionalCabinetBuilder()
     }
   }
 }
-

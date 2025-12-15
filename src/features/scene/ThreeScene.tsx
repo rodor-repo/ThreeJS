@@ -1012,12 +1012,12 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         onDrawerHeightsReset={() => {
           if (selectedCabinet) {
 
-            // Get optimal drawer heights from the carcass
-            const optimalHeights = selectedCabinet.carcass.getOptimalDrawerHeights();
+            // Get drawer heights from the carcass
+            const heights = selectedCabinet.carcass.getDrawerHeights();
 
             // Reset drawer heights directly on the carcass and force update via public API
-            selectedCabinet.carcass.config.drawerHeights = [...optimalHeights]
-            const qty = selectedCabinet.carcass.config.drawerQuantity || optimalHeights.length
+            selectedCabinet.carcass.config.drawerHeights = [...heights]
+            const qty = selectedCabinet.carcass.config.drawerQuantity || heights.length
             selectedCabinet.carcass.updateDrawerQuantity(qty)
 
             // Trigger re-render while preserving multi-selection

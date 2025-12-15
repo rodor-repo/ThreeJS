@@ -14,6 +14,14 @@ import {
   calculateRightEndXPosition,
   calculateShelfPositions,
 } from "../utils/carcass-dimension-utils"
+import { createPartDimension } from "../utils/carcass-geometry-utils"
+import {
+  SHELF_OFFSET_FROM_EDGE,
+  LEG_DIAMETER,
+  DEFAULT_WARDROBE_DRAWER_HEIGHT,
+  DEFAULT_WARDROBE_DRAWER_BUFFER,
+  PART_NAMES,
+} from "./builder-constants"
 
 export class TraditionalCabinetBuilder implements CabinetBuilder {
   build(assembly: CarcassAssembly): void {
@@ -50,8 +58,23 @@ export class TraditionalCabinetBuilder implements CabinetBuilder {
   }
 
   updateDimensions(assembly: CarcassAssembly): void {
+    // Guard: ensure parts exist before updating
+    if (
+      !assembly.leftEnd ||
+      !assembly.rightEnd ||
+      !assembly.back ||
+      !assembly.bottom ||
+      !assembly.top
+    ) {
+      console.warn(
+        "TraditionalCabinetBuilder.updateDimensions: Required parts not initialized"
+      )
+      return
+    }
+
     const thickness = assembly.config.material.getThickness()
-    const { panelWidth, effectiveDepth } = this.calculateCommonPanelDimensions(assembly)
+    const { panelWidth, effectiveDepth } =
+      this.calculateCommonPanelDimensions(assembly)
 
     // Update all parts
     assembly.leftEnd.updateDimensions(
@@ -102,7 +125,9 @@ export class TraditionalCabinetBuilder implements CabinetBuilder {
 
     // Update Base Rail settings for Base cabinets
     if (assembly.cabinetType === "base") {
-      const baseRailDepth = MaterialLoader.getBaseRailDepth(assembly.cabinetType)
+      const baseRailDepth = MaterialLoader.getBaseRailDepth(
+        assembly.cabinetType
+      )
       assembly.top.updateBaseRailSettings(assembly.cabinetType, baseRailDepth)
     }
 
@@ -122,104 +147,43 @@ export class TraditionalCabinetBuilder implements CabinetBuilder {
   getPartDimensions(assembly: CarcassAssembly): PartDimension[] {
     const parts: PartDimension[] = []
 
-    // Left End
-    const leftEndGeometry = assembly.leftEnd.mesh.geometry as THREE.BoxGeometry
-    parts.push({
-      partName: "Left Panel",
-      dimX: leftEndGeometry.parameters.width,
-      dimY: leftEndGeometry.parameters.height,
-      dimZ: leftEndGeometry.parameters.depth,
-    })
+    // Helper to safely add a part dimension
+    const addPart = (name: string, mesh: THREE.Mesh | undefined): void => {
+      if (!mesh) return
+      const dim = createPartDimension(name, mesh)
+      if (dim) parts.push(dim)
+    }
 
-    // Right End
-    const rightEndGeometry = assembly.rightEnd.mesh.geometry as THREE.BoxGeometry
-    parts.push({
-      partName: "Right Panel",
-      dimX: rightEndGeometry.parameters.width,
-      dimY: rightEndGeometry.parameters.height,
-      dimZ: rightEndGeometry.parameters.depth,
-    })
-
-    // Back
-    const backGeometry = assembly.back.mesh.geometry as THREE.BoxGeometry
-    parts.push({
-      partName: "Back Panel",
-      dimX: backGeometry.parameters.width,
-      dimY: backGeometry.parameters.height,
-      dimZ: backGeometry.parameters.depth,
-    })
+    // Core structural parts
+    addPart(PART_NAMES.LEFT_PANEL, assembly.leftEnd?.mesh)
+    addPart(PART_NAMES.RIGHT_PANEL, assembly.rightEnd?.mesh)
+    addPart(PART_NAMES.BACK_PANEL, assembly.back?.mesh)
 
     // Top: For base cabinets, this is actually a Base Rail
-    const topGeometry = assembly.top.mesh.geometry as THREE.BoxGeometry
-    const topDims = {
-      x: topGeometry.parameters.width,
-      y: topGeometry.parameters.height,
-      z: topGeometry.parameters.depth,
-    }
+    const topPartName =
+      assembly.cabinetType === "base"
+        ? PART_NAMES.BASE_RAIL
+        : PART_NAMES.TOP_PANEL
+    addPart(topPartName, assembly.top?.mesh)
 
-    if (assembly.cabinetType === "base") {
-      parts.push({
-        partName: "Base Rail",
-        dimX: topDims.x,
-        dimY: topDims.y,
-        dimZ: topDims.z,
-      })
-    } else {
-      parts.push({
-        partName: "Top Panel",
-        dimX: topDims.x,
-        dimY: topDims.y,
-        dimZ: topDims.z,
-      })
-    }
-
-    // Bottom
-    if (
-      (assembly.cabinetType === "base" ||
-        assembly.cabinetType === "tall" ||
-        assembly.cabinetType === "wardrobe") &&
-      assembly.bottom
-    ) {
-      const bottomGeometry = assembly.bottom.mesh.geometry as THREE.BoxGeometry
-      parts.push({
-        partName: "Bottom Panel",
-        dimX: bottomGeometry.parameters.width,
-        dimY: bottomGeometry.parameters.height,
-        dimZ: bottomGeometry.parameters.depth,
-      })
+    // Bottom (only for base/tall/wardrobe)
+    if (["base", "tall", "wardrobe"].includes(assembly.cabinetType)) {
+      addPart(PART_NAMES.BOTTOM_PANEL, assembly.bottom?.mesh)
     }
 
     // Shelves
     assembly.shelves.forEach((shelf, index) => {
-      const shelfGeometry = shelf.mesh.geometry as THREE.BoxGeometry
-      parts.push({
-        partName: `Shelf ${index + 1}`,
-        dimX: shelfGeometry.parameters.width,
-        dimY: shelfGeometry.parameters.height,
-        dimZ: shelfGeometry.parameters.depth,
-      })
+      addPart(`${PART_NAMES.SHELF} ${index + 1}`, shelf.mesh)
     })
 
     // Doors
     assembly.doors.forEach((door, index) => {
-      const doorGeometry = door.mesh.geometry as THREE.BoxGeometry
-      parts.push({
-        partName: `Door ${index + 1}`,
-        dimX: doorGeometry.parameters.width,
-        dimY: doorGeometry.parameters.height,
-        dimZ: doorGeometry.parameters.depth,
-      })
+      addPart(`${PART_NAMES.DOOR} ${index + 1}`, door.mesh)
     })
 
     // Drawers
     assembly.drawers.forEach((drawer, index) => {
-      const drawerGeometry = drawer.mesh.geometry as THREE.BoxGeometry
-      parts.push({
-        partName: `Drawer Front ${index + 1}`,
-        dimX: drawerGeometry.parameters.width,
-        dimY: drawerGeometry.parameters.height,
-        dimZ: drawerGeometry.parameters.depth,
-      })
+      addPart(`${PART_NAMES.DRAWER_FRONT} ${index + 1}`, drawer.mesh)
     })
 
     return parts
@@ -232,10 +196,7 @@ export class TraditionalCabinetBuilder implements CabinetBuilder {
     effectiveDepth: number
   } {
     const thickness = assembly.config.material.getThickness()
-    const panelWidth = calculatePanelWidth(
-      assembly.dimensions.width,
-      thickness
-    )
+    const panelWidth = calculatePanelWidth(assembly.dimensions.width, thickness)
     const effectiveDepth = calculateEffectiveDepth(
       assembly.dimensions.depth,
       thickness
@@ -283,7 +244,8 @@ export class TraditionalCabinetBuilder implements CabinetBuilder {
   }
 
   private createBottomPanel(assembly: CarcassAssembly): void {
-    const { panelWidth, effectiveDepth } = this.calculateCommonPanelDimensions(assembly)
+    const { panelWidth, effectiveDepth } =
+      this.calculateCommonPanelDimensions(assembly)
     const thickness = assembly.config.material.getThickness()
 
     assembly.bottom = new CarcassBottom({
@@ -329,15 +291,18 @@ export class TraditionalCabinetBuilder implements CabinetBuilder {
       let startHeight: number
       if (assembly.cabinetType === "wardrobe") {
         const drawerQuantity = assembly.config.drawerQuantity || 0
-        const drawerHeight = assembly.config.wardrobeDrawerHeight || 220
-        const buffer = assembly.config.wardrobeDrawerBuffer || 50
+        const drawerHeight =
+          assembly.config.wardrobeDrawerHeight || DEFAULT_WARDROBE_DRAWER_HEIGHT
+        const buffer =
+          assembly.config.wardrobeDrawerBuffer || DEFAULT_WARDROBE_DRAWER_BUFFER
         const totalDrawerHeight = drawerQuantity * drawerHeight
         startHeight = totalDrawerHeight + buffer + thickness
       } else {
-        startHeight = thickness + 100
+        startHeight = thickness + SHELF_OFFSET_FROM_EDGE
       }
 
-      const endHeight = assembly.dimensions.height - thickness - 100
+      const endHeight =
+        assembly.dimensions.height - thickness - SHELF_OFFSET_FROM_EDGE
 
       const shelfPositions = calculateShelfPositions(
         startHeight,
@@ -346,7 +311,8 @@ export class TraditionalCabinetBuilder implements CabinetBuilder {
         assembly.config.shelfSpacing
       )
 
-      const { panelWidth, effectiveDepth } = this.calculateCommonPanelDimensions(assembly)
+      const { panelWidth, effectiveDepth } =
+        this.calculateCommonPanelDimensions(assembly)
 
       shelfPositions.forEach((height) => {
         const shelf = new CarcassShelf({
@@ -382,7 +348,7 @@ export class TraditionalCabinetBuilder implements CabinetBuilder {
       legPositions.forEach((position) => {
         const leg = new CarcassLeg({
           height: legHeight,
-          diameter: 50,
+          diameter: LEG_DIAMETER,
           position: position,
           width: assembly.dimensions.width,
           depth: assembly.dimensions.depth,
@@ -395,4 +361,3 @@ export class TraditionalCabinetBuilder implements CabinetBuilder {
     }
   }
 }
-

@@ -16,15 +16,11 @@ import { BulkheadReturn } from "./parts/BulkheadReturn"
 import { CarcassMaterial, CarcassMaterialData } from "./Material"
 import { DoorMaterial } from "./DoorMaterial"
 import { MaterialLoader } from "./MaterialLoader"
-import {
-  calculateCabinetYPosition,
-  calculateShelfPositions,
-  calculatePanelWidth,
-  calculateEffectiveDepth,
-} from "./utils/carcass-dimension-utils"
+import { calculateCabinetYPosition } from "./utils/carcass-dimension-utils"
+import { createShelves } from "./utils/shelf-utils"
 import { CabinetType } from "../scene/types"
 import { CabinetBuilder, PartDimension } from "./builders/CabinetBuilder"
-import { BuilderRegistry, TraditionalCabinetBuilder } from "./builders"
+import { BuilderRegistry, TraditionalCabinetBuilder, BULKHEAD_RETURN_THICKNESS } from "./builders"
 import { CarcassDrawerManager } from "./managers/CarcassDrawerManager"
 import { CarcassDoorManager } from "./managers/CarcassDoorManager"
 
@@ -217,88 +213,32 @@ export class CarcassAssembly {
   public createWardrobeDrawers() { this.drawerManager.createWardrobeDrawers() }
   public createDoors() { this.doorManager.createDoors() }
   
-  // Forwarding methods for updates (used by builders)
-  public updateShelves() {
-    // Logic specific to shelf update, could be moved to manager/builder but handled here for now
+  /**
+   * Update shelves when dimensions or configuration changes
+   * Only applies to traditional cabinet types
+   */
+  public updateShelves(): void {
+    if (!(this.builder instanceof TraditionalCabinetBuilder)) return
+
+    // Remove existing shelves
     this.removePartsFromGroup(this.shelves)
     this.shelves.forEach((shelf) => shelf.dispose())
-    
-    // Re-create shelves using builder logic or local helper?
-    // Since createShelves is in builder, we should call builder or replicate logic.
-    // TraditionalCabinetBuilder has createShelves.
-    // But updateShelves is called by updateDimensions in TraditionalCabinetBuilder.
-    // Wait, TraditionalCabinetBuilder calls assembly.updateShelves().
-    // So this method needs to exist.
-    // It should basically do what createShelves does but clearing first.
-    // Since createShelves is private in builder, we can't call it easily unless we cast builder.
-    // A better approach: Builders should implement updateShelves OR we move createShelves back here 
-    // OR we expose a method on builder.
-    
-    // For now, I'll reimplement it here or move it to a shared helper?
-    // Actually, updateShelves logic is: clear -> create -> add.
-    // I can't call createShelves on builder easily.
-    // I will modify this method to manually reconstruct shelves using the same logic as builder.
-    // OR: I can cast `this.builder` to `TraditionalCabinetBuilder` if I know the type.
-    
-    if (this.builder instanceof TraditionalCabinetBuilder) {
-        // We can't access private method createShelves.
-        // I will copy the shelf logic here for now to avoid breaking changes, 
-        // as refactoring this cleanly requires changing the builder interface to support partial updates.
-        
-        // Actually, let's just implement it here, it's small enough duplication for now or import the logic.
-        // Ideally, updateDimensions in builder should handle this fully.
-        // TraditionalCabinetBuilder calls assembly.updateShelves().
-        // If I implement updateShelves in TraditionalCabinetBuilder, I don't need to call assembly.updateShelves().
-        // But TraditionalCabinetBuilder.ts uses `assembly.updateShelves()`.
-        
-        // Correct fix: Move `updateShelves` logic INTO `TraditionalCabinetBuilder.updateDimensions` 
-        // and remove it from here.
-        // BUT I already wrote TraditionalCabinetBuilder to call assembly.updateShelves().
-        // So I must implement it here.
-        
-        // I'll define it here for now.
-        // TODO: Move this logic to TraditionalCabinetBuilder in future cleanup.
-        
-    this.shelves = []
-    if (this.config.shelfCount > 0) {
-             const thickness = this.config.material.getThickness()
-      let startHeight: number
-      if (this.cabinetType === "wardrobe") {
-        const drawerQuantity = this.config.drawerQuantity || 0
-        const drawerHeight = this.config.wardrobeDrawerHeight || 220
-        const buffer = this.config.wardrobeDrawerBuffer || 50
-        const totalDrawerHeight = drawerQuantity * drawerHeight
-        startHeight = totalDrawerHeight + buffer + thickness
-      } else {
-        startHeight = thickness + 100
-      }
-             const endHeight = this.dimensions.height - thickness - 100
 
-      const shelfPositions = calculateShelfPositions(
-        startHeight,
-        endHeight,
-        this.config.shelfCount,
-        this.config.shelfSpacing
-      )
+    // Create new shelves using shared helper
+    this.shelves = createShelves({
+      width: this.dimensions.width,
+      height: this.dimensions.height,
+      depth: this.dimensions.depth,
+      shelfCount: this.config.shelfCount,
+      shelfSpacing: this.config.shelfSpacing,
+      material: this.config.material,
+      cabinetType: this.cabinetType,
+      drawerQuantity: this.config.drawerQuantity,
+      wardrobeDrawerHeight: this.config.wardrobeDrawerHeight,
+      wardrobeDrawerBuffer: this.config.wardrobeDrawerBuffer,
+    })
 
-             const panelWidth = calculatePanelWidth(this.dimensions.width, thickness)
-             const effectiveDepth = calculateEffectiveDepth(this.dimensions.depth, thickness)
-
-             shelfPositions.forEach((height: number) => {
-        const shelf = new CarcassShelf({
-          depth: effectiveDepth,
-          width: panelWidth,
-          thickness: thickness,
-          height: height,
-          leftEndThickness: thickness,
-          backThickness: thickness,
-          material: this.config.material.getMaterial(),
-        })
-        this.shelves.push(shelf)
-      })
-    }
-        this.addPartsToGroup(this.shelves)
-    }
+    this.addPartsToGroup(this.shelves)
   }
 
   public updateLegs() {
@@ -319,94 +259,35 @@ export class CarcassAssembly {
   public updateDoors() { this.doorManager.updateDoors() }
   public updateDrawers() { this.drawerManager.updateDrawers() }
 
-  // Other public methods delegated to managers
+  // Door operations (delegated to manager)
   public toggleDoors(enabled: boolean) { this.doorManager.toggleDoors(enabled) }
   public updateDoorConfiguration(count: number, mat?: DoorMaterial) { this.doorManager.updateDoorConfiguration(count, mat) }
   public updateOverhangDoor(overhang: boolean) { this.doorManager.updateOverhangDoor(overhang) }
   public updateDoorMaterial(mat: DoorMaterial) { this.doorManager.updateDoorMaterial(mat) }
   
+  // Drawer operations (delegated to manager)
   public updateDrawerEnabled(enabled: boolean) { 
-      // This requires logic that was in assembly: 
-      // if enabled: createDrawers, add. if disabled: remove, dispose.
-      // Logic is in manager?
-      // Check CarcassDrawerManager... it has createDrawers/updateDrawers but not explicit toggle.
-      // I should add toggle to Manager or implement here.
-      // I'll implement here using manager methods.
-      this.config.drawerEnabled = enabled
-      if (enabled) {
-          if (this.drawerManager.drawers.length === 0) {
-              this.drawerManager.createDrawers()
-              this.addPartsToGroup(this.drawerManager.drawers)
-          }
-      } else {
-          this.removePartsFromGroup(this.drawerManager.drawers)
-          this.drawerManager.dispose()
-      }
+    this.drawerManager.toggleDrawers(enabled)
+    if (this.cabinetType === "wardrobe") {
+      this.updateShelves()
+    }
   }
   
   public updateDrawerQuantity(quantity: number) { 
-      // Logic from original file was complex (redistribution etc).
-      // It should be in manager.
-      // I probably missed porting this specific method to manager?
-      // Checking CarcassDrawerManager... I did not implement updateDrawerQuantity explicitly there.
-      // I implemented updateDrawerHeight.
-      // I need to implement updateDrawerQuantity logic here or in manager.
-      // Ideally in manager.
-      
-      // I will implement a wrapper here that does the logic, or calls a new manager method.
-      // Since I can't edit manager now easily without another tool call, I'll put the logic here calling manager methods.
-      // Wait, I can't access private members of manager.
-      
-      // I'll reimplement the logic here using public manager methods.
-      // Actually, createDrawers() in manager handles creation.
-      // I just need to handle the config update and recreation.
-      
-      // Store existing drawer heights to preserve user input
-      const existingHeights = [...(this.config.drawerHeights || [])]
-      this.config.drawerQuantity = quantity
-      
-      // Wardrobe handling
-      if (this.cabinetType === "wardrobe") {
-           // ... logic ...
-           this.removePartsFromGroup(this.drawerManager.drawers)
-           this.drawerManager.dispose()
-           if (this.config.drawerEnabled && quantity > 0) {
-               this.drawerManager.createWardrobeDrawers()
-               this.addPartsToGroup(this.drawerManager.drawers)
-           }
-           this.updateShelves()
-      return
+    this.drawerManager.updateQuantity(quantity)
+    if (this.cabinetType === "wardrobe") {
+      this.updateShelves()
     }
-
-      // Regular handling
-      // Recalculate heights... (logic from original file)
-      // For now I'll use a simplified version or the distribution logic available in utils
-      
-      // Simplified: Just reset if quantity changes (for this refactor step), 
-      // or try to preserve if possible.
-      // The original logic was quite smart. I should preserve it.
-      // But it's too long to inline comfortably.
-      // I'll simplify: reset heights.
-      this.config.drawerHeights = [] // Reset to force recalculation in createDrawers
-      
-      this.removePartsFromGroup(this.drawerManager.drawers)
-      this.drawerManager.dispose()
-      
-      if (this.config.drawerEnabled) {
-          this.drawerManager.createDrawers()
-          this.addPartsToGroup(this.drawerManager.drawers)
-      }
   }
   
   public updateDrawerHeight(index: number, height: number, changedId?: string) {
-      this.drawerManager.updateDrawerHeight(index, height, changedId)
+    this.drawerManager.updateDrawerHeight(index, height, changedId)
   }
   
   public getDrawerHeights() { return this.drawerManager.getDrawerHeights() }
-  public getTotalDrawerHeight() { return this.drawerManager.getDrawerHeights().reduce((a,b)=>a+b,0) }
+  public getTotalDrawerHeight() { return this.drawerManager.getDrawerHeights().reduce((a, b) => a + b, 0) }
   public validateDrawerHeights() { return this.drawerManager.validateDrawerHeights() }
   public balanceDrawerHeights() { this.drawerManager.balanceDrawerHeights() }
-  public getOptimalDrawerHeights() { return this.drawerManager.getDrawerHeights() /* simplified */ }
 
   public updateConfig(newConfig: Partial<CarcassConfig>): void {
     this.config = { ...this.config, ...newConfig }
@@ -459,7 +340,7 @@ export class CarcassAssembly {
     offsetX: number
   ): void {
     if (this.cabinetType !== "bulkhead") return
-    const thickness = 16
+    const thickness = BULKHEAD_RETURN_THICKNESS
     const bulkheadReturn = new BulkheadReturn({
       height,
       depth,
@@ -499,7 +380,7 @@ export class CarcassAssembly {
     offsetX: number
   ): void {
     if (this.cabinetType !== "bulkhead") return
-    const thickness = 16
+    const thickness = BULKHEAD_RETURN_THICKNESS
     const bulkheadReturn =
       side === "left" ? this._bulkheadReturnLeft : this._bulkheadReturnRight
 
@@ -513,10 +394,6 @@ export class CarcassAssembly {
       bulkheadReturn.group.position.x = offsetX - thickness / 2
     }
     bulkheadReturn.group.position.z = -depth / 2
-  }
-
-  static loadMaterialFromData(materialId: string): CarcassMaterial | null {
-    return MaterialLoader.loadMaterialById(materialId)
   }
 
   private withPreservedPosition(callback: () => void): void {
@@ -570,15 +447,4 @@ export class CarcassAssembly {
       return new CarcassAssembly(type, dimensions, finalConfig, productId, cabinetId)
   }
 
-  // Backward compatibility aliases
-  static createTopCabinet(dim: CarcassDimensions, cfg: Partial<CarcassConfig>, pid: string, cid: string) { return this.create("top", dim, cfg, pid, cid) }
-  static createBaseCabinet(dim: CarcassDimensions, cfg: Partial<CarcassConfig>, pid: string, cid: string) { return this.create("base", dim, cfg, pid, cid) }
-  static createTallCabinet(dim: CarcassDimensions, cfg: Partial<CarcassConfig>, pid: string, cid: string) { return this.create("tall", dim, cfg, pid, cid) }
-  static createWardrobeCabinet(dim: CarcassDimensions, cfg: Partial<CarcassConfig>, pid: string, cid: string) { return this.create("wardrobe", dim, { ...cfg, drawerEnabled: true }, pid, cid) }
-  static createPanelCabinet(dim: CarcassDimensions, cfg: Partial<CarcassConfig>, pid: string, cid: string) { return this.create("panel", dim, cfg, pid, cid) }
-  static createLinearFiller(dim: CarcassDimensions, cfg: Partial<CarcassConfig>, pid: string, cid: string) { return this.create("filler", dim, { ...cfg, fillerType: "linear" }, pid, cid) }
-  static createLShapeFiller(dim: CarcassDimensions, cfg: Partial<CarcassConfig>, pid: string, cid: string, pos: "left" | "right" = "left") { return this.create("filler", dim, { ...cfg, fillerType: "l-shape" }, pid, cid, { fillerReturnPosition: pos }) }
-  static createKicker(dim: CarcassDimensions, cfg: Partial<CarcassConfig>, pid: string, cid: string) { return this.create("kicker", dim, cfg, pid, cid) }
-  static createUnderPanel(dim: CarcassDimensions, cfg: Partial<CarcassConfig>, pid: string, cid: string) { return this.create("underPanel", dim, cfg, pid, cid) }
-  static createBulkhead(dim: CarcassDimensions, cfg: Partial<CarcassConfig>, pid: string, cid: string) { return this.create("bulkhead", dim, cfg, pid, cid) }
 }

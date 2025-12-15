@@ -3,6 +3,7 @@ import {
   CarcassAssembly,
   CarcassDimensions,
   CabinetType,
+  CarcassConfig,
 } from "@/features/carcass"
 import { CabinetData } from "@/features/scene/types"
 
@@ -26,6 +27,68 @@ const defaultDimensions: Defaults = {
   // UnderPanel: width = cabinet width, height = thickness (16mm), depth = parent depth - 20
   underPanel: { width: 600, height: 16, depth: 280 },
   benchtop: { width: 2000, height: 40, depth: 600 }, // Standard benchtop size
+}
+
+// Default configurations per cabinet type
+const getDefaultConfig = (
+  type: CabinetType,
+  subcategoryId: string,
+  opts?: {
+    fillerType?: "linear" | "l-shape"
+    fillerReturnPosition?: "left" | "right"
+    wardrobeDrawerQuantity?: number
+    wardrobeDrawerHeight?: number
+    wardrobeDrawerBuffer?: number
+  }
+): Partial<CarcassConfig> => {
+  const baseConfig: Partial<CarcassConfig> = {
+    shelfCount: 0,
+    shelfSpacing: 0,
+    doorEnabled: false,
+    drawerEnabled: false,
+  }
+
+  switch (type) {
+    case "top":
+      return { shelfCount: 2, shelfSpacing: 300 }
+    case "base":
+      if (subcategoryId === "drawer") {
+        return {
+          shelfCount: 0,
+          shelfSpacing: 0,
+          doorEnabled: false,
+          drawerEnabled: true,
+          drawerQuantity: 3,
+          drawerHeights: [],
+        }
+      }
+      return { shelfCount: 2, shelfSpacing: 300 }
+    case "tall":
+      return { shelfCount: 4, shelfSpacing: 300 }
+    case "wardrobe":
+      return {
+        shelfCount: 4,
+        shelfSpacing: 300,
+        doorEnabled: false,
+        drawerEnabled: true,
+        drawerQuantity: opts?.wardrobeDrawerQuantity ?? 0,
+        wardrobeDrawerHeight: opts?.wardrobeDrawerHeight ?? 220,
+        wardrobeDrawerBuffer: opts?.wardrobeDrawerBuffer ?? 50,
+      }
+    case "filler":
+      return {
+        ...baseConfig,
+        fillerType: opts?.fillerType || "linear",
+        fillerReturnPosition: opts?.fillerReturnPosition || "left",
+      }
+    case "panel":
+    case "kicker":
+    case "bulkhead":
+    case "underPanel":
+      return baseConfig
+    default:
+      return { shelfCount: 2, shelfSpacing: 300 }
+  }
 }
 
 export const createCabinet = (
@@ -55,185 +118,40 @@ export const createCabinet = (
       `Unsupported cabinet type "${type}" passed to createCabinet. Falling back to 'tall'.`
     )
   }
-  const baseDims = _.cloneDeep(defaultDimensions[hasDefaults ? type : "tall"])
+  const resolvedType = hasDefaults ? type : "tall"
+  const baseDims = _.cloneDeep(defaultDimensions[resolvedType])
+  
+  // Handle special dimension case for drawer base cabinets
   const dimensions: CarcassDimensions = {
     width: opts?.customDimensions?.width ?? baseDims.width,
-    height: opts?.customDimensions?.height ?? baseDims.height,
+    height: type === "base" && subcategoryId === "drawer" 
+      ? 730 
+      : (opts?.customDimensions?.height ?? baseDims.height),
     depth: opts?.customDimensions?.depth ?? baseDims.depth,
   }
 
   // Use lodash uniqueId + random suffix to avoid collisions when creating multiple cabinets quickly
   const cabinetId = `${_.uniqueId("cabinet-")}-${Math.random().toString(36).slice(2, 8)}`
 
-  let carcass: CarcassAssembly
-  switch (type) {
-    case "top":
-      carcass = CarcassAssembly.createTopCabinet(
-        dimensions,
-        {
-          shelfCount: 2,
-          shelfSpacing: 300,
-        },
-        productId,
-        cabinetId
-      )
-      break
-    case "base":
-      if (subcategoryId === "drawer") {
-        const drawerDimensions = { ...dimensions, height: 730 }
-        carcass = CarcassAssembly.createBaseCabinet(
-          drawerDimensions,
-          {
-            shelfCount: 0,
-            shelfSpacing: 0,
-            doorEnabled: false,
-            drawerEnabled: true,
-            drawerQuantity: 3,
-            drawerHeights: [],
-          },
-          productId,
-          cabinetId
-        )
-      } else {
-        carcass = CarcassAssembly.createBaseCabinet(
-          dimensions,
-          {
-            shelfCount: 2,
-            shelfSpacing: 300,
-          },
-          productId,
-          cabinetId
-        )
-      }
-      break
-    case "tall":
-      carcass = CarcassAssembly.createTallCabinet(
-        dimensions,
-        {
-          shelfCount: 4,
-          shelfSpacing: 300,
-        },
-        productId,
-        cabinetId
-      )
-      break
-    case "panel":
-      carcass = CarcassAssembly.createPanelCabinet(
-        dimensions,
-        {
-          shelfCount: 0,
-          shelfSpacing: 0,
-          doorEnabled: false,
-          drawerEnabled: false,
-        },
-        productId,
-        cabinetId
-      )
-      break
-    case "filler":
-      if (opts?.fillerType === "l-shape") {
-        carcass = CarcassAssembly.createLShapeFiller(
-          dimensions,
-          {
-            shelfCount: 0,
-            shelfSpacing: 0,
-            doorEnabled: false,
-            drawerEnabled: false,
-          },
-          productId,
-          cabinetId,
-          opts?.fillerReturnPosition || "left"
-        )
-      } else {
-        // Default to linear filler
-        carcass = CarcassAssembly.createLinearFiller(
-          dimensions,
-          {
-            shelfCount: 0,
-            shelfSpacing: 0,
-            doorEnabled: false,
-            drawerEnabled: false,
-          },
-          productId,
-          cabinetId
-        )
-      }
-      break
-    case "wardrobe":
-      carcass = CarcassAssembly.createWardrobeCabinet(
-        dimensions,
-        {
-          shelfCount: 4, // Default 4 shelves above drawers
-          shelfSpacing: 300,
-          doorEnabled: false, // Wardrobes never have doors
-          drawerEnabled: true, // Always has drawers
-          drawerQuantity: opts?.wardrobeDrawerQuantity ?? 0, // Default 2 drawers
-          wardrobeDrawerHeight: opts?.wardrobeDrawerHeight ?? 220, // Fixed 220mm drawer height
-          wardrobeDrawerBuffer: opts?.wardrobeDrawerBuffer ?? 50, // 50mm buffer
-        },
-        productId,
-        cabinetId
-      )
-      break
-    case "kicker":
-      carcass = CarcassAssembly.createKicker(
-        dimensions,
-        {
-          shelfCount: 0,
-          shelfSpacing: 0,
-          doorEnabled: false,
-          drawerEnabled: false,
-        },
-        productId,
-        cabinetId
-      )
-      break
-    case "bulkhead":
-      carcass = CarcassAssembly.createBulkhead(
-        dimensions,
-        {
-          shelfCount: 0,
-          shelfSpacing: 0,
-          doorEnabled: false,
-          drawerEnabled: false,
-        },
-        productId,
-        cabinetId
-      )
-      break
-    case "underPanel":
-      carcass = CarcassAssembly.createUnderPanel(
-        dimensions,
-        {
-          shelfCount: 0,
-          shelfSpacing: 0,
-          doorEnabled: false,
-          drawerEnabled: false,
-        },
-        productId,
-        cabinetId
-      )
-      break
-    default:
-      carcass = CarcassAssembly.createTopCabinet(
-        dimensions,
-        {
-          shelfCount: 2,
-          shelfSpacing: 300,
-        },
-        productId,
-        cabinetId
-      )
-  }
+  // Get type-specific configuration
+  const config = getDefaultConfig(resolvedType, subcategoryId, opts)
+  
+  // Create carcass using unified factory method
+  const carcass = CarcassAssembly.create(
+    resolvedType,
+    dimensions,
+    config,
+    productId,
+    cabinetId,
+    type === "filler" && opts?.fillerType === "l-shape" 
+      ? { fillerReturnPosition: opts?.fillerReturnPosition || "left" }
+      : undefined
+  )
 
   // position by index to avoid overlap if desired
   const index = opts?.indexOffset ?? 0
   const spacing = opts?.spacing ?? 100
   carcass.group.position.x = index * (dimensions.width + spacing)
-
-  // const cabinetId = `cabinet-${type}-${subcategoryId}-${
-  //   opts?.productId || "default"
-  // }-${index}`
 
   return {
     group: carcass.group,

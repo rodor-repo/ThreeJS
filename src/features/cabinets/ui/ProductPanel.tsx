@@ -1,15 +1,53 @@
-import { calculateWsProductPrice, type CalculatePriceRequest } from '@/server/calculateWsProductPrice'
 import { getProductData, type DefaultMaterialSelections, type MaterialOptionsResponse } from '@/server/getProductData'
 import { GDThreeJsType } from '@/types/erpTypes'
 import { useQuery } from '@tanstack/react-query'
 import _ from 'lodash'
-import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { X, RefreshCw, RotateCcw } from 'lucide-react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import toast from 'react-hot-toast'
+
 import type { ProductPanelProps } from './productPanel.types'
 import { ViewSelector } from './ViewSelector'
 import type { ViewId } from '../ViewManager'
-import toast from 'react-hot-toast'
 import { updateKickerPosition } from '@/features/scene/utils/handlers/kickerPositionHandler'
+
+// Import refactored hooks
+import {
+  useGDMapping,
+  usePersistence,
+  usePanelState,
+  usePriceQuery,
+  useDimensionEvents,
+  useDimensionSync,
+  useInitialization,
+  useMaterialSync,
+  getPersistedState,
+} from './productPanel/hooks'
+
+// Import refactored components
+import {
+  PanelHeader,
+  DimensionsSection,
+  MaterialsSection,
+  ColorPickerModal,
+  PairSection,
+  SyncSection,
+  OffTheFloorControl,
+  SimpleColorPicker,
+} from './productPanel/components'
+
+// Import utils
+import {
+  toNum,
+  buildDimsList,
+  applyPrimaryDimsTo3D,
+  validateDrawerHeightChange,
+} from './productPanel/utils/dimensionUtils'
+
+import type { MaterialSelections } from './productPanel/utils/materialUtils'
+
+// Re-export for backward compatibility
+export { toNum }
+export { cabinetPanelState, type PersistedPanelState } from './productPanel/hooks/usePersistence'
 
 // Throttled toast to prevent spam when user drags sliders rapidly
 export const toastThrottled = _.throttle(
@@ -18,35 +56,43 @@ export const toastThrottled = _.throttle(
   { leading: true, trailing: false }
 )
 
-interface LocalProductPanelProps extends ProductPanelProps { }
-
-// In-memory per-cabinet state store to persist last user-edited values across panel reopens
-export type PersistedPanelState = {
-  values: Record<string, number | string>
-  materialColor: string
-  materialSelections?: Record<string, { priceRangeId: string, colorId: string, finishId?: string }>
-  price?: { amount: number }
-}
-export const cabinetPanelState = new Map<string, PersistedPanelState>()
+interface LocalProductPanelProps extends ProductPanelProps {}
 
 const ProductPanel: React.FC<LocalProductPanelProps> = props => {
-  // Always render dynamic panel: fetch WsProduct on demand via React Query using cabinet productId
   return <DynamicPanelWithQuery {...props} />
 }
 
 export default ProductPanel
 
 // -------- Fetcher wrapper + Dynamic Dims-only variant driven by WsProduct --------
-const DynamicPanelWithQuery: React.FC<LocalProductPanelProps> = ({ isVisible, onClose, selectedCabinet, onDimensionsChange, onMaterialChange, onOverhangDoorToggle, onShelfCountChange, onDrawerHeightChange, onDrawerQuantityChange, onDoorCountChange, viewManager, onViewChange, allCabinets, onGroupChange, initialGroupData, onSyncChange, initialSyncData }) => {
+const DynamicPanelWithQuery: React.FC<LocalProductPanelProps> = ({
+  isVisible,
+  onClose,
+  selectedCabinet,
+  onDimensionsChange,
+  onMaterialChange,
+  onOverhangDoorToggle,
+  onShelfCountChange,
+  onDrawerHeightChange,
+  onDrawerQuantityChange,
+  onDoorCountChange,
+  viewManager,
+  onViewChange,
+  allCabinets,
+  onGroupChange,
+  initialGroupData,
+  onSyncChange,
+  initialSyncData,
+}) => {
   const productId = selectedCabinet?.productId
+  
   const { data, isLoading, isError } = useQuery({
     queryKey: ['productData', productId],
     queryFn: async () => {
       if (!productId) throw new Error('No productId')
-      // Call Next.js Server Action directly for type-safe data
       const data = await getProductData(productId)
 
-      // apply drawer qty and door qty to all products of this productId in the cabinets state
+      // Apply drawer qty and door qty to all products of this productId in the cabinets state
       if (allCabinets) {
         for (const cabinet of allCabinets) {
           const cabProductId = cabinet.carcass?.productId
@@ -71,10 +117,9 @@ const DynamicPanelWithQuery: React.FC<LocalProductPanelProps> = ({ isVisible, on
       }
       return data
     },
-    // enabled: !!productId && !!isVisible,
     enabled: !!productId,
     staleTime: 5 * 60 * 1000,
-    gcTime: Infinity
+    gcTime: Infinity,
   })
 
   const wsProduct = data?.product
@@ -92,12 +137,6 @@ const DynamicPanelWithQuery: React.FC<LocalProductPanelProps> = ({ isVisible, on
     }
   }, [productId, materialOptions, defaultMaterialSelections])
 
-  // Debug: log fetched data shape when visible
-  useEffect(() => {
-    if (!productId) return
-  }, [isVisible, productId, wsProduct, materialOptions, defaultMaterialSelections])
-
-  // if (!isVisible) return null
   if (!productId) return null
 
   return (
@@ -131,41 +170,205 @@ const DynamicPanelWithQuery: React.FC<LocalProductPanelProps> = ({ isVisible, on
   )
 }
 
-export const toNum = (v: number | string | undefined) => typeof v === 'number' ? v : Number(v)
+type DynamicPanelProps = LocalProductPanelProps & {
+  productId?: string
+  loading?: boolean
+  error?: boolean
+  materialOptions?: MaterialOptionsResponse
+  defaultMaterialSelections?: DefaultMaterialSelections
+  threeJsGDs: Record<GDThreeJsType, string[]> | undefined
+  onGroupChange?: (cabinetId: string, groupCabinets: Array<{ cabinetId: string; percentage: number }>) => void
+  initialGroupData?: Array<{ cabinetId: string; percentage: number }>
+  onSyncChange?: (cabinetId: string, syncCabinets: string[]) => void
+  initialSyncData?: string[]
+}
 
-type DynamicPanelProps = LocalProductPanelProps & { productId?: string, loading?: boolean, error?: boolean, materialOptions?: MaterialOptionsResponse, defaultMaterialSelections?: DefaultMaterialSelections, threeJsGDs: Record<GDThreeJsType, string[]> | undefined, onGroupChange?: (cabinetId: string, groupCabinets: Array<{ cabinetId: string; percentage: number }>) => void, initialGroupData?: Array<{ cabinetId: string; percentage: number }>, onSyncChange?: (cabinetId: string, syncCabinets: string[]) => void, initialSyncData?: string[] }
+const DynamicPanel: React.FC<DynamicPanelProps> = ({
+  productId,
+  isVisible,
+  onClose,
+  wsProduct,
+  materialOptions,
+  defaultMaterialSelections,
+  selectedCabinet,
+  onDimensionsChange,
+  onMaterialChange,
+  loading,
+  error,
+  threeJsGDs,
+  onOverhangDoorToggle,
+  onShelfCountChange,
+  onDrawerHeightChange,
+  onDrawerQuantityChange,
+  onDoorCountChange,
+  viewManager,
+  onViewChange,
+  allCabinets,
+  onGroupChange,
+  initialGroupData,
+  onSyncChange,
+  initialSyncData,
+}) => {
+  const cabinetId = selectedCabinet?.cabinetId
 
-const DynamicPanel: React.FC<DynamicPanelProps> = ({ productId, isVisible, onClose, wsProduct, materialOptions, defaultMaterialSelections, selectedCabinet, onDimensionsChange, onMaterialChange, loading, error, threeJsGDs, onOverhangDoorToggle, onShelfCountChange, onDrawerHeightChange, onDrawerQuantityChange, onDoorCountChange, viewManager, onViewChange, allCabinets, onGroupChange, initialGroupData, onSyncChange, initialSyncData }) => {
-
-
+  // UI state
   const [isExpanded, setIsExpanded] = useState(true)
-  const [values, setValues] = useState<Record<string, number | string>>(() => {
-    const entries = Object.entries(wsProduct?.dims || {})
-    const initial: Record<string, number | string> = {}
-    entries.forEach(([id, dimObj]) => { initial[id] = dimObj.defaultValue })
-    return initial
-  })
-  const [materialColor, setMaterialColor] = useState<string>(selectedCabinet?.material.getColour() || '#ffffff')
-  const [materialSelections, setMaterialSelections] = useState<Record<string, { priceRangeId: string, colorId: string, finishId?: string }>>({})
   const [openMaterialId, setOpenMaterialId] = useState<string | null>(null)
   const [groupCabinets, setGroupCabinets] = useState<Array<{ cabinetId: string; percentage: number }>>([])
   const [syncCabinets, setSyncCabinets] = useState<string[]>([])
-  // Temporary raw editing buffer for number inputs so user can type full value before clamping/validation
-  const [editingValues, setEditingValues] = useState<Record<string, string>>({})
-  // "Off the Floor" dimension for fillers and panels
   const [offTheFloor, setOffTheFloor] = useState<number>(0)
   const [editingOffTheFloor, setEditingOffTheFloor] = useState<string>('')
-  
-  // Load group data when selected cabinet changes
+
+  // GD Mapping hook
+  const gdMapping = useGDMapping(threeJsGDs)
+
+  // Panel state hook
+  const panelState = usePanelState({
+    initialDims: wsProduct?.dims,
+    initialMaterialColor: selectedCabinet?.material.getColour() || '#ffffff',
+  })
+
+  // Persistence hook
+  const persistence = usePersistence(cabinetId)
+
+  // Build dims list
+  const dimsList = useMemo(
+    () => buildDimsList(wsProduct?.dims),
+    [wsProduct?.dims]
+  )
+
+  // Calculate drawer quantity for dependent drawer detection
+  const drawerQty = selectedCabinet?.carcass?.config?.drawerQuantity || 0
+
+  // Calculate modal filler/panel status
+  const isModalFillerOrPanel =
+    (selectedCabinet?.cabinetType === 'filler' ||
+      selectedCabinet?.cabinetType === 'panel') &&
+    selectedCabinet?.hideLockIcons === true
+
+  // Apply dimensions to 3D callback
+  const applyDimsTo3D = useCallback(
+    (vals: Record<string, number | string>, changedId?: string) => {
+      if (!selectedCabinet || !onDimensionsChange) return
+
+      applyPrimaryDimsTo3D(
+        vals,
+        dimsList,
+        gdMapping,
+        selectedCabinet,
+        {
+          onDimensionsChange,
+          onOverhangDoorToggle,
+          onShelfCountChange,
+          onDrawerQuantityChange,
+          onDoorCountChange,
+          onDrawerHeightChange,
+        },
+        isModalFillerOrPanel,
+        changedId
+      )
+    },
+    [
+      selectedCabinet,
+      dimsList,
+      gdMapping,
+      isModalFillerOrPanel,
+      onDimensionsChange,
+      onOverhangDoorToggle,
+      onShelfCountChange,
+      onDrawerQuantityChange,
+      onDoorCountChange,
+      onDrawerHeightChange,
+    ]
+  )
+
+  // Initialization hook
+  useInitialization({
+    cabinetId,
+    wsProduct,
+    materialOptions,
+    defaultMaterialSelections,
+    selectedCabinet: selectedCabinet ?? undefined,
+    gdMapping,
+    getPersistedState: (id) => getPersistedState(id),
+    setPersistedState: (id, state) => persistence.setPersisted(state),
+    onInitialized: (result) => {
+      panelState.setValues(result.values)
+      panelState.setMaterialColor(result.materialColor)
+      panelState.setMaterialSelections(result.materialSelections)
+    },
+    onApply3D: applyDimsTo3D,
+    onMaterialSelectionsSync: (id, selections) => {
+      const { getPartDataManager } = require('@/nesting/PartDataManager')
+      const partDataManager = getPartDataManager()
+      partDataManager.setMaterialSelections(id, selections)
+    },
+  })
+
+  // Material sync hook
+  useMaterialSync(
+    productId,
+    cabinetId,
+    materialOptions,
+    defaultMaterialSelections,
+    panelState.materialSelections,
+    selectedCabinet ?? undefined
+  )
+
+  // Dimension events hook
+  useDimensionEvents({
+    cabinetId,
+    selectedCabinet: selectedCabinet ?? undefined,
+    dims: wsProduct?.dims,
+    gdMapping,
+    onValueUpdate: (id, value) => {
+      panelState.updateValue(id, value)
+    },
+    onPersistedValueUpdate: (id, value) => {
+      persistence.updateSingleValue(id, value)
+    },
+    onValuesSync: (syncedValues) => {
+      panelState.setValues(prev => ({ ...prev, ...syncedValues }))
+    },
+    onPersistedValuesSync: (syncedValues) => {
+      persistence.updateValues({ ...panelState.values, ...syncedValues })
+    },
+  })
+
+  // Dimension sync hook
+  useDimensionSync({
+    cabinetId,
+    cabinetWidth: selectedCabinet?.dimensions.width,
+    dims: wsProduct?.dims,
+    gdMapping,
+    onWidthSync: (widthDimId, newWidth) => {
+      panelState.updateValue(widthDimId, newWidth)
+    },
+    onPersistedWidthSync: (widthDimId, newWidth) => {
+      persistence.updateSingleValue(widthDimId, newWidth)
+    },
+  })
+
+  // Price query hook
+  const priceQuery = usePriceQuery({
+    productId: productId || wsProduct?.productId,
+    isVisible,
+    wsProductLoaded: !!wsProduct,
+    dims: panelState.debouncedInputs.dims,
+    materialSelections: panelState.debouncedInputs.materialSelections,
+    onPriceUpdate: (price) => {
+      persistence.updatePrice(price)
+    },
+  })
+
+  // Load group/sync data when selected cabinet changes
   useEffect(() => {
     if (selectedCabinet?.cabinetId) {
-      // Load existing group data from parent (ThreeScene)
       if (initialGroupData && initialGroupData.length > 0) {
         setGroupCabinets([...initialGroupData])
       } else {
         setGroupCabinets([])
       }
-      // Load existing sync data from parent (ThreeScene)
       if (initialSyncData && initialSyncData.length > 0) {
         setSyncCabinets([...initialSyncData])
       } else {
@@ -173,507 +376,234 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ productId, isVisible, onClo
       }
     }
   }, [selectedCabinet?.cabinetId, initialGroupData, initialSyncData])
-  
-  // debounced inputs for price calculation
-  type MaterialSel = { priceRangeId: string, colorId: string, finishId?: string }
-  type PriceInputs = { dims: Record<string, number | string>, materialSelections: Record<string, MaterialSel> }
-  const [debouncedInputs, setDebouncedInputs] = useState<PriceInputs>({ dims: values, materialSelections: materialSelections })
-  // const lastInitRef = useRef<string | null>(null)
-  const cabinetId = selectedCabinet?.cabinetId
-  const hasInitializedRef = useRef<boolean>(false)
-  const lastSyncedWidthRef = useRef<number | null>(null)
 
-  // Sync materialSelections to PartDataManager whenever it changes
+  // Initialize material color and off-the-floor
   useEffect(() => {
-    if (cabinetId && selectedCabinet && Object.keys(materialSelections).length > 0) {
-      const { getPartDataManager } = require('@/nesting/PartDataManager')
-      const partDataManager = getPartDataManager()
-      partDataManager.setMaterialSelections(cabinetId, materialSelections)
-      // Update cabinet parts to refresh door color names
-      partDataManager.updateCabinetParts(selectedCabinet)
-    }
-  }, [cabinetId, materialSelections, selectedCabinet])
-
-
-  useEffect(() => {
-    setMaterialColor(selectedCabinet?.material.getColour() || '#ffffff')
-    // Initialize "Off the Floor" value for fillers and panels
-    if (selectedCabinet && (selectedCabinet.cabinetType === 'filler' || selectedCabinet.cabinetType === 'panel')) {
+    panelState.setMaterialColor(selectedCabinet?.material.getColour() || '#ffffff')
+    if (
+      selectedCabinet &&
+      (selectedCabinet.cabinetType === 'filler' ||
+        selectedCabinet.cabinetType === 'panel')
+    ) {
       const currentY = selectedCabinet.group.position.y
       setOffTheFloor(Math.max(0, Math.min(1200, currentY)))
       setEditingOffTheFloor('')
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCabinet])
-  
 
-  // add window event listener for productPanel:updateDim
+  // Apply drawer/door qty on dimsList change
   useEffect(() => {
-    if (!cabinetId) return
-    // Handler expects a CustomEvent with detail: { id: string, value: number }
-    const handler = (e: Event) => {
-      const ev = e as CustomEvent<{ id: string; value: number }>
-      const payload = ev.detail || (e as MessageEvent).data
-      if (!payload || typeof payload.id !== 'string') return
-      const id = payload.id
-      const valNum = Number(payload.value)
-      if (isNaN(valNum)) return
-
-      setValues(prev => {
-        const next = { ...prev, [id]: valNum }
-        return next
-      })
-      const saved = cabinetPanelState.get(cabinetId)
-      if (!saved) throw new Error("Cabinet panel state not found.")
-      cabinetPanelState.set(cabinetId, {
-        ...saved,
-        values: {
-          ...saved?.values,
-          [id]: valNum,
-        },
-      })
-    }
-
-    window.addEventListener('productPanel:updateDim', handler)
-    return () => {
-      window.removeEventListener('productPanel:updateDim', handler)
-    }
-  }, [cabinetId])
-
-  // Listen for dimension rejection events to sync UI with actual cabinet dimensions
-  useEffect(() => {
-    if (!cabinetId || !selectedCabinet || !wsProduct?.dims) return
-
-    const handler = () => {
-      // We can't simply do setValues(prev => ({ ...prev })) because by the time this
-      // event fires, the local `values` state has already been updated with the rejected
-      // value (e.g., 501). We need to read from selectedCabinet.dimensions (the source
-      // of truth, still at 500) and explicitly overwrite the incorrect local state.
-      // The complexity of iterating through dims comes from the data structure - `values`
-      // is keyed by dimension IDs (e.g., "dim_abc123"), not semantic names like "width".
-      const widthGDIds = threeJsGDs?.["width"] || []
-      const heightGDIds = threeJsGDs?.["height"] || []
-      const depthGDIds = threeJsGDs?.["depth"] || []
-
-      setValues(prev => {
-        const next = { ...prev }
-        for (const [dimId, dimObj] of Object.entries(wsProduct!.dims)) {
-          if (!dimObj.GDId) continue
-          if (widthGDIds.includes(dimObj.GDId)) {
-            next[dimId] = selectedCabinet!.dimensions.width
-          } else if (heightGDIds.includes(dimObj.GDId)) {
-            next[dimId] = selectedCabinet!.dimensions.height
-          } else if (depthGDIds.includes(dimObj.GDId)) {
-            next[dimId] = selectedCabinet!.dimensions.depth
-          }
-        }
-        // Also update persisted state
-        const persisted = cabinetPanelState.get(cabinetId!)
-        if (persisted) {
-          cabinetPanelState.set(cabinetId!, { ...persisted, values: next })
-        }
-        return next
-      })
-    }
-
-    window.addEventListener('productPanel:dimensionRejected', handler)
-    return () => {
-      window.removeEventListener('productPanel:dimensionRejected', handler)
-    }
-  }, [cabinetId, selectedCabinet, wsProduct?.dims, threeJsGDs])
-
-
-  // const envWidthGDIds = process.env.NEXT_PUBLIC_WIDTH_GDID?.split(',') || []
-  // const envHeightGDIds = process.env.NEXT_PUBLIC_HEIGHT_GDID?.split(',') || []
-  // const envDepthGDIds = process.env.NEXT_PUBLIC_DEPTH_GDID?.split(',') || []
-  const widthGDIds = threeJsGDs?.["width"] || []
-  const heightGDIds = threeJsGDs?.["height"] || []
-  const depthGDIds = threeJsGDs?.["depth"] || []
-  
-  // Disable height and depth editing for fillers/panels added from modal
-  const isModalFillerOrPanel = (selectedCabinet?.cabinetType === 'filler' || selectedCabinet?.cabinetType === 'panel') && selectedCabinet?.hideLockIcons === true
-  const doorOverhangGDIds = threeJsGDs?.["doorOverhang"] || []
-  const shelfQtyGDIds = threeJsGDs?.["shelfQty"] || []
-  const drawerQtyGDIds = threeJsGDs?.["drawerQty"] || []
-  const doorQtyGDIds = threeJsGDs?.["doorQty"] || []
-  // Drawer height GD mappings (index based)
-  const drawerHeightGDMap: Record<number, string[]> = {
-    0: threeJsGDs?.drawerH1 || [],
-    1: threeJsGDs?.drawerH2 || [],
-    2: threeJsGDs?.drawerH3 || [],
-    3: threeJsGDs?.drawerH4 || [],
-    4: threeJsGDs?.drawerH5 || []
-  }
-
-  const dimsList = useMemo(() => {
-    const entries = Object.entries(wsProduct?.dims || {})
-    return _.sortBy(entries, ([, dimObj]) => Number(dimObj.sortNum))
-  }, [wsProduct?.dims])
-
-  useEffect(() => {
-    let drawerQty: number | undefined = selectedCabinet?.carcass?.config?.drawerQuantity
-    let doorQty: number | undefined = selectedCabinet?.carcass?.config?.doorCount
+    let drawerQtyVal: number | undefined = selectedCabinet?.carcass?.config?.drawerQuantity
+    let doorQtyVal: number | undefined = selectedCabinet?.carcass?.config?.doorCount
     dimsList.forEach(([_id, dimObj]) => {
       const gdId = dimObj.GDId
       if (!gdId) return
-      if (drawerQtyGDIds.includes(gdId)) drawerQty = toNum(dimObj.defaultValue) || drawerQty
-      if (drawerQty) onDrawerQuantityChange?.(drawerQty)
-      if (doorQtyGDIds.includes(gdId)) doorQty = toNum(dimObj.defaultValue) || doorQty
-      if (doorQty) onDoorCountChange?.(doorQty)
+      if (gdMapping.drawerQtyGDIds.includes(gdId)) {
+        drawerQtyVal = toNum(dimObj.defaultValue) || drawerQtyVal
+      }
+      if (drawerQtyVal) onDrawerQuantityChange?.(drawerQtyVal)
+      if (gdMapping.doorQtyGDIds.includes(gdId)) {
+        doorQtyVal = toNum(dimObj.defaultValue) || doorQtyVal
+      }
+      if (doorQtyVal) onDoorCountChange?.(doorQtyVal)
     })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dimsList, threeJsGDs])
 
-  // Sync values with current cabinet dimensions when they change externally (e.g., from group rule)
-  useEffect(() => {
-    if (!selectedCabinet || !wsProduct?.dims || !cabinetId) return
-    
-    const currentWidth = selectedCabinet.dimensions.width
-    
-    // Reset ref when cabinet changes
-    if (lastSyncedWidthRef.current === null || lastSyncedWidthRef.current !== currentWidth) {
-      // Find width dimension ID and sync with current cabinet width
-      const widthGDIds = threeJsGDs?.["width"] || []
-      let widthDimId: string | null = null
-      for (const [dimId, dimObj] of Object.entries(wsProduct.dims)) {
-        if (dimObj.GDId && widthGDIds.includes(dimObj.GDId)) {
-          widthDimId = dimId
-          break
-        }
-      }
-      
-      // If we found the width dimension ID and the width has changed, update it
-      if (widthDimId && (lastSyncedWidthRef.current === null || Math.abs(lastSyncedWidthRef.current - currentWidth) > 0.1)) {
-        // Width changed externally - sync the values state
-        setValues(prevValues => {
-          const updatedValues = { ...prevValues, [widthDimId!]: currentWidth }
-          
-          // Also update cabinetPanelState
-          const persisted = cabinetPanelState.get(cabinetId)
-          if (persisted) {
-            cabinetPanelState.set(cabinetId, {
-              ...persisted,
-              values: updatedValues
-            })
-          }
-          
-          return updatedValues
-        })
-        
-        // Update ref to track the synced width
-        lastSyncedWidthRef.current = currentWidth
-      }
-    }
-  }, [selectedCabinet?.dimensions.width, selectedCabinet?.cabinetId, wsProduct?.dims, cabinetId, threeJsGDs])
-  
-  // Reset sync ref when cabinet changes
-  useEffect(() => {
-    lastSyncedWidthRef.current = null
-  }, [cabinetId])
-
-  // Initialize values once data loads or when product changes; also apply primary dims to 3D once
-  useEffect(() => {
-    if (!wsProduct?.dims || !cabinetId) return
-    // if (lastInitRef.current === cabinetId && !_.isEmpty(values)) return
-
-
-    if (hasInitializedRef.current) return
-    hasInitializedRef.current = true
-
-    // [ProductPanel] Initialize
-    const entries = Object.entries(wsProduct.dims)
-    const defaults: Record<string, number | string> = {}
-    entries.forEach(([id, dimObj]) => { defaults[id] = dimObj.defaultValue })
-    const saved = cabinetPanelState.get(cabinetId)
-    // Sync with current cabinet dimensions if available (prioritize actual dimensions over saved)
-    let nextValues = saved?.values ? { ...defaults, ...saved.values } : defaults
-    
-    // If selectedCabinet has dimensions, sync width/height/depth from actual cabinet
-    if (selectedCabinet) {
-      const widthGDIds = threeJsGDs?.["width"] || []
-      const heightGDIds = threeJsGDs?.["height"] || []
-      const depthGDIds = threeJsGDs?.["depth"] || []
-      
-      for (const [dimId, dimObj] of Object.entries(wsProduct.dims)) {
-        if (dimObj.GDId) {
-          if (widthGDIds.includes(dimObj.GDId)) {
-            nextValues[dimId] = selectedCabinet.dimensions.width
-          } else if (heightGDIds.includes(dimObj.GDId)) {
-            nextValues[dimId] = selectedCabinet.dimensions.height
-          } else if (depthGDIds.includes(dimObj.GDId)) {
-            nextValues[dimId] = selectedCabinet.dimensions.depth
-          }
-        }
-      }
-    }
-    const nextColor = saved?.materialColor ?? (selectedCabinet?.material.getColour() || '#ffffff')
-
-    // Determine initial material selections: prefer saved, else derive from API defaults, else empty
-    // Build API defaults map
-    const apiDefaults: Record<string, { priceRangeId: string, colorId: string, finishId?: string }> = {}
-    if (defaultMaterialSelections && materialOptions) {
-      // [ProductPanel] Apply API defaultMaterialSelections
-      for (const [materialId, sel] of Object.entries(defaultMaterialSelections)) {
-        const mOpts = materialOptions[materialId]
-        if (!mOpts) {
-          console.warn('No material options for', materialId)
-          continue
-        }
-        const desiredColorId = sel.colorId || undefined
-        // find priceRange containing the colorId
-        let priceRangeId: string | undefined
-        if (desiredColorId) {
-          for (const [prId, pr] of Object.entries(mOpts.priceRanges)) {
-            if (desiredColorId in pr.colorOptions) { priceRangeId = prId; break }
-          }
-        }
-        if (!priceRangeId) {
-          priceRangeId = Object.keys(mOpts.priceRanges)[0]
-          // fallback selection chosen
-        }
-        const pr = priceRangeId ? mOpts.priceRanges[priceRangeId] : undefined
-        let colorId = desiredColorId
-        if (!colorId) {
-          colorId = pr ? Object.keys(pr.colorOptions)[0] : ''
-          // fallback color chosen
-        }
-        // finish
-        let finishId = sel.finishId || undefined
-        if (!finishId && colorId && pr) {
-          const finishes = pr.colorOptions[colorId]?.finishes
-          if (finishes) finishId = Object.keys(finishes)[0]
-        }
-        // default selections computed
-        apiDefaults[materialId] = { priceRangeId: priceRangeId || '', colorId: colorId || '', finishId }
-      }
-      // end Apply API defaults
-    }
-
-    // Merge strategy: API defaults provide base, saved selections override where present
-    let nextSelections: Record<string, { priceRangeId: string, colorId: string, finishId?: string }>
-    if (saved?.materialSelections) {
-      const savedEmpty = _.isEmpty(saved.materialSelections)
-      if (savedEmpty) {/* Saved materialSelections empty → seeding with API defaults */}
-      nextSelections = { ...apiDefaults, ...saved.materialSelections }
-    } else {
-      nextSelections = { ...apiDefaults }
-    }
-
-    setValues(nextValues)
-    setMaterialColor(nextColor)
-    setMaterialSelections(nextSelections || {})
-    // Initialized values and selections
-    // Persist initialized state and sync 3D primary dims
-    cabinetPanelState.set(cabinetId, { values: nextValues, materialColor: nextColor, materialSelections: nextSelections || {}, price: saved?.price })
-    
-    // Sync materialSelections to PartDataManager on initialization
-    if (nextSelections && Object.keys(nextSelections).length > 0) {
-      const { getPartDataManager } = require('@/nesting/PartDataManager')
-      const partDataManager = getPartDataManager()
-      partDataManager.setMaterialSelections(cabinetId, nextSelections)
-    }
-    
-    // Persisted state for cabinet
-    // lastInitRef.current = cabinetId
-    if (!selectedCabinet.carcass?.defaultDimValuesApplied) {
-      applyPrimaryDimsTo3D(nextValues)
-      selectedCabinet.carcass!.defaultDimValuesApplied = true
-    }
-    // end Initialize
-  }, [wsProduct?.dims, cabinetId, materialOptions, defaultMaterialSelections])
-
-  // Setup debounced updates for price inputs
-  useEffect(() => {
-    const updater = _.debounce((next: PriceInputs) => {
-      setDebouncedInputs(next)
-    }, 400)
-    updater({ dims: values, materialSelections })
-    return () => {
-      updater.cancel()
-    }
-  }, [values, materialSelections])
-
-  // Price calculation via React Query keyed by all affecting inputs
-  // Use the explicit productId prop (from selectedCabinet) rather than wsProduct?.productId
-  // because wsProduct.productId may not exist in the API response structure
-  const effectiveProductId = productId || wsProduct?.productId
-  const { data: priceData, isFetching: isPriceFetching, isError: isPriceError, status: queryStatus, fetchStatus } = useQuery({
-    queryKey: ['wsProductPrice', effectiveProductId, debouncedInputs.dims, debouncedInputs.materialSelections],
-    queryFn: async () => {
-      // wsProduct.productId check is redundant with enabled check but typescript needs it
-      if (!effectiveProductId) throw new Error('No productId')
-      const payload: CalculatePriceRequest = {
-        productId: effectiveProductId,
-        dims: debouncedInputs.dims,
-        materialSelections: debouncedInputs.materialSelections
-      }
-      const res = await calculateWsProductPrice(payload)
-      return { amount: res.price }
-    },
-    // The query MUST be disabled until wsProduct is loaded. 
-    // Even if selectedCabinet has a productId, wsProduct needs to be fetched first 
-    // because that's what drives the inputs (dims/materials) used in the price calculation.
-    enabled: !!isVisible && !!effectiveProductId && !!wsProduct,
-    staleTime: 10 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
-    refetchOnWindowFocus: false
-  })
-
-  useEffect(() => {
-    if (isPriceFetching) return
-    if (isPriceError) {
-      console.warn('[ProductPanel] Price query error for', wsProduct?.productId)
-    } else if (priceData) {
-      // Price updated
-    }
-  }, [priceData, isPriceFetching, isPriceError, wsProduct?.productId])
-
-  // Persist latest price in the in-memory store for the cabinet
+  // Persist values and price changes
   useEffect(() => {
     if (!cabinetId) return
-    const persisted = cabinetPanelState.get(cabinetId)
-    cabinetPanelState.set(cabinetId, { ...(persisted || { values, materialColor, materialSelections }), price: priceData || persisted?.price })
-  }, [priceData, cabinetId])
+    persistence.setPersisted({
+      values: panelState.values,
+      materialColor: panelState.materialColor,
+      materialSelections: panelState.materialSelections,
+      price: priceQuery.priceData,
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    panelState.values,
+    panelState.materialColor,
+    panelState.materialSelections,
+    priceQuery.priceData,
+    cabinetId,
+  ])
 
+  // Handlers
+  const handleValueChange = useCallback(
+    (id: string, value: number | string) => {
+      const next = { ...panelState.values, [id]: value }
+      panelState.setValues(next)
+      applyDimsTo3D(next, id)
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [panelState.values, applyDimsTo3D]
+  )
 
-  const applyPrimaryDimsTo3D = (vals: Record<string, number | string>, changedId?: string) => {
-    if (!selectedCabinet || !onDimensionsChange) return
-    
-    // Disable height and depth editing for fillers/panels added from modal
-    const isModalFillerOrPanel = (selectedCabinet.cabinetType === 'filler' || selectedCabinet.cabinetType === 'panel') && selectedCabinet.hideLockIcons === true
-    
-    let width = selectedCabinet.dimensions.width
-    let height = selectedCabinet.dimensions.height
-    let depth = selectedCabinet.dimensions.depth
-    let overhangDoor = selectedCabinet.overhangDoor
-    let shelfCount: number | undefined = selectedCabinet.carcass?.config?.shelfCount
-    let drawerQty: number | undefined = selectedCabinet.carcass?.config?.drawerQuantity
-    let doorQty: number | undefined = selectedCabinet.carcass?.config?.doorCount
-    // Collect drawer heights by index from GDIds
-    const pendingDrawerHeights: Record<number, number> = {}
+  const handleResetAll = useCallback(() => {
+    if (!wsProduct?.dims) return
+    panelState.resetAllValues(wsProduct.dims)
+    applyDimsTo3D(panelState.values)
+  }, [wsProduct?.dims, panelState, applyDimsTo3D])
 
-    dimsList.forEach(([id, dimObj]) => {
-      if (!dimObj.GDId) return
-      const v = vals[id]
-      const gdId = dimObj.GDId
-      if (widthGDIds.includes(gdId)) width = toNum(v) || width
-      // Skip height and depth updates for modal fillers/panels
-      if (!isModalFillerOrPanel) {
-        if (heightGDIds.includes(gdId)) height = toNum(v) || height
-        if (depthGDIds.includes(gdId)) depth = toNum(v) || depth
+  const handleResetDimension = useCallback(
+    (id: string) => {
+      const dimObj = wsProduct?.dims?.[id]
+      if (!dimObj) return
+      panelState.resetValue(id, dimObj)
+      applyDimsTo3D({ ...panelState.values, [id]: panelState.values[id] }, id)
+    },
+    [wsProduct?.dims, panelState, applyDimsTo3D]
+  )
+
+  const handleDimensionValidate = useCallback(
+    (id: string, value: number): string | undefined => {
+      const validation = validateDrawerHeightChange(
+        panelState.values,
+        id,
+        value,
+        gdMapping.drawerHeightGDMap,
+        dimsList,
+        drawerQty
+      )
+      if (!validation.valid) {
+        toastThrottled(validation.error || 'Invalid dimension value')
+        return validation.error
       }
-      if (doorOverhangGDIds.includes(gdId)) overhangDoor = v.toString().toLowerCase() === 'yes' || v === 1 || v === '1'
-      if (shelfQtyGDIds.includes(gdId)) shelfCount = toNum(v) || shelfCount
-      if (drawerQtyGDIds.includes(gdId)) drawerQty = toNum(v) || drawerQty
-      if (doorQtyGDIds.includes(gdId)) doorQty = toNum(v) || doorQty
-      // Drawer heights
-      Object.entries(drawerHeightGDMap).forEach(([drawerIndexStr, gdList]) => {
-        const drawerIndex = Number(drawerIndexStr)
-        if (gdList.includes(gdId)) {
-          const numVal = toNum(v)
-          if (!isNaN(numVal)) {
-            if (!changedId) { // This is the initial setup of dimensions, apply to all
-              pendingDrawerHeights[drawerIndex] = numVal
-            } else { // This was a user change, only apply if this is the changed one
-              if (id === changedId) {
-                pendingDrawerHeights[drawerIndex] = numVal
-              }
+      return undefined
+    },
+    [panelState.values, gdMapping.drawerHeightGDMap, dimsList, drawerQty]
+  )
+
+  const handleMaterialSelectionChange = useCallback(
+    (materialId: string, selection: MaterialSelections[string]) => {
+      panelState.updateMaterialSelection(materialId, selection)
+    },
+    [panelState]
+  )
+
+  const handleMaterialColorChange = useCallback(
+    (color: string) => {
+      panelState.setMaterialColor(color)
+      onMaterialChange?.({ colour: color })
+    },
+    [panelState, onMaterialChange]
+  )
+
+  const handleOffTheFloorChange = useCallback(
+    (value: number) => {
+      setOffTheFloor(value)
+      if (selectedCabinet && allCabinets) {
+        const actualCabinet = allCabinets.find(
+          (c) => c.cabinetId === selectedCabinet.cabinetId
+        )
+        if (actualCabinet) {
+          const currentY = actualCabinet.group.position.y
+          const currentHeight = actualCabinet.carcass.dimensions.height
+          const topPosition = currentY + currentHeight
+          const newHeight = topPosition - value
+
+          actualCabinet.group.position.set(
+            actualCabinet.group.position.x,
+            value,
+            actualCabinet.group.position.z
+          )
+
+          if (onDimensionsChange) {
+            onDimensionsChange({
+              width: actualCabinet.carcass.dimensions.width,
+              height: newHeight,
+              depth: actualCabinet.carcass.dimensions.depth,
+            })
+          }
+
+          // Update parent kicker
+          if (actualCabinet.parentCabinetId && allCabinets) {
+            const parentCabinet = allCabinets.find(
+              (c) => c.cabinetId === actualCabinet.parentCabinetId
+            )
+            if (
+              parentCabinet &&
+              (parentCabinet.cabinetType === 'base' ||
+                parentCabinet.cabinetType === 'tall')
+            ) {
+              updateKickerPosition(parentCabinet, allCabinets, {
+                dimensionsChanged: true,
+              })
             }
           }
         }
-      })
-    })
-    onDimensionsChange({ width, height, depth })
-    onOverhangDoorToggle?.(overhangDoor || false)
-    onShelfCountChange?.(shelfCount || 0)
-    // Apply drawer quantity before heights so drawers exist
-    if (drawerQty !== undefined && onDrawerQuantityChange && drawerQty > 0) {
-      onDrawerQuantityChange(drawerQty)
-    }
+      }
+    },
+    [selectedCabinet, allCabinets, onDimensionsChange]
+  )
 
-    // Apply door count if defined
-    if (doorQty !== undefined && onDoorCountChange && doorQty > 0) {
-      onDoorCountChange(doorQty)
-    }
+  const handleGroupChange = useCallback(
+    (newGroup: Array<{ cabinetId: string; percentage: number }>) => {
+      setGroupCabinets(newGroup)
+      if (selectedCabinet?.cabinetId && onGroupChange) {
+        onGroupChange(selectedCabinet.cabinetId, newGroup)
+      }
+    },
+    [selectedCabinet?.cabinetId, onGroupChange]
+  )
 
-    // Apply drawer heights only if enabled and callback present
-    if (drawerQty && onDrawerHeightChange) {
-      Object.entries(pendingDrawerHeights).forEach(([idxStr, h]) => {
-        const idx = Number(idxStr)
-        if (idx < drawerQty!) onDrawerHeightChange(idx, h, changedId)
-      })
-    }
-
-    // Applied primary dims to 3D
-  }
-
-  // Price is calculated automatically via debounced query
+  const handleSyncChange = useCallback(
+    (newSyncList: string[]) => {
+      setSyncCabinets(newSyncList)
+      if (selectedCabinet?.cabinetId && onSyncChange) {
+        onSyncChange(selectedCabinet.cabinetId, newSyncList)
+      }
+    },
+    [selectedCabinet?.cabinetId, onSyncChange]
+  )
 
   if (!isVisible) return null
+
+  // Get cabinets in view for pair/sync sections
+  const cabinetsInView =
+    viewManager && selectedCabinet?.viewId && selectedCabinet.viewId !== 'none'
+      ? viewManager.getCabinetsInView(selectedCabinet.viewId as ViewId)
+      : []
 
   return (
     <div
       className="fixed right-0 top-0 h-full bg-white shadow-lg border-l border-gray-200 transition-all duration-300 ease-in-out z-50 productPanel"
       data-product-panel
-      onClick={e => e.stopPropagation()}
-      onMouseDown={e => e.stopPropagation()}
-      onMouseUp={e => e.stopPropagation()}
-      onWheel={e => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
+      onMouseUp={(e) => e.stopPropagation()}
+      onWheel={(e) => e.stopPropagation()}
     >
       <button
-        onClick={e => { e.stopPropagation(); setIsExpanded(!isExpanded) }}
-        onMouseDown={e => e.stopPropagation()}
-        onMouseUp={e => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation()
+          setIsExpanded(!isExpanded)
+        }}
+        onMouseDown={(e) => e.stopPropagation()}
+        onMouseUp={(e) => e.stopPropagation()}
         className="absolute -left-3 top-1/2 transform -translate-y-1/2 bg-blue-600 text-white rounded-full p-1 hover:bg-blue-700 transition-colors"
       >
         {isExpanded ? '<' : '>'}
       </button>
 
-      <div className={`h-full transition-all duration-300 ease-in-out ${isExpanded ? 'w-80 sm:w-96 max-w-[90vw]' : 'w-0'} overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100`}>
+      <div
+        className={`h-full transition-all duration-300 ease-in-out ${
+          isExpanded ? 'w-80 sm:w-96 max-w-[90vw]' : 'w-0'
+        } overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100`}
+      >
         {/* Header */}
-        <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-start gap-3 min-w-0 flex-1">
-              {selectedCabinet?.sortNumber && (
-                <div className="flex items-center justify-center w-10 h-10 rounded-full bg-amber-100 border-2 border-amber-400 shadow-sm flex-shrink-0 mt-1">
-                  <span className="text-lg font-extrabold text-amber-700">#{selectedCabinet.sortNumber}</span>
-                </div>
-              )}
-              <div className="min-w-0 flex-1">
-                <h2 className="text-lg font-semibold text-gray-800 leading-tight">Product Panel</h2>
-                {wsProduct && (
-                  <p className="text-sm text-gray-600 mt-1 break-words leading-snug" title={wsProduct.product}>
-                    {wsProduct.product}
-                  </p>
-                )}
-                <div className="mt-2 flex items-center gap-2 text-sm text-gray-700">
-                  {loading ? (
-                    <span className="text-blue-600 text-xs uppercase font-medium tracking-wide animate-pulse">Loading Product...</span>
-                  ) : error ? (
-                    <span className="text-red-600 font-medium">Product Error</span>
-                  ) : !wsProduct ? (
-                     <span className="text-amber-600 font-medium">No Product Data</span>
-                  ) : isPriceFetching ? (
-                    <span className="text-gray-500 text-xs uppercase font-medium tracking-wide">Updating Price…</span>
-                  ) : isPriceError ? (
-                    <span className="text-red-600 font-medium">Price N/A</span>
-                  ) : priceData && queryStatus === 'success' && priceData.amount > 0 ? (
-                    <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 font-bold">{`$${priceData.amount.toFixed(2)}`}</span>
-                  ) : (
-                    <span className="text-gray-400 italic text-xs">Calculating...</span>
-                  )}
-                </div>
-              </div>
-            </div>
-            <button
-              onClick={e => {
-                e.stopPropagation()
-                onClose()
-              }}
-              className="text-gray-500 hover:text-gray-700 transition-colors text-xl leading-none px-2 py-1 -mr-2 -mt-1"
-            >
-              ×
-            </button>
-          </div>
-        </div>
+        <PanelHeader
+          wsProduct={wsProduct}
+          sortNumber={selectedCabinet?.sortNumber}
+          loading={!!loading}
+          error={!!error}
+          priceData={priceQuery.priceData}
+          isPriceFetching={priceQuery.isPriceFetching}
+          isPriceError={priceQuery.isPriceError}
+          queryStatus={priceQuery.queryStatus}
+          onClose={onClose}
+        />
 
         {/* Loading / Error */}
         {loading ? (
@@ -694,10 +624,16 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ productId, isVisible, onClo
                 onViewChange={(viewId) => {
                   if (selectedCabinet?.cabinetId) {
                     if (viewId === 'none') {
-                      viewManager.assignCabinetToView(selectedCabinet.cabinetId, 'none')
+                      viewManager.assignCabinetToView(
+                        selectedCabinet.cabinetId,
+                        'none'
+                      )
                       onViewChange?.(selectedCabinet.cabinetId, 'none')
                     } else {
-                      viewManager.assignCabinetToView(selectedCabinet.cabinetId, viewId)
+                      viewManager.assignCabinetToView(
+                        selectedCabinet.cabinetId,
+                        viewId
+                      )
                       onViewChange?.(selectedCabinet.cabinetId, viewId)
                     }
                   }
@@ -705,7 +641,10 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ productId, isVisible, onClo
                 onCreateView={() => {
                   const newView = viewManager.createView()
                   if (selectedCabinet?.cabinetId) {
-                    viewManager.assignCabinetToView(selectedCabinet.cabinetId, newView.id)
+                    viewManager.assignCabinetToView(
+                      selectedCabinet.cabinetId,
+                      newView.id
+                    )
                     onViewChange?.(selectedCabinet.cabinetId, newView.id)
                   }
                 }}
@@ -715,749 +654,98 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ productId, isVisible, onClo
             )}
 
             {/* Pair Section */}
-            {viewManager && selectedCabinet && selectedCabinet.viewId && selectedCabinet.viewId !== 'none' && (
-              <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-200">
-                <div className="flex items-center space-x-2 mb-2.5 text-gray-700 font-medium">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                    <circle cx="9" cy="7" r="4" />
-                    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                  </svg>
-                  <h3>Pair</h3>
-                </div>
-                <div className="space-y-3">
-                  {/* Dropdown - auto-adds on selection */}
-                  <select
-                    className="w-full text-sm px-2 py-1.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    value=""
-                    onChange={(e) => {
-                      const cabinetToAdd = e.target.value
-                      if (cabinetToAdd && !groupCabinets.find(g => g.cabinetId === cabinetToAdd)) {
-                        const newGroup = [...groupCabinets, { cabinetId: cabinetToAdd, percentage: 0 }]
-                        // Distribute percentages evenly
-                        const totalCabinets = newGroup.length
-                        const equalPercentage = 100 / totalCabinets
-                        const adjustedGroup = newGroup.map(g => ({ ...g, percentage: Math.round(equalPercentage * 100) / 100 }))
-                        // Ensure total is exactly 100%
-                        const total = adjustedGroup.reduce((sum, g) => sum + g.percentage, 0)
-                        if (total !== 100) {
-                          const diff = 100 - total
-                          adjustedGroup[0].percentage += diff
-                        }
-                        setGroupCabinets(adjustedGroup)
-                        // Notify parent about group change
-                        if (selectedCabinet?.cabinetId && onGroupChange) {
-                          onGroupChange(selectedCabinet.cabinetId, adjustedGroup)
-                        }
-                      }
-                    }}
-                  >
-                    <option value="">Select a cabinet to add...</option>
-                    {(() => {
-                      const cabinetsInView = viewManager.getCabinetsInView(selectedCabinet.viewId as ViewId)
-                      const availableCabinets = (allCabinets || [])
-                        .filter(c => 
-                          c.cabinetId !== selectedCabinet.cabinetId && 
-                          cabinetsInView.includes(c.cabinetId) &&
-                          !groupCabinets.find(g => g.cabinetId === c.cabinetId)
-                        )
-                      return availableCabinets.map(cabinet => (
-                        <option key={cabinet.cabinetId} value={cabinet.cabinetId}>
-                          {cabinet.sortNumber ? `#${cabinet.sortNumber}` : `Cabinet ${cabinet.cabinetId.slice(0, 8)}...`}
-                        </option>
-                      ))
-                    })()}
-                  </select>
-
-                  {/* Pair List */}
-                  {groupCabinets.length > 0 && (
-                    <div className="space-y-2">
-                      {groupCabinets.map((groupCabinet, index) => {
-                        const cabinet = (allCabinets || []).find(c => c.cabinetId === groupCabinet.cabinetId)
-                        return (
-                          <div key={groupCabinet.cabinetId} className="flex items-center gap-2 p-2 bg-gray-50 rounded-md">
-                            <span className="flex-1 text-sm text-gray-700 truncate">
-                              {cabinet?.sortNumber ? `#${cabinet.sortNumber}` : (cabinet ? `Cabinet ${cabinet.cabinetId.slice(0, 8)}...` : `Cabinet ${groupCabinet.cabinetId.slice(0, 8)}...`)}
-                            </span>
-                            <input
-                              type="number"
-                              min="0"
-                              max="100"
-                              step="0.01"
-                              className="w-20 text-center text-sm px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                              value={groupCabinet.percentage}
-                              onChange={(e) => {
-                                const newPercentage = Math.max(0, Math.min(100, parseFloat(e.target.value) || 0))
-                                const updatedGroup = groupCabinets.map((g, i) => 
-                                  i === index ? { ...g, percentage: newPercentage } : g
-                                )
-                                // Adjust other percentages to maintain 100% total
-                                const total = updatedGroup.reduce((sum, g) => sum + g.percentage, 0)
-                                if (total !== 100) {
-                                  const diff = 100 - total
-                                  const otherIndices = updatedGroup.map((_, i) => i).filter(i => i !== index)
-                                  if (otherIndices.length > 0) {
-                                    const perCabinet = diff / otherIndices.length
-                                    otherIndices.forEach(i => {
-                                      updatedGroup[i].percentage = Math.max(0, Math.min(100, updatedGroup[i].percentage + perCabinet))
-                                    })
-                                    // Final adjustment to ensure exactly 100%
-                                    const finalTotal = updatedGroup.reduce((sum, g) => sum + g.percentage, 0)
-                                    if (finalTotal !== 100) {
-                                      updatedGroup[otherIndices[0]].percentage += (100 - finalTotal)
-                                    }
-                                  }
-                                }
-                                setGroupCabinets(updatedGroup)
-                                // Notify parent about group change
-                                if (selectedCabinet?.cabinetId && onGroupChange) {
-                                  onGroupChange(selectedCabinet.cabinetId, updatedGroup)
-                                }
-                              }}
-                            />
-                            <span className="text-sm text-gray-600">%</span>
-                            <button
-                              onClick={() => {
-                                const remaining = groupCabinets.filter(g => g.cabinetId !== groupCabinet.cabinetId)
-                                if (remaining.length > 0) {
-                                  // Redistribute percentages to remaining cabinets
-                                  const totalRemaining = remaining.reduce((sum, g) => sum + g.percentage, 0)
-                                  const adjusted = remaining.map(g => ({
-                                    ...g,
-                                    percentage: totalRemaining > 0 ? (g.percentage / totalRemaining) * 100 : 100 / remaining.length
-                                  }))
-                                  // Ensure total is exactly 100%
-                                  const finalTotal = adjusted.reduce((sum, g) => sum + g.percentage, 0)
-                                  if (finalTotal !== 100) {
-                                    adjusted[0].percentage += (100 - finalTotal)
-                                  }
-                                  setGroupCabinets(adjusted)
-                                  // Notify parent about group change
-                                  if (selectedCabinet?.cabinetId && onGroupChange) {
-                                    onGroupChange(selectedCabinet.cabinetId, adjusted)
-                                  }
-                                } else {
-                                  setGroupCabinets([])
-                                  // Notify parent about group change (empty)
-                                  if (selectedCabinet?.cabinetId && onGroupChange) {
-                                    onGroupChange(selectedCabinet.cabinetId, [])
-                                  }
-                                }
-                              }}
-                              className="text-gray-400 hover:text-red-600 transition-colors"
-                              title="Remove from pair"
-                            >
-                              <X size={16} />
-                            </button>
-                          </div>
-                        )
-                      })}
-                      {/* Total Percentage Display */}
-                      <div className="flex justify-between items-center pt-2 border-t border-gray-200">
-                        <span className="text-sm font-medium text-gray-700">Total:</span>
-                        <span className={`text-sm font-semibold ${groupCabinets.reduce((sum, g) => sum + g.percentage, 0) === 100 ? 'text-green-600' : 'text-red-600'}`}>
-                          {groupCabinets.reduce((sum, g) => sum + g.percentage, 0).toFixed(2)}%
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
+            {viewManager &&
+              selectedCabinet &&
+              selectedCabinet.viewId &&
+              selectedCabinet.viewId !== 'none' && (
+                <PairSection
+                  selectedCabinet={{
+                    cabinetId: selectedCabinet.cabinetId,
+                    sortNumber: selectedCabinet.sortNumber,
+                  }}
+                  cabinetsInView={cabinetsInView}
+                  allCabinets={(allCabinets || []).map((c) => ({
+                    cabinetId: c.cabinetId,
+                    sortNumber: c.sortNumber,
+                  }))}
+                  groupCabinets={groupCabinets}
+                  onGroupChange={handleGroupChange}
+                />
+              )}
 
             {/* Sync Section */}
-            {viewManager && selectedCabinet && selectedCabinet.viewId && selectedCabinet.viewId !== 'none' && (
-              <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-200">
-                <div className="flex items-center space-x-2 mb-2.5 text-gray-700 font-medium">
-                  <RefreshCw size={20} />
-                  <h3>Sync</h3>
-                </div>
-                <div className="max-h-48 overflow-y-auto space-y-2">
-                  {(() => {
-                    const cabinetsInView = viewManager.getCabinetsInView(selectedCabinet.viewId as ViewId)
-                    const availableCabinets = (allCabinets || [])
-                      .filter(c => 
-                        c.cabinetId !== selectedCabinet.cabinetId && 
-                        cabinetsInView.includes(c.cabinetId)
-                      )
-                    
-                    if (availableCabinets.length === 0) {
-                      return (
-                        <p className="text-sm text-gray-500 italic">No other cabinets in this view</p>
-                      )
-                    }
-                    
-                    return availableCabinets.map(cabinet => {
-                      const isSynced = syncCabinets.includes(cabinet.cabinetId)
-                      const displayName = cabinet.sortNumber 
-                        ? `#${cabinet.sortNumber}` 
-                        : `Cabinet ${cabinet.cabinetId.slice(0, 8)}...`
-                      
-                      return (
-                        <label
-                          key={cabinet.cabinetId}
-                          className={`flex items-center gap-2 p-2 rounded-md cursor-pointer transition-colors ${
-                            isSynced ? 'bg-blue-50 border border-blue-200' : 'bg-gray-50 hover:bg-gray-100 border border-transparent'
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isSynced}
-                            onChange={(e) => {
-                              const newSyncList = e.target.checked
-                                ? [...syncCabinets, cabinet.cabinetId]
-                                : syncCabinets.filter(id => id !== cabinet.cabinetId)
-                              setSyncCabinets(newSyncList)
-                              if (selectedCabinet?.cabinetId && onSyncChange) {
-                                onSyncChange(selectedCabinet.cabinetId, newSyncList)
-                              }
-                            }}
-                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                          />
-                          <span className={`flex-1 text-sm truncate ${isSynced ? 'text-blue-700 font-medium' : 'text-gray-700'}`}>
-                            {displayName}
-                          </span>
-                          {isSynced && <RefreshCw size={14} className="text-blue-500" />}
-                        </label>
-                      )
-                    })
-                  })()}
-                </div>
-              </div>
-            )}
-            
-            {/* Dimensions */}
-            <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-200">
-              <div className="flex items-center justify-between mb-2.5 text-gray-700 font-medium">
-                <div className="flex items-center space-x-2">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 3h5v5" /><path d="M8 21H3v-5" /><path d="M21 3l-7 7" /><path d="M3 21l7-7" /></svg>
-                  <h3>Dimensions</h3>
-                </div>
-                <button
-                  type="button"
-                  title="Reset all dimensions"
-                  onClick={() => {
-                    if (!wsProduct?.dims) return
-                    const next: Record<string, number | string> = {}
-                    Object.entries(wsProduct.dims).forEach(([id, dimObj]) => {
-                      if (dimObj.valueType === 'range') {
-                        let defVal = Number(dimObj.defaultValue ?? dimObj.min ?? 0)
-                        if (isNaN(defVal)) defVal = 0
-                        if (typeof dimObj.min === 'number') defVal = Math.max(dimObj.min, defVal)
-                        if (typeof dimObj.max === 'number') defVal = Math.min(dimObj.max, defVal)
-                        next[id] = defVal
-                      } else {
-                        next[id] = String(dimObj.defaultValue ?? dimObj.options?.[0] ?? '')
-                      }
-                    })
-                    setValues(next)
-                    if (cabinetId) {
-                      const persisted = cabinetPanelState.get(cabinetId)
-                      cabinetPanelState.set(cabinetId, { ...(persisted || {} as any), values: next, materialColor, materialSelections, price: priceData || persisted?.price })
-                    }
-                    // Reset all dims
-                    applyPrimaryDimsTo3D(next)
+            {viewManager &&
+              selectedCabinet &&
+              selectedCabinet.viewId &&
+              selectedCabinet.viewId !== 'none' && (
+                <SyncSection
+                  selectedCabinet={{
+                    cabinetId: selectedCabinet.cabinetId,
+                    sortNumber: selectedCabinet.sortNumber,
                   }}
-                  className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-blue-600 transition-colors px-2 py-1 rounded-md hover:bg-blue-50"
-                >
-                  <RotateCcw size={14} />
-                  Reset
-                </button>
-              </div>
-              <div className="space-y-3">
-                {dimsList
-                  .filter(([, dimObj]) => dimObj.visible !== false)
-                  .map(([id, dimObj]) => {
-                    // Resolve drawer height index if GDId matches one of the drawer height GD lists
-                    let drawerHeightIndex: number | null = null
-                    if (dimObj.GDId) {
-                      for (const [idxStr, list] of Object.entries(drawerHeightGDMap)) {
-                        if (list.includes(dimObj.GDId)) { drawerHeightIndex = Number(idxStr); break }
-                      }
-                    }
+                  cabinetsInView={cabinetsInView}
+                  allCabinets={(allCabinets || []).map((c) => ({
+                    cabinetId: c.cabinetId,
+                    sortNumber: c.sortNumber,
+                  }))}
+                  syncCabinets={syncCabinets}
+                  onSyncChange={handleSyncChange}
+                />
+              )}
 
-                    // Calculate default value to check if changed
-                    let defVal = Number(dimObj.defaultValue ?? dimObj.min ?? 0)
-                    if (isNaN(defVal)) defVal = 0
-                    if (typeof dimObj.min === 'number') defVal = Math.max(dimObj.min, defVal)
-                    if (typeof dimObj.max === 'number') defVal = Math.min(dimObj.max, defVal)
+            {/* Dimensions */}
+            <DimensionsSection
+              dimsList={dimsList}
+              values={panelState.values}
+              editingValues={panelState.editingValues}
+              gdMapping={gdMapping}
+              drawerQty={drawerQty}
+              isModalFillerOrPanel={isModalFillerOrPanel}
+              onValueChange={handleValueChange}
+              onEditingChange={panelState.updateEditingValue}
+              onReset={handleResetDimension}
+              onResetAll={handleResetAll}
+              onValidate={handleDimensionValidate}
+            />
 
-                    const drawerQty = selectedCabinet?.carcass?.config?.drawerQuantity || 0
-                    const isDependentDrawer = drawerHeightIndex !== null && drawerHeightIndex === (drawerQty - 1)
-
-                    return (
-                      <div key={id} className={`space-y-2 ${isDependentDrawer ? 'opacity-50' : ''}`}>
-                        <div className="flex items-center justify-between">
-                          <label className="block text-sm font-medium text-gray-700">
-                            {dimObj.dim}
-                          </label>
-                          <div className="flex items-center gap-2">
-                            {dimObj.GDId && widthGDIds.includes(dimObj.GDId) && <span className="px-1.5 py-0.5 text-[10px] rounded-full bg-blue-50 text-blue-600">Width</span>}
-                            {dimObj.GDId && heightGDIds.includes(dimObj.GDId) && <span className="px-1.5 py-0.5 text-[10px] rounded-full bg-blue-50 text-blue-600">Height</span>}
-                            {dimObj.GDId && depthGDIds.includes(dimObj.GDId) && <span className="px-1.5 py-0.5 text-[10px] rounded-full bg-blue-50 text-blue-600">Depth</span>}
-                            {dimObj.GDId && doorOverhangGDIds.includes(dimObj.GDId) && <div className="px-1.5 py-0.5 text-[10px] rounded-full bg-blue-50 text-blue-600">Door Overhang</div>}
-                            {dimObj.GDId && shelfQtyGDIds.includes(dimObj.GDId) && <div className="px-1.5 py-0.5 text-[10px] rounded-full bg-blue-50 text-blue-600">Shelf Qty</div>}
-                            {dimObj.GDId && drawerQtyGDIds.includes(dimObj.GDId) && <div className="px-1.5 py-0.5 text-[10px] rounded-full bg-blue-50 text-blue-600">Drawer Qty</div>}
-                            {drawerHeightIndex !== null && <div className="px-1.5 py-0.5 text-[10px] rounded-full bg-blue-50 text-blue-600">Drawer H{drawerHeightIndex + 1}</div>}
-                          </div>
-                        </div>
-
-                        {dimObj.valueType === 'range' ? (
-                          <div>
-                            <div className="flex items-center gap-1.5 mb-1.5">
-                              <input
-                                type="number"
-                                disabled={
-                                  isDependentDrawer || 
-                                  (isModalFillerOrPanel && dimObj.GDId ? (
-                                    heightGDIds.includes(dimObj.GDId) || 
-                                    depthGDIds.includes(dimObj.GDId)
-                                  ) : false)
-                                }
-                                className="w-20 text-center text-sm px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent leading-tight"
-                                value={editingValues[id] !== undefined ? editingValues[id] : String(values[id] ?? dimObj.defaultValue ?? dimObj.min)}
-                                min={dimObj.min}
-                                max={dimObj.max}
-                                onChange={e => {
-                                  // Allow free typing (including temporarily out-of-range) until blur
-                                  setEditingValues(prev => ({ ...prev, [id]: e.target.value }))
-                                }}
-                                onBlur={() => {
-                                  const raw = editingValues[id]
-                                  if (raw === undefined) return
-                                  if (raw.trim() === '') {
-                                    // Empty input -> revert to previous stored value
-                                    setEditingValues(prev => { const { [id]: _, ...rest } = prev; return rest })
-                                    return
-                                  }
-                                  let val = Number(raw)
-                                  if (isNaN(val)) {
-                                    // Invalid number -> revert
-                                    setEditingValues(prev => { const { [id]: _, ...rest } = prev; return rest })
-                                    return
-                                  }
-                                  // Clamp to min/max only now (after full entry)
-                                  if (typeof dimObj.min === 'number') val = Math.max(dimObj.min, val)
-                                  if (typeof dimObj.max === 'number') val = Math.min(dimObj.max, val)
-
-                                  // Validation for drawer heights (same logic as before)
-                                  if (drawerHeightIndex !== null && !isDependentDrawer) {
-                                    const lastDrawerIdx = drawerQty - 1
-                                    const lastDrawerDimEntry = dimsList.find(([_, d]) => d.GDId && drawerHeightGDMap[lastDrawerIdx]?.includes(d.GDId))
-                                    if (lastDrawerDimEntry) {
-                                      const [lastId, lastDimObj] = lastDrawerDimEntry
-                                      const lastCurrentVal = Number(values[lastId] ?? lastDimObj.defaultValue ?? lastDimObj.min)
-                                      const currentVal = Number(values[id] ?? dimObj.defaultValue ?? dimObj.min)
-                                      const delta = val - currentVal
-                                      const projectedLastVal = lastCurrentVal - delta
-
-                                      const lastMin = typeof lastDimObj.min === 'number' ? lastDimObj.min : 50
-                                      const lastMax = typeof lastDimObj.max === 'number' ? lastDimObj.max : 2000
-
-                                      if (projectedLastVal < lastMin) {
-                                        toastThrottled(`Cannot increase height: Last drawer would be too small (min ${lastMin}mm).`)
-                                        setEditingValues(prev => { const { [id]: _, ...rest } = prev; return rest })
-                                        return
-                                      }
-                                      if (projectedLastVal > lastMax) {
-                                        toastThrottled(`Cannot decrease height: Last drawer would be too large (max ${lastMax}mm).`)
-                                        setEditingValues(prev => { const { [id]: _, ...rest } = prev; return rest })
-                                        return
-                                      }
-                                    }
-                                  }
-
-                                  const next = { ...values, [id]: val }
-                                  setValues(next)
-                                  // Clear editing buffer for this field
-                                  setEditingValues(prev => { const { [id]: _, ...rest } = prev; return rest })
-                                  if (cabinetId) {
-                                    const persisted = cabinetPanelState.get(cabinetId)
-                                    cabinetPanelState.set(cabinetId, { ...(persisted || {} as any), values: next, materialColor, materialSelections, price: priceData || persisted?.price })
-                                  }
-                                  applyPrimaryDimsTo3D(next, id)
-                                }}
-                              />
-                              <button
-                                type="button"
-                                disabled={
-                                  isDependentDrawer || 
-                                  (isModalFillerOrPanel && dimObj.GDId ? (
-                                    heightGDIds.includes(dimObj.GDId) || 
-                                    depthGDIds.includes(dimObj.GDId)
-                                  ) : false)
-                                }
-                                title="Reset dimension"
-                                onClick={() => {
-                                  const next = { ...values, [id]: defVal }
-                                  setValues(next)
-                                  if (cabinetId) {
-                                    const persisted = cabinetPanelState.get(cabinetId)
-                                    cabinetPanelState.set(cabinetId, { ...(persisted || {} as any), values: next, materialColor, materialSelections, price: priceData || persisted?.price })
-                                  }
-                                  // Reset dim
-                                  applyPrimaryDimsTo3D(next, id)
-                                }}
-                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
-                              >
-                                <RotateCcw size={14} />
-                              </button>
-                              <span className="text-sm text-gray-500">mm</span>
-                            </div>
-                            <input
-                              type="range"
-                              disabled={isDependentDrawer}
-                              className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
-                              value={Number(((values[id] ?? dimObj.defaultValue ?? dimObj.min) as any))}
-                              min={dimObj.min}
-                              max={dimObj.max}
-                              onChange={e => {
-                                let val = Number(e.target.value)
-                                if (isNaN(val)) return
-                                if (typeof dimObj.min === 'number') val = Math.max(dimObj.min, val)
-                                if (typeof dimObj.max === 'number') val = Math.min(dimObj.max, val)
-
-                                // Validation for drawer heights
-                                if (drawerHeightIndex !== null && !isDependentDrawer) {
-                                  const lastDrawerIdx = drawerQty - 1
-                                  const lastDrawerDimEntry = dimsList.find(([_, d]) => d.GDId && drawerHeightGDMap[lastDrawerIdx]?.includes(d.GDId))
-                                  if (lastDrawerDimEntry) {
-                                    const [lastId, lastDimObj] = lastDrawerDimEntry
-                                    const lastCurrentVal = Number(values[lastId] ?? lastDimObj.defaultValue ?? lastDimObj.min)
-                                    const currentVal = Number(values[id] ?? dimObj.defaultValue ?? dimObj.min)
-                                    const delta = val - currentVal
-                                    const projectedLastVal = lastCurrentVal - delta
-
-                                    const lastMin = typeof lastDimObj.min === 'number' ? lastDimObj.min : 50
-                                    const lastMax = typeof lastDimObj.max === 'number' ? lastDimObj.max : 2000
-
-                                    if (projectedLastVal < lastMin) {
-                                      toastThrottled(`Cannot increase height: Last drawer would be too small (min ${lastMin}mm).`)
-                                      return
-                                    }
-                                    if (projectedLastVal > lastMax) {
-                                      toastThrottled(`Cannot decrease height: Last drawer would be too large (max ${lastMax}mm).`)
-                                      return
-                                    }
-                                  }
-                                }
-
-                                const next = { ...values, [id]: val }
-                                setValues(next)
-                                if (cabinetId) {
-                                  const persisted = cabinetPanelState.get(cabinetId)
-                                  cabinetPanelState.set(cabinetId, { ...(persisted || {} as any), values: next, materialColor, materialSelections, price: priceData || persisted?.price })
-                                }
-                                // Range dim changed
-                                applyPrimaryDimsTo3D(next, id)
-                              }}
-                            />
-                            <div className="flex justify-between text-xs text-gray-500 mt-1">
-                              <span>{dimObj.min}</span>
-                              <span>{dimObj.max}</span>
-                            </div>
-                          </div>
-                        ) : (
-                          <select
-                            disabled={isDependentDrawer}
-                            className="w-full text-sm px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent leading-tight"
-                            value={String(values[id] ?? dimObj.defaultValue ?? (dimObj.options?.[0] ?? ''))}
-                            onChange={e => {
-                              const val = e.target.value
-                              const next = { ...values, [id]: val }
-                              setValues(next)
-                              if (cabinetId) {
-                                const persisted = cabinetPanelState.get(cabinetId)
-                                cabinetPanelState.set(cabinetId, { ...(persisted || {} as any), values: next, materialColor, materialSelections, price: priceData || persisted?.price })
-                              }
-                              // Select dim changed
-                              applyPrimaryDimsTo3D(next, id)
-                            }}
-                          >
-                            {dimObj.options.map(opt => (
-                              <option key={String(opt)} value={String(opt)}>{String(opt)}</option>
-                            ))}
-                          </select>
-                        )}
-                      </div>
-                    )
-                  })}
-                
-                {/* Off the Floor - Only for Fillers and Panels */}
-                {(selectedCabinet?.cabinetType === 'filler' || selectedCabinet?.cabinetType === 'panel') && (
-                  <div className="space-y-2 pt-2 border-t border-gray-200">
-                    <div className="flex items-center justify-between">
-                      <label className="block text-sm font-medium text-gray-700">
-                        Off the Floor
-                      </label>
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-1.5 mb-1.5">
-                        <input
-                          type="number"
-                          className="w-20 text-center text-sm px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent leading-tight"
-                          value={editingOffTheFloor !== '' ? editingOffTheFloor : String(offTheFloor)}
-                          min={0}
-                          max={1200}
-                          onChange={e => {
-                            setEditingOffTheFloor(e.target.value)
-                          }}
-                          onBlur={() => {
-                            const raw = editingOffTheFloor
-                            if (raw === '') {
-                              setEditingOffTheFloor('')
-                              return
-                            }
-                            let val = Number(raw)
-                            if (isNaN(val)) {
-                              setEditingOffTheFloor('')
-                              return
-                            }
-                            val = Math.max(0, Math.min(1200, val))
-                            setOffTheFloor(val)
-                            setEditingOffTheFloor('')
-                            
-                            // Update cabinet Y position and adjust height to maintain top position
-                            if (selectedCabinet && allCabinets) {
-                              const actualCabinet = allCabinets.find(c => c.cabinetId === selectedCabinet.cabinetId)
-                              if (actualCabinet) {
-                                const currentY = actualCabinet.group.position.y
-                                const currentHeight = actualCabinet.carcass.dimensions.height
-                                const topPosition = currentY + currentHeight
-                                
-                                // Calculate new height to maintain top position
-                                const newHeight = topPosition - val
-                                
-                                // Update Y position
-                                actualCabinet.group.position.set(
-                                  actualCabinet.group.position.x,
-                                  val,
-                                  actualCabinet.group.position.z
-                                )
-                                
-                                // Update height to maintain top position
-                                if (onDimensionsChange) {
-                                  onDimensionsChange({
-                                    width: actualCabinet.carcass.dimensions.width,
-                                    height: newHeight,
-                                    depth: actualCabinet.carcass.dimensions.depth
-                                  })
-                                }
-
-                                // Update parent kicker if child's "off the floor" changed
-                                // (affects whether child is included in kicker width)
-                                if (actualCabinet.parentCabinetId && allCabinets) {
-                                  const parentCabinet = allCabinets.find(c => c.cabinetId === actualCabinet.parentCabinetId)
-                                  if (parentCabinet && (parentCabinet.cabinetType === 'base' || parentCabinet.cabinetType === 'tall')) {
-                                    updateKickerPosition(parentCabinet, allCabinets, {
-                                      dimensionsChanged: true
-                                    })
-                                  }
-                                }
-                              }
-                            }
-                          }}
-                        />
-                      </div>
-                      <input
-                        type="range"
-                        className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
-                        value={offTheFloor}
-                        min={0}
-                        max={1200}
-                        onChange={e => {
-                          const val = Math.max(0, Math.min(1200, Number(e.target.value)))
-                          setOffTheFloor(val)
-                          setEditingOffTheFloor('')
-                          
-                          // Update cabinet Y position and adjust height to maintain top position
-                          if (selectedCabinet && allCabinets) {
-                            const actualCabinet = allCabinets.find(c => c.cabinetId === selectedCabinet.cabinetId)
-                            if (actualCabinet) {
-                              const currentY = actualCabinet.group.position.y
-                              const currentHeight = actualCabinet.carcass.dimensions.height
-                              const topPosition = currentY + currentHeight
-                              
-                              // Calculate new height to maintain top position
-                              const newHeight = topPosition - val
-                              
-                              // Update Y position
-                              actualCabinet.group.position.set(
-                                actualCabinet.group.position.x,
-                                val,
-                                actualCabinet.group.position.z
-                              )
-                              
-                              // Update height to maintain top position
-                              if (onDimensionsChange) {
-                                onDimensionsChange({
-                                  width: actualCabinet.carcass.dimensions.width,
-                                  height: newHeight,
-                                  depth: actualCabinet.carcass.dimensions.depth
-                                })
-                              }
-
-                              // Update parent kicker if child's "off the floor" changed
-                              // (affects whether child is included in kicker width)
-                              if (actualCabinet.parentCabinetId && allCabinets) {
-                                const parentCabinet = allCabinets.find(c => c.cabinetId === actualCabinet.parentCabinetId)
-                                if (parentCabinet && (parentCabinet.cabinetType === 'base' || parentCabinet.cabinetType === 'tall')) {
-                                  updateKickerPosition(parentCabinet, allCabinets, {
-                                    dimensionsChanged: true
-                                  })
-                                }
-                              }
-                            }
-                          }
-                        }}
-                      />
-                      <div className="flex justify-between text-xs text-gray-500 mt-1">
-                        <span>0</span>
-                        <span>1200</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
+            {/* Off the Floor - Only for Fillers and Panels */}
+            {(selectedCabinet?.cabinetType === 'filler' ||
+              selectedCabinet?.cabinetType === 'panel') && (
+              <OffTheFloorControl
+                value={offTheFloor}
+                editingValue={editingOffTheFloor}
+                onValueChange={handleOffTheFloorChange}
+                onEditingChange={setEditingOffTheFloor}
+              />
+            )}
 
             {/* Materials selection */}
             {wsProduct && (
-              <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-200">
-                <div className="flex items-center space-x-2 mb-2.5 text-gray-700 font-medium">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /></svg>
-                  <h3>Materials</h3>
-                </div>
-                <div className="space-y-4">
-                  {_(wsProduct.materials)
-                    .toPairs()
-                    .filter(([, m]) => m.visible !== false)
-                    .sortBy(([, m]) => Number(m.sortNum))
-                    .map(([materialId, m]) => {
-                      const mOpts = materialOptions?.[materialId]
-                      const prPairs = mOpts ? Object.entries(mOpts.priceRanges) : []
-                      const selected = materialSelections[materialId]
-                      const selectedPriceRangeId = selected?.priceRangeId || m.priceRangeIds?.[0] || prPairs?.[0]?.[0]
-                      const selectedPriceRange = selectedPriceRangeId && mOpts ? mOpts.priceRanges[selectedPriceRangeId] : undefined
-                      const colorPairs = selectedPriceRange ? Object.entries(selectedPriceRange.colorOptions) : []
-                      const selectedColorId = selected?.colorId || colorPairs?.[0]?.[0]
-                      const selectedColor = selectedColorId && selectedPriceRange ? selectedPriceRange.colorOptions[selectedColorId] : undefined
-                      const selectedFinishId = selected?.finishId || (selectedColor ? Object.keys(selectedColor.finishes)[0] : undefined)
-                      const selectedFinish = selectedFinishId && selectedColor ? selectedColor.finishes[selectedFinishId] : undefined
-
-                      return (
-                        <div key={materialId} className="border border-gray-200 rounded-md p-3">
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <div className="text-sm font-medium text-gray-800 capitalize">{m.material}</div>
-                              <div className="mt-2">
-                                <label className="block text-xs text-gray-600 mb-1">Price range</label>
-                                <select
-                                  className="w-full text-sm px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent leading-tight"
-                                  value={selectedPriceRangeId || ''}
-                                  onChange={e => {
-                                    const priceRangeId = e.target.value
-                                    setMaterialSelections(prev => {
-                                      const next = { ...prev }
-                                      const firstColorId = mOpts?.priceRanges?.[priceRangeId] ? Object.keys(mOpts.priceRanges[priceRangeId].colorOptions)[0] : undefined
-                                      const firstFinishId = firstColorId && mOpts?.priceRanges?.[priceRangeId]?.colorOptions?.[firstColorId] ? Object.keys(mOpts.priceRanges[priceRangeId].colorOptions[firstColorId].finishes)[0] : undefined
-                                      next[materialId] = { priceRangeId, colorId: firstColorId || '', finishId: firstFinishId }
-                                      // Main list price range changed
-                                      if (cabinetId) {
-                                        const persisted = cabinetPanelState.get(cabinetId)
-                                        cabinetPanelState.set(cabinetId, { ...(persisted || {} as any), values, materialColor, materialSelections: next, price: priceData || persisted?.price })
-                                      }
-                                      return next
-                                    })
-                                  }}
-                                >
-                                  {prPairs.map(([prId, pr]) => (
-                                    <option key={prId} value={prId}>{pr.priceRange}</option>
-                                  ))}
-                                </select>
-                              </div>
-                            </div>
-                            <div className="min-w-[140px] text-right">
-                              <button
-                                className="inline-flex items-center gap-2 text-sm px-3 py-1.5 bg-gray-800 text-white rounded hover:bg-gray-900 disabled:opacity-50"
-                                disabled={!mOpts || prPairs.length === 0}
-                                onClick={() => { setOpenMaterialId(materialId) }}
-                              >
-                                <span>Select Colour</span>
-                              </button>
-                              <div className="mt-2 text-xs text-gray-600 truncate">
-                                {selectedColor ? (
-                                  <div className="flex items-center justify-end gap-2">
-                                    <div className="w-6 h-6 rounded bg-gray-100 overflow-hidden border border-gray-200">
-                                      {selectedColor.imageUrl ? (
-                                        <img src={selectedColor.imageUrl} alt={selectedColor.color} className="w-full h-full object-cover" />
-                                      ) : (
-                                        <div className="w-full h-full bg-gray-200" />
-                                      )}
-                                    </div>
-                                    <div className="max-w-[120px] text-right">
-                                      <div className="text-gray-800">{selectedColor.color}</div>
-                                      {selectedFinish && <div className="text-gray-500">{selectedFinish.finish}</div>}
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <span className="text-gray-500">No color selected</span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      )
-                    })
-                    .value()}
-                </div>
-              </div>
+              <MaterialsSection
+                wsProduct={wsProduct}
+                materialOptions={materialOptions}
+                materialSelections={panelState.materialSelections}
+                onSelectionChange={handleMaterialSelectionChange}
+                onOpenColorPicker={(materialId) => setOpenMaterialId(materialId)}
+              />
             )}
 
             {/* Material color selection (simple) */}
-            <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-200">
-              <div className="flex items-center space-x-2 mb-2.5 text-gray-700 font-medium">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M14.31 8l5.74 9.94" /><path d="M9.69 8h11.48" /><path d="M7.38 12l5.74-9.94" /><path d="M9.69 16L3.95 6.06" /><path d="M14.31 16H2.83" /></svg>
-                <h3>Material</h3>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <input
-                  type="color"
-                  className="w-10 h-8 border border-gray-300 rounded-md cursor-pointer"
-                  value={materialColor}
-                  onChange={e => {
-                    const color = e.target.value
-                    setMaterialColor(color)
-                    onMaterialChange?.({ colour: color })
-                    if (cabinetId) {
-                      const persisted = cabinetPanelState.get(cabinetId)
-                      cabinetPanelState.set(cabinetId, { ...(persisted || {} as any), values, materialColor: color, materialSelections, price: priceData || persisted?.price })
-                    }
-                  }}
-                />
-                <input
-                  type="text"
-                  className="flex-1 text-sm px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent leading-tight"
-                  value={materialColor}
-                  onChange={e => {
-                    const color = e.target.value
-                    setMaterialColor(color)
-                    onMaterialChange?.({ colour: color })
-                    if (cabinetId) {
-                      const persisted = cabinetPanelState.get(cabinetId)
-                      cabinetPanelState.set(cabinetId, { ...(persisted || {} as any), values, materialColor: color, materialSelections, price: priceData || persisted?.price })
-                    }
-                  }}
-                />
-              </div>
-            </div>
+            <SimpleColorPicker
+              color={panelState.materialColor}
+              onChange={handleMaterialColorChange}
+            />
 
             {/* Bottom actions */}
             <div className="pt-1.5">
-                <button
+              <button
                 onClick={() => {
-                  // Intentional: debug/log selections button pressed
+                  // Debug/log selections
+                  console.log('[ProductPanel2] Selections:', {
+                    values: panelState.values,
+                    materialSelections: panelState.materialSelections,
+                    materialColor: panelState.materialColor,
+                  })
                 }}
                 className="w-full text-sm px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700"
               >
@@ -1468,174 +756,26 @@ const DynamicPanel: React.FC<DynamicPanelProps> = ({ productId, isVisible, onClo
         )}
       </div>
 
-      {/* Secondary side panel for Color Select (left of main ProductPanel) */}
-      {openMaterialId && (() => {
-        const m = wsProduct?.materials?.[openMaterialId]
-        const mOpts = materialOptions?.[openMaterialId]
-        if (!m || !mOpts) return null
-        const prPairs = Object.entries(mOpts.priceRanges)
-        const sel = materialSelections[openMaterialId]
-        const priceRangeId = sel?.priceRangeId || m.priceRangeIds?.[0] || prPairs?.[0]?.[0]
-        const priceRange = priceRangeId ? mOpts.priceRanges[priceRangeId] : undefined
-        const colorPairs = priceRange ? Object.entries(priceRange.colorOptions) : []
-        const colorId = sel?.colorId || colorPairs?.[0]?.[0]
-        const selectedColor = colorId && priceRange ? priceRange.colorOptions[colorId] : undefined
-        const finishId = sel?.finishId || (selectedColor ? Object.keys(selectedColor.finishes)[0] : undefined)
-
-        const commit = () => {
-          const currentSel = materialSelections[openMaterialId]
-          const next = {
-            ...materialSelections,
-            [openMaterialId]: {
-              priceRangeId: currentSel?.priceRangeId || priceRangeId || '',
-              colorId: currentSel?.colorId || colorId || '',
-              finishId: currentSel?.finishId || finishId || undefined
-            }
-          }
-          setMaterialSelections(next)
-          // Modal commit
-          if (cabinetId) {
-            const persisted = cabinetPanelState.get(cabinetId)
-            cabinetPanelState.set(cabinetId, { ...(persisted || {} as any), values, materialColor, materialSelections: next, price: priceData || persisted?.price })
-          }
-          setOpenMaterialId(null)
-        }
-
-        return (
-          <div
-            className={`fixed top-0 h-full bg-white shadow-lg border-r border-gray-200 transition-all duration-300 ease-in-out z-[55] ${isExpanded ? 'right-80 sm:right-96' : 'right-0'} w-80 sm:w-96`}
-            data-color-panel
-            onClick={e => e.stopPropagation()}
-            onMouseDown={e => e.stopPropagation()}
-            onMouseUp={e => e.stopPropagation()}
-            onWheel={e => e.stopPropagation()}
-          >
-            <div className="flex h-full flex-col">
-              {/* Header */}
-              <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex items-center justify-between">
-                <div className="text-base font-medium truncate">Select color – {m.material}</div>
-                <div className="ml-2 text-sm flex items-center gap-2">
-                  {isPriceFetching ? (
-                    <span className="text-gray-500">Updating…</span>
-                  ) : isPriceError ? (
-                    <span className="px-2 py-0.5 rounded bg-red-50 text-red-700">Price N/A</span>
-                  ) : priceData ? (
-                    <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700">${priceData.amount.toFixed(2)}</span>
-                  ) : null}
-                </div>
-                <button className="text-gray-500 hover:text-gray-700" onClick={() => commit()}>×</button>
-              </div>
-
-              {/* Body */}
-              <div className="flex-1 overflow-y-auto p-4">
-                {/* Price range select */}
-                <div className="flex items-center gap-2 mb-4">
-                  <label className="text-sm text-gray-600">Price range</label>
-                  <select
-                    className="text-sm px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    value={priceRangeId || ''}
-                    onChange={e => {
-                      const prId = e.target.value
-                      const firstColor = Object.keys(mOpts.priceRanges[prId].colorOptions)[0]
-                      const firstFinish = firstColor ? Object.keys(mOpts.priceRanges[prId].colorOptions[firstColor].finishes)[0] : ''
-                      const next = { ...materialSelections, [openMaterialId]: { priceRangeId: prId, colorId: firstColor || '', finishId: firstFinish || undefined } }
-                      setMaterialSelections(next)
-                      // Color panel price range changed
-                      if (cabinetId) {
-                        const persisted = cabinetPanelState.get(cabinetId)
-                        cabinetPanelState.set(cabinetId, { ...(persisted || {} as any), values, materialColor, materialSelections: next, price: priceData || persisted?.price })
-                      }
-                    }}
-                  >
-                    {prPairs.map(([prId, pr]) => (
-                      <option key={prId} value={prId}>{pr.priceRange}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* 2-column color grid */}
-                <div className="grid grid-cols-2 gap-4">
-                  {colorPairs.map(([cId, c]) => {
-                    const isSelectedColor = cId === (materialSelections[openMaterialId]?.colorId || colorId)
-                    const currentSel = materialSelections[openMaterialId]
-                    const currentFinishId = currentSel?.finishId
-                    return (
-                      <div
-                        key={cId}
-                        role="button"
-                        tabIndex={0}
-                        className={`group relative rounded-lg overflow-hidden border ${isSelectedColor ? 'border-blue-600 ring-2 ring-blue-200' : 'border-gray-200'} hover:shadow focus:outline-none focus:ring-2 focus:ring-blue-300`}
-                        onClick={() => {
-                          const nextFinishId = Object.keys(c.finishes)[0] || ''
-                          const next = { ...materialSelections, [openMaterialId]: { priceRangeId: priceRangeId || '', colorId: cId, finishId: nextFinishId || undefined } }
-                          setMaterialSelections(next)
-                          // Color panel color picked
-                          if (cabinetId) {
-                            const persisted = cabinetPanelState.get(cabinetId)
-                            cabinetPanelState.set(cabinetId, { ...(persisted || {} as any), values, materialColor, materialSelections: next, price: priceData || persisted?.price })
-                          }
-                        }}
-                        onKeyDown={e => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault()
-                            const nextFinishId = Object.keys(c.finishes)[0] || ''
-                            const next = { ...materialSelections, [openMaterialId]: { priceRangeId: priceRangeId || '', colorId: cId, finishId: nextFinishId || undefined } }
-                            setMaterialSelections(next)
-                            // Color panel color picked via keyboard
-                            if (cabinetId) {
-                              const persisted = cabinetPanelState.get(cabinetId)
-                              cabinetPanelState.set(cabinetId, { ...(persisted || {} as any), values, materialColor, materialSelections: next, price: priceData || persisted?.price })
-                            }
-                          }
-                        }}
-                      >
-                        <div className="aspect-square w-full bg-gray-100">
-                          {c.imageUrl ? (
-                            <img src={c.imageUrl} alt={c.color} className="w-full h-full object-cover" />
-                          ) : (
-                            <div className="w-full h-full bg-gray-200" />
-                          )}
-                        </div>
-                        <div className="p-2 text-left">
-                          <div className="text-sm text-gray-800 truncate">{c.color}</div>
-                          <div className="mt-2 flex flex-wrap gap-1.5">
-                            {Object.entries(c.finishes).map(([fId, f]) => {
-                              const isSelectedFinish = isSelectedColor && fId === currentFinishId
-                              return (
-                                <button
-                                  key={fId}
-                                  className={`px-2 py-1 rounded border text-xs ${isSelectedFinish ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'}`}
-                                  onClick={e => {
-                                    e.stopPropagation()
-                                    const next = { ...materialSelections, [openMaterialId]: { priceRangeId: priceRangeId || '', colorId: cId, finishId: fId } }
-                                    setMaterialSelections(next)
-                                    // Color panel finish picked
-                                    if (cabinetId) {
-                                      const persisted = cabinetPanelState.get(cabinetId)
-                                      cabinetPanelState.set(cabinetId, { ...(persisted || {} as any), values, materialColor, materialSelections: next, price: priceData || persisted?.price })
-                                    }
-                                  }}
-                                >
-                                  {f.finish}
-                                </button>
-                              )
-                            })}
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {/* Footer */}
-              <div className="bg-white border-t border-gray-200 px-4 py-3 flex items-center justify-end">
-                <button className="px-3 py-1.5 rounded border border-gray-300 text-gray-700 hover:bg-gray-50" onClick={() => commit()}>Close</button>
-              </div>
-            </div>
-          </div>
-        )
-      })()}
+      {/* Color Picker Modal */}
+      {openMaterialId &&
+        wsProduct?.materials?.[openMaterialId] &&
+        materialOptions?.[openMaterialId] && (
+          <ColorPickerModal
+            isOpen={true}
+            materialId={openMaterialId}
+            material={wsProduct.materials[openMaterialId]}
+            materialOptions={materialOptions[openMaterialId]}
+            currentSelection={panelState.materialSelections[openMaterialId]}
+            isExpanded={isExpanded}
+            priceData={priceQuery.priceData}
+            isPriceFetching={priceQuery.isPriceFetching}
+            isPriceError={priceQuery.isPriceError}
+            onSelectionChange={(selection) => {
+              handleMaterialSelectionChange(openMaterialId, selection)
+            }}
+            onClose={() => setOpenMaterialId(null)}
+          />
+        )}
     </div>
   )
 }

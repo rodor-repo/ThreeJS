@@ -5,7 +5,7 @@ import { motion } from 'framer-motion'
 import { X } from 'lucide-react'
 import type { CabinetData, WallDimensions } from '@/features/scene/types'
 import { ViewId } from '@/features/cabinets/ViewManager'
-import { repositionViewCabinets } from '@/features/scene/utils/handlers/viewRepositionHandler'
+import { repositionViewCabinets, checkLeftWallOverflow } from '@/features/scene/utils/handlers/viewRepositionHandler'
 import { applyWidthChangeWithLock } from '@/features/scene/utils/handlers/lockBehaviorHandler'
 import { toastThrottled } from './ProductPanel'
 
@@ -149,6 +149,20 @@ export const AppliancePanel: React.FC<AppliancePanelProps> = ({
     }
   }, [selectedCabinet])
 
+  // Force update for deep config changes
+  const [, forceUpdate] = useState({})
+
+  const handleFridgeConfigChange = useCallback((key: 'doorCount' | 'doorSide', value: any) => {
+    if (!selectedCabinet?.carcass) return
+
+    const newConfig = {
+      [key === 'doorCount' ? 'fridgeDoorCount' : 'fridgeDoorSide']: value
+    }
+
+    selectedCabinet.carcass.updateConfig(newConfig)
+    forceUpdate({})
+  }, [selectedCabinet])
+
   // Helper to trigger view cabinet repositioning
   const triggerViewReposition = useCallback((
     widthDelta: number,
@@ -193,6 +207,45 @@ export const AppliancePanel: React.FC<AppliancePanelProps> = ({
 
     // Apply lock behavior if width changed
     if (dimension === 'width' && newShellWidth !== oldShellWidth) {
+      if (selectedCabinet.viewId && selectedCabinet.viewId !== 'none') {
+        const leftLock = selectedCabinet.leftLock ?? false
+        const rightLock = selectedCabinet.rightLock ?? false
+        const widthDelta = newShellWidth - oldShellWidth
+
+        // Check for left wall overflow
+        if (widthDelta > 0) {
+          const pushAmount = rightLock ? widthDelta : (!leftLock && !rightLock) ? widthDelta / 2 : 0
+          
+          if (pushAmount > 0) {
+            // Check if THIS cabinet hits the wall
+            if (oldX - pushAmount < -0.1) {
+              toastThrottled('Cannot expand: cabinet would hit the left wall')
+              return
+            }
+
+            const rightEdge = oldX + oldShellWidth
+            const overflow = checkLeftWallOverflow(
+              pushAmount,
+              selectedCabinet.cabinetId,
+              rightEdge,
+              selectedCabinet.viewId as ViewId,
+              cabinets,
+              cabinetGroups,
+              viewManager as ViewManagerResult
+            )
+
+            if (overflow !== null) {
+              toastThrottled(
+                `Cannot expand width: a cabinet would be pushed ${overflow.toFixed(
+                  0
+                )}mm past the left wall. Please reduce the width or move cabinets first.`
+              )
+              return
+            }
+          }
+        }
+      }
+
       const lockResult = applyWidthChangeWithLock(
         selectedCabinet,
         newShellWidth,
@@ -254,6 +307,44 @@ export const AppliancePanel: React.FC<AppliancePanelProps> = ({
     // Apply lock behavior if shell width changed
     const widthDelta = newShellWidth - oldShellWidth
     if (Math.abs(widthDelta) > 0.1) {
+      if (selectedCabinet.viewId && selectedCabinet.viewId !== 'none') {
+        const leftLock = selectedCabinet.leftLock ?? false
+        const rightLock = selectedCabinet.rightLock ?? false
+
+        // Check for left wall overflow
+        if (widthDelta > 0) {
+          const pushAmount = rightLock ? widthDelta : (!leftLock && !rightLock) ? widthDelta / 2 : 0
+          
+          if (pushAmount > 0) {
+            // Check if THIS cabinet hits the wall
+            if (oldX - pushAmount < -0.1) {
+              toastThrottled('Cannot expand: cabinet would hit the left wall')
+              return
+            }
+
+            const rightEdge = oldX + oldShellWidth
+            const overflow = checkLeftWallOverflow(
+              pushAmount,
+              selectedCabinet.cabinetId,
+              rightEdge,
+              selectedCabinet.viewId as ViewId,
+              cabinets,
+              cabinetGroups,
+              viewManager as ViewManagerResult
+            )
+
+            if (overflow !== null) {
+              toastThrottled(
+                `Cannot expand gaps: a cabinet would be pushed ${overflow.toFixed(
+                  0
+                )}mm past the left wall. Please reduce the gaps or move cabinets first.`
+              )
+              return
+            }
+          }
+        }
+      }
+
       const lockResult = applyWidthChangeWithLock(
         selectedCabinet,
         newShellWidth,
@@ -405,6 +496,65 @@ export const AppliancePanel: React.FC<AppliancePanelProps> = ({
             </p>
           </div>
         </div>
+
+        {/* Fridge Configuration */}
+        {applianceType === 'sideBySideFridge' && selectedCabinet?.carcass?.config && (
+          <div className="space-y-4 pt-4 border-t border-gray-200">
+            <h3 className="text-sm font-semibold text-gray-800 uppercase tracking-wide">Fridge Options</h3>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-gray-500 block mb-1.5">Door Configuration</label>
+                <div className="flex bg-gray-100 p-1 rounded-lg">
+                  <button
+                    onClick={() => handleFridgeConfigChange('doorCount', 1)}
+                    className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${selectedCabinet.carcass.config.fridgeDoorCount === 1
+                        ? 'bg-white text-blue-600 shadow-sm'
+                        : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                  >
+                    1 Door
+                  </button>
+                  <button
+                    onClick={() => handleFridgeConfigChange('doorCount', 2)}
+                    className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${(selectedCabinet.carcass.config.fridgeDoorCount !== 1) // Default 2
+                        ? 'bg-white text-blue-600 shadow-sm'
+                        : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                  >
+                    2 Doors
+                  </button>
+                </div>
+              </div>
+
+              {selectedCabinet.carcass.config.fridgeDoorCount === 1 && (
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1.5">Handle Position</label>
+                  <div className="flex bg-gray-100 p-1 rounded-lg">
+                    <button
+                      onClick={() => handleFridgeConfigChange('doorSide', 'left')}
+                      className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${(selectedCabinet.carcass.config.fridgeDoorSide !== 'right') // Default left
+                          ? 'bg-white text-blue-600 shadow-sm'
+                          : 'text-gray-500 hover:text-gray-700'
+                        }`}
+                    >
+                      Left
+                    </button>
+                    <button
+                      onClick={() => handleFridgeConfigChange('doorSide', 'right')}
+                      className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${selectedCabinet.carcass.config.fridgeDoorSide === 'right'
+                          ? 'bg-white text-blue-600 shadow-sm'
+                          : 'text-gray-500 hover:text-gray-700'
+                        }`}
+                    >
+                      Right
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* View Assignment */}
         <div className="space-y-2">

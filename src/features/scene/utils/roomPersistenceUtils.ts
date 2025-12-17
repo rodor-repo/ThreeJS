@@ -11,7 +11,11 @@ import type { CabinetType, CarcassDimensions } from "@/features/carcass"
 import type { CabinetData, WallDimensions as WallDims } from "../types"
 import type { View, ViewId, ViewManager } from "@/features/cabinets/ViewManager"
 import { getClient } from "@/app/QueryProvider"
-import { getProductData, type MaterialOptionsResponse, type DefaultMaterialSelections } from "@/server/getProductData"
+import {
+  getProductData,
+  type MaterialOptionsResponse,
+  type DefaultMaterialSelections,
+} from "@/server/getProductData"
 import _ from "lodash"
 import toast from "react-hot-toast"
 
@@ -180,6 +184,13 @@ export function serializeRoom({
       kickerParentCabinetId: cabinet.kickerParentCabinetId,
       bulkheadParentCabinetId: cabinet.bulkheadParentCabinetId,
       underPanelParentCabinetId: cabinet.underPanelParentCabinetId,
+      // Appliance properties
+      applianceType: cabinet.carcass.config.applianceType,
+      applianceTopGap: cabinet.carcass.config.applianceTopGap,
+      applianceLeftGap: cabinet.carcass.config.applianceLeftGap,
+      applianceRightGap: cabinet.carcass.config.applianceRightGap,
+      fridgeDoorCount: cabinet.carcass.config.fridgeDoorCount,
+      fridgeDoorSide: cabinet.carcass.config.fridgeDoorSide,
     }
   })
 
@@ -292,18 +303,29 @@ export async function restoreRoom({
   await prefetchProductData(productIds)
 
   // After prefetching, sync material options for all productIds (including cached ones)
-  const { getPartDataManager } = await import('@/nesting/PartDataManager')
+  const { getPartDataManager } = await import("@/nesting/PartDataManager")
   const partDataManager = getPartDataManager()
   const queryClient = getClient()
-  productIds.forEach(productId => {
+  productIds.forEach((productId) => {
     const cached = queryClient.getQueryData(["productData", productId])
-    if (cached && typeof cached === 'object' && 'materialOptions' in cached && 'defaultMaterialSelections' in cached) {
-      const data = cached as { materialOptions: MaterialOptionsResponse, defaultMaterialSelections: DefaultMaterialSelections }
+    if (
+      cached &&
+      typeof cached === "object" &&
+      "materialOptions" in cached &&
+      "defaultMaterialSelections" in cached
+    ) {
+      const data = cached as {
+        materialOptions: MaterialOptionsResponse
+        defaultMaterialSelections: DefaultMaterialSelections
+      }
       if (data.materialOptions) {
         partDataManager.setMaterialOptions(productId, data.materialOptions)
       }
       if (data.defaultMaterialSelections) {
-        partDataManager.setDefaultMaterialSelections(productId, data.defaultMaterialSelections)
+        partDataManager.setDefaultMaterialSelections(
+          productId,
+          data.defaultMaterialSelections
+        )
       }
     }
   })
@@ -372,6 +394,18 @@ export async function restoreRoom({
           savedCabinet.position.y,
           savedCabinet.position.z
         )
+
+        // Restore appliance config
+        if (savedCabinet.applianceType) {
+          cabinetData.carcass.updateConfig({
+            applianceType: savedCabinet.applianceType,
+            applianceTopGap: savedCabinet.applianceTopGap || 0,
+            applianceLeftGap: savedCabinet.applianceLeftGap || 0,
+            applianceRightGap: savedCabinet.applianceRightGap || 0,
+            fridgeDoorCount: savedCabinet.fridgeDoorCount,
+            fridgeDoorSide: savedCabinet.fridgeDoorSide,
+          })
+        }
 
         if (savedCabinet.shelfCount !== undefined) {
           cabinetData.carcass.updateConfig({
@@ -488,7 +522,9 @@ export async function restoreRoom({
 
         // Map kickerParentCabinetId
         if (savedCabinet.kickerParentCabinetId) {
-          const newKickerParentId = oldIdToNewId.get(savedCabinet.kickerParentCabinetId)
+          const newKickerParentId = oldIdToNewId.get(
+            savedCabinet.kickerParentCabinetId
+          )
           if (newKickerParentId) {
             cabinetData.kickerParentCabinetId = newKickerParentId
           }
@@ -496,7 +532,9 @@ export async function restoreRoom({
 
         // Map bulkheadParentCabinetId
         if (savedCabinet.bulkheadParentCabinetId) {
-          const newBulkheadParentId = oldIdToNewId.get(savedCabinet.bulkheadParentCabinetId)
+          const newBulkheadParentId = oldIdToNewId.get(
+            savedCabinet.bulkheadParentCabinetId
+          )
           if (newBulkheadParentId) {
             cabinetData.bulkheadParentCabinetId = newBulkheadParentId
           }
@@ -504,7 +542,9 @@ export async function restoreRoom({
 
         // Map underPanelParentCabinetId
         if (savedCabinet.underPanelParentCabinetId) {
-          const newUnderPanelParentId = oldIdToNewId.get(savedCabinet.underPanelParentCabinetId)
+          const newUnderPanelParentId = oldIdToNewId.get(
+            savedCabinet.underPanelParentCabinetId
+          )
           if (newUnderPanelParentId) {
             cabinetData.underPanelParentCabinetId = newUnderPanelParentId
           }

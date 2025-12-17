@@ -51,6 +51,15 @@ export interface SavedCabinet {
   bulkheadParentCabinetId?: string
   /** For underPanel type: parent cabinet ID that this under panel belongs to */
   underPanelParentCabinetId?: string
+  /** Number of doors for fridge (1 or 2) */
+  fridgeDoorCount?: 1 | 2
+  /** Handle side for 1-door fridge */
+  fridgeDoorSide?: 'left' | 'right'
+  /** Appliance specific properties */
+  applianceType?: "dishwasher" | "washingMachine" | "sideBySideFridge"
+  applianceTopGap?: number
+  applianceLeftGap?: number
+  applianceRightGap?: number
 }
 
 export interface SavedView {

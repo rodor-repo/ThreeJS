@@ -35,6 +35,8 @@ export class ApplianceBuilder implements CabinetBuilder {
       height: visualHeight,
       depth,
       applianceType: config.applianceType || "dishwasher",
+      fridgeDoorCount: config.fridgeDoorCount,
+      fridgeDoorSide: config.fridgeDoorSide,
     })
 
     // Position visual with gaps
@@ -64,6 +66,13 @@ export class ApplianceBuilder implements CabinetBuilder {
       const rightGap = config.applianceRightGap || 0
 
       visual.updateDimensions(width, height, depth, topGap, leftGap, rightGap)
+      // also update config if needed (e.g. if type changed via panel, though usually config is recreated? no, visual is kept)
+      if (config.fridgeDoorCount) {
+        visual.setFridgeConfig(
+          config.fridgeDoorCount,
+          config.fridgeDoorSide || "left"
+        )
+      }
     }
   }
 

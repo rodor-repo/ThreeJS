@@ -128,6 +128,8 @@ const getDefaultConfig = (
         applianceTopGap: 0,
         applianceLeftGap: 0,
         applianceRightGap: 0,
+        fridgeDoorCount: 2,
+        fridgeDoorSide: "left",
       }
     default:
       return { shelfCount: 2, shelfSpacing: 300 }

@@ -51,6 +51,8 @@ export interface CarcassConfig {
   applianceTopGap?: number // Gap at top between visual and shell (default: 0mm)
   applianceLeftGap?: number // Gap on left side (default: 0mm)
   applianceRightGap?: number // Gap on right side (default: 0mm)
+  fridgeDoorCount?: 1 | 2 // Number of doors for fridge (default: 2)
+  fridgeDoorSide?: "left" | "right" // Handle side/door pivot for 1-door fridge (default: left)
 }
 
 export { type CabinetType } from "../scene/types"

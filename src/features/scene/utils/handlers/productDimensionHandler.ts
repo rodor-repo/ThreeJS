@@ -16,7 +16,10 @@ import {
   applyWidthChangeWithLock,
   processGroupedCabinets,
 } from "./lockBehaviorHandler"
-import { repositionViewCabinets } from "./viewRepositionHandler"
+import {
+  repositionViewCabinets,
+  checkLeftWallOverflow,
+} from "./viewRepositionHandler"
 import { areCabinetsPaired, clampPositionX } from "./sharedCabinetUtils"
 
 interface ViewManagerResult {
@@ -54,48 +57,6 @@ const dispatchDimensionRejected = () => {
   if (typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent("productPanel:dimensionRejected"))
   }
-}
-
-// Helper function to check if pushing left cabinets would exceed the left wall
-// Returns the overflow amount (how much it would go past x=0) or null if OK
-const checkLeftWallOverflow = (
-  pushAmount: number,
-  changingCabinetId: string,
-  changingRightEdge: number,
-  viewId: ViewId,
-  cabinets: CabinetData[],
-  cabinetGroups: Map<string, Array<{ cabinetId: string; percentage: number }>>,
-  viewManager: ViewManagerResult
-): number | null => {
-  if (!viewManager || pushAmount <= 0) return null
-
-  const cabinetsInView = viewManager.getCabinetsInView(viewId)
-  let maxOverflow: number | null = null
-
-  for (const cabId of cabinetsInView) {
-    if (cabId === changingCabinetId) continue
-
-    const cab = cabinets.find((c) => c.cabinetId === cabId)
-    if (!cab) continue
-
-    // Skip paired cabinets
-    if (areCabinetsPaired(changingCabinetId, cab.cabinetId, cabinetGroups))
-      continue
-
-    // Check if this cabinet is to the LEFT of the changing cabinet
-    const cabRightEdge = cab.group.position.x + cab.carcass.dimensions.width
-    if (cabRightEdge < changingRightEdge) {
-      const newX = cab.group.position.x - pushAmount
-      if (newX < 0) {
-        const overflow = Math.abs(newX)
-        if (maxOverflow === null || overflow > maxOverflow) {
-          maxOverflow = overflow
-        }
-      }
-    }
-  }
-
-  return maxOverflow
 }
 
 export const handleProductDimensionChange = (
@@ -137,7 +98,8 @@ export const handleProductDimensionChange = (
   // Handle width changes with sync/pair/lock logic
   if (widthDelta !== 0) {
     // Check for sync relationships - sync logic overrides lock system and pair system
-    const syncCabinetsForThis = cabinetSyncs.get(selectedCabinet.cabinetId) || []
+    const syncCabinetsForThis =
+      cabinetSyncs.get(selectedCabinet.cabinetId) || []
     const isChangingCabinetSynced = syncCabinetsForThis.length > 0
 
     if (isChangingCabinetSynced) {
@@ -213,6 +175,13 @@ export const handleProductDimensionChange = (
     ) {
       const pushAmount = rightLock ? widthDelta : widthDelta / 2
       if (rightLock || (!leftLock && !rightLock)) {
+        // Check self
+        if (oldX - pushAmount < -0.1) {
+          toastThrottled('Cannot expand: cabinet would hit the left wall')
+          dispatchDimensionRejected()
+          return
+        }
+
         const rightEdge = oldX + oldWidth
         const overflow = checkLeftWallOverflow(
           pushAmount,
@@ -412,9 +381,14 @@ function handleSyncResize(
 
   // Update child cabinets for changing cabinet
   updateChildCabinets(selectedCabinet, cabinets, {
-    heightChanged: Math.abs(newDimensions.height - selectedCabinet.carcass.dimensions.height) > 0.1,
+    heightChanged:
+      Math.abs(
+        newDimensions.height - selectedCabinet.carcass.dimensions.height
+      ) > 0.1,
     widthChanged: true,
-    depthChanged: Math.abs(newDimensions.depth - selectedCabinet.carcass.dimensions.depth) > 0.1,
+    depthChanged:
+      Math.abs(newDimensions.depth - selectedCabinet.carcass.dimensions.depth) >
+      0.1,
     positionChanged: false,
   })
 

@@ -14,7 +14,7 @@ import { useUndoRedo } from './hooks/useUndoRedo'
 import { useCameraDrag } from './hooks/useCameraDrag'
 import { useSceneInteractions } from './hooks/useSceneInteractions'
 import { useSnapGuides } from './hooks/useSnapGuides'
-import { useDimensionLines } from './hooks/useDimensionLines'
+import { useDimensionLinesEnhanced } from './hooks/useDimensionLinesEnhanced'
 import { useCabinetNumbers } from './hooks/useCabinetNumbers'
 import { useThreeRenderer } from './hooks/useThreeRenderer'
 import { useScenePanels, DEFAULT_WALL_COLOR } from './hooks/useScenePanels'
@@ -62,6 +62,7 @@ import { CartSection } from './ui/CartSection'
 import { BottomRightActions } from './ui/BottomRightActions'
 import { HistoryControls } from './ui/HistoryControls'
 import { SaveButton } from './ui/SaveButton'
+import { DimensionLineControls } from './ui/DimensionLineControls'
 
 interface ThreeSceneProps {
   wallDimensions: WallDims
@@ -145,8 +146,24 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
   // Snap guides for visual feedback during cabinet dragging
   const { updateSnapGuides, clearSnapGuides } = useSnapGuides(sceneRef, wallDimensions)
 
-  // Dimension lines for showing cabinet measurements
-  useDimensionLines(sceneRef, cabinets, dimensionsVisible, viewManager.viewManager, wallDimensions, cameraViewMode)
+  // Dimension lines for showing cabinet measurements with interaction support
+  const {
+    selectedDimLineId,
+    hasModifications: hasDimLineModifications,
+    hideSelected: hideDimLine,
+    resetAllLines: resetDimLines,
+  } = useDimensionLinesEnhanced({
+    sceneRef,
+    cameraRef,
+    orthoCameraRef,
+    isOrthoActiveRef,
+    canvasRef: mountRef,
+    cabinets,
+    visible: dimensionsVisible,
+    viewManager: viewManager.viewManager,
+    wallDimensions,
+    cameraViewMode,
+  })
 
   // Cabinet numbering system
   useCabinetNumbers(sceneRef, cabinets, numbersVisible)
@@ -1130,6 +1147,14 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
       />
 
       <SaveButton onSave={openSaveModal} />
+
+      <DimensionLineControls
+        hasSelection={!!selectedDimLineId}
+        hasModifications={hasDimLineModifications}
+        onHide={hideDimLine}
+        onReset={resetDimLines}
+        isOrthoView={isOrthoView}
+      />
     </div>
   );
 };

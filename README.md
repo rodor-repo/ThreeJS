@@ -78,9 +78,9 @@ npm run dev
 ### **Controls**
 - **Edit Button**: Top center - Opens dimension editing modal
 - **3D View**: Default perspective view
-- **X View**: Side view (looking along X-axis)
-- **Y View**: Top view (looking along Y-axis)
-- **Z View**: Front view (looking along Z-axis)
+- **X View**: Side view (looking at YZ plane from the right)
+- **Y View**: Front view (looking at XY plane from the front)
+- **Z View**: Top view (looking at XZ plane from above)
 
 ## Development
 

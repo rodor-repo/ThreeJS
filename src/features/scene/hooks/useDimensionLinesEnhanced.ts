@@ -9,32 +9,61 @@ import {
 } from "./useDimensionLinesUtils/dimensionLineUtils"
 import {
   wouldDimensionLinePenetrate,
-  createCabinetDimensionLines,
-  createOverallWidthDimension,
-  createOverallHeightDimension,
-  createBaseTallOverallWidthDimension,
   detectEmptySpacesY,
   detectEmptySpacesX,
-  createEmptySpaceYDimension,
-  createEmptySpaceXDimension,
-} from "./useDimensionLinesUtils/dimensionLineCreators"
+} from "./useDimensionLinesUtils/dimensionLineDetection"
+import {
+  createWidthDimension,
+  createHeightDimension,
+  createKickerDimension,
+  createDepthDimension,
+  createOverallWidthDimensionEnhanced,
+  createOverallHeightDimensionEnhanced,
+  createBaseTallOverallWidthDimensionEnhanced,
+  createEmptySpaceYDimensionEnhanced,
+  createEmptySpaceXDimensionEnhanced,
+  type DimensionLineOffsets,
+} from "./useDimensionLinesUtils/dimensionLineCreatorsEnhanced"
+import { useDimensionLineInteraction } from "./useDimensionLinesUtils/dimensionLineInteraction"
 
 /**
- * Hook for managing dimension lines that show cabinet measurements
- * Creates dimension lines with arrows and text labels for Height, Width, and Depth
- * Also shows dimension lines for empty spaces between cabinets in the same view
+ * Options for the enhanced dimension lines hook
  */
-export const useDimensionLines = (
-  sceneRef: React.MutableRefObject<THREE.Scene | null>,
-  cabinets: CabinetData[],
-  visible: boolean = true,
-  viewManager?: ViewManager,
-  wallDimensions?: WallDimensions,
-  cameraViewMode?: 'x' | 'y' | 'z' | null
-) => {
-  const dimensionLinesRef = useRef<THREE.Group[]>([])
+export interface UseDimensionLinesEnhancedOptions {
+  sceneRef: React.MutableRefObject<THREE.Scene | null>
+  cameraRef: React.MutableRefObject<THREE.PerspectiveCamera | null>
+  orthoCameraRef?: React.MutableRefObject<THREE.OrthographicCamera | null>
+  isOrthoActiveRef?: React.MutableRefObject<boolean>
+  canvasRef?: React.MutableRefObject<HTMLElement | null>
+  cabinets: CabinetData[]
+  visible?: boolean
+  viewManager?: ViewManager
+  wallDimensions?: WallDimensions
+  cameraViewMode?: "x" | "y" | "z" | null
+}
 
-  // Create wall offset context for use in creators
+/**
+ * Enhanced hook for managing dimension lines with interaction support
+ * Supports dragging dimension lines in orthographic views and hiding/showing them
+ */
+export function useDimensionLinesEnhanced(options: UseDimensionLinesEnhancedOptions) {
+  const {
+    sceneRef,
+    cameraRef,
+    orthoCameraRef,
+    isOrthoActiveRef,
+    canvasRef,
+    cabinets,
+    visible = true,
+    viewManager,
+    wallDimensions,
+    cameraViewMode,
+  } = options
+
+  const dimensionLinesRef = useRef<THREE.Group[]>([])
+  const redrawTriggerRef = useRef(0)
+
+  // Create wall offset context
   const getWallOffsetContext = useCallback(
     (): WallOffsetContext => ({
       leftWallVisible: wallDimensions?.leftWallVisible,
@@ -45,6 +74,29 @@ export const useDimensionLines = (
     }),
     [wallDimensions]
   )
+
+  // Trigger redraw
+  const triggerRedraw = useCallback(() => {
+    redrawTriggerRef.current += 1
+  }, [])
+
+  // Interaction hook for selection, dragging, and visibility
+  const interaction = useDimensionLineInteraction({
+    sceneRef,
+    cameraRef,
+    orthoCameraRef,
+    isOrthoActiveRef,
+    cameraViewMode: cameraViewMode ?? null,
+    canvasRef,
+    onNeedRedraw: triggerRedraw,
+    enabled: visible && !!cameraViewMode, // Only enable in ortho views
+  })
+
+  // Create offsets interface for creators
+  const offsets: DimensionLineOffsets = {
+    getOffset: interaction.getOffset,
+    isHidden: interaction.isHidden,
+  }
 
   /**
    * Update dimension lines for all cabinets
@@ -74,7 +126,7 @@ export const useDimensionLines = (
       cabinetsByHeight.get(height)!.push(cabinet)
     })
 
-    // Find selected cabinet for each height (leftmost, or rightmost if leftmost would penetrate)
+    // Find selected cabinet for each height
     const selectedByHeight = new Map<number, string>()
     cabinetsByHeight.forEach((cabs, height) => {
       const leftmost = cabs.reduce((prev, curr) =>
@@ -118,7 +170,7 @@ export const useDimensionLines = (
       }
     })
 
-    // Group cabinets by kicker height (base/tall only)
+    // Group cabinets by kicker height
     const cabinetsByKickerHeight = new Map<number, CabinetData[]>()
     cabinets.forEach((cabinet) => {
       if (cabinet.cabinetType === "base" || cabinet.cabinetType === "tall") {
@@ -139,90 +191,76 @@ export const useDimensionLines = (
       selectedByKickerHeight.set(kickerHeight, leftmost.cabinetId)
     })
 
-    // Create dimension lines for each cabinet (skip kickers)
-    cabinets.forEach((cabinet) => {
-      // Skip dimension lines for kickers
-      if (cabinet.cabinetType === 'kicker') {
-        return
+    // Helper to add dimension group if not null
+    const addDimensionGroup = (group: THREE.Group | null) => {
+      if (group && sceneRef.current) {
+        sceneRef.current.add(group)
+        dimensionLinesRef.current.push(group)
       }
+    }
+
+    // Create dimension lines for each cabinet
+    cabinets.forEach((cabinet) => {
+      if (cabinet.cabinetType === "kicker") return
 
       const height = cabinet.carcass.dimensions.height
       const depth = cabinet.carcass.dimensions.depth
-      const isSelectedForHeight =
-        selectedByHeight.get(height) === cabinet.cabinetId
-      const isSelectedForDepth =
-        selectedByDepth.get(depth) === cabinet.cabinetId
+      const isSelectedForHeight = selectedByHeight.get(height) === cabinet.cabinetId
+      const isSelectedForDepth = selectedByDepth.get(depth) === cabinet.cabinetId
 
       let isSelectedForKickerHeight = false
       if (cabinet.cabinetType === "base" || cabinet.cabinetType === "tall") {
         const kickerHeight = cabinet.group.position.y
-        isSelectedForKickerHeight =
-          selectedByKickerHeight.get(kickerHeight) === cabinet.cabinetId
+        isSelectedForKickerHeight = selectedByKickerHeight.get(kickerHeight) === cabinet.cabinetId
       }
 
-      // Determine which dimension lines to show based on camera view mode
-      // X view: Show Z (depth) and Y (height), hide X (width)
-      // Y view: Show X (width) and Y (height), hide Z (depth)
-      // Z view: Show Z (depth) and X (width), hide Y (height)
-      // 3D view (null): Show all
+      // Determine visibility based on camera view mode
       let showWidth = true
       let showHeightDim = isSelectedForHeight
       let showDepthDim = isSelectedForDepth
       let showKickerHeightDim = isSelectedForKickerHeight
-      
-      if (cameraViewMode === 'x') {
-        // X view: Show Z and Y, hide X
+
+      if (cameraViewMode === "x") {
         showWidth = false
-        showHeightDim = isSelectedForHeight
-        showDepthDim = isSelectedForDepth
-        showKickerHeightDim = isSelectedForKickerHeight // Kicker height is Y-axis, show in X view
-      } else if (cameraViewMode === 'y') {
-        // Y view: Show X and Y, hide Z
-        showWidth = true
-        showHeightDim = isSelectedForHeight
+        showKickerHeightDim = isSelectedForKickerHeight
+      } else if (cameraViewMode === "y") {
         showDepthDim = false
-        showKickerHeightDim = isSelectedForKickerHeight // Kicker height is Y-axis, show in Y view
-      } else if (cameraViewMode === 'z') {
-        // Z view: Show Z and X, hide Y (including kicker height)
-        showWidth = true
+        showKickerHeightDim = isSelectedForKickerHeight
+      } else if (cameraViewMode === "z") {
         showHeightDim = false
-        showDepthDim = isSelectedForDepth
-        showKickerHeightDim = false // Kicker height is Y-axis, hide in Z view
+        showKickerHeightDim = false
       }
 
-      const dimensionGroup = createCabinetDimensionLines(
-        cabinet,
-        wallOffsetContext,
-        showHeightDim,
-        showDepthDim,
-        showKickerHeightDim, // Use the calculated showKickerHeightDim instead of isSelectedForKickerHeight
-        cabinets, // Pass all cabinets for parent-child alignment
-        showWidth // Pass showWidth parameter
-      )
-      sceneRef.current!.add(dimensionGroup)
-      dimensionLinesRef.current.push(dimensionGroup)
+      // Create individual dimension lines with metadata
+      if (showWidth) {
+        addDimensionGroup(createWidthDimension(cabinet, wallOffsetContext, offsets))
+      }
+
+      if (showHeightDim) {
+        addDimensionGroup(createHeightDimension(cabinet, wallOffsetContext, cabinets, offsets))
+      }
+
+      if (showKickerHeightDim) {
+        addDimensionGroup(createKickerDimension(cabinet, wallOffsetContext, offsets))
+      }
+
+      if (showDepthDim) {
+        addDimensionGroup(createDepthDimension(cabinet, wallOffsetContext, offsets))
+      }
     })
 
-    // Create overall width dimension line (X-axis) - hide in X view
-    if (cameraViewMode !== 'x') {
-      const overallDimension = createOverallWidthDimension(cabinets)
-      if (overallDimension) {
-        sceneRef.current!.add(overallDimension)
-        dimensionLinesRef.current.push(overallDimension)
-      }
+    // Create overall width dimension line - hide in X view
+    if (cameraViewMode !== "x") {
+      addDimensionGroup(createOverallWidthDimensionEnhanced(cabinets, offsets))
 
       // Check if we need additional overall width dimension for base/tall only
       const hasTopCabinets = cabinets.some((c) => c.cabinetType === "top")
 
       if (hasTopCabinets) {
-        // Calculate overall width including all cabinets (exclude kickers)
         let allMinX = Infinity
         let allMaxX = -Infinity
         cabinets.forEach((cabinet) => {
-          // Skip kickers
-          if (cabinet.cabinetType === 'kicker') {
-            return
-          }
+          if (cabinet.cabinetType === "kicker") return
           const x = cabinet.group.position.x
           const width = cabinet.carcass.dimensions.width
           allMinX = Math.min(allMinX, x)
@@ -230,7 +268,6 @@ export const useDimensionLines = (
         })
         const overallWidthAll = allMaxX - allMinX
 
-        // Calculate overall width excluding top cabinets
         const baseTallCabinets = cabinets.filter(
           (c) => c.cabinetType === "base" || c.cabinetType === "tall"
         )
@@ -244,49 +281,36 @@ export const useDimensionLines = (
         })
         const overallWidthBaseTall = baseTallMaxX - baseTallMinX
 
-        // Only create additional dimension if widths are different
         if (Math.abs(overallWidthAll - overallWidthBaseTall) > 0.1) {
-          const baseTallOverallDimension =
-            createBaseTallOverallWidthDimension(cabinets)
-          if (baseTallOverallDimension) {
-            sceneRef.current!.add(baseTallOverallDimension)
-            dimensionLinesRef.current.push(baseTallOverallDimension)
-          }
+          addDimensionGroup(createBaseTallOverallWidthDimensionEnhanced(cabinets, offsets))
         }
       }
     }
 
-    // Create overall height dimension for each view (Y-axis) - hide in Z view
-    if (viewManager && cameraViewMode !== 'z') {
-      const overallHeightDimensions = createOverallHeightDimension(
+    // Create overall height dimension for each view - hide in Z view
+    if (viewManager && cameraViewMode !== "z") {
+      const heightDimensions = createOverallHeightDimensionEnhanced(
         cabinets,
         viewManager,
-        wallDimensions
+        wallDimensions,
+        offsets
       )
-      overallHeightDimensions.forEach((dimension) => {
-        sceneRef.current!.add(dimension)
-        dimensionLinesRef.current.push(dimension)
-      })
+      heightDimensions.forEach(addDimensionGroup)
     }
 
     // Create dimension lines for empty spaces
     if (viewManager) {
-      // Detect and render Y-axis empty spaces (Y-axis) - hide in Z view
-      if (cameraViewMode !== 'z') {
+      // Y-axis empty spaces - hide in Z view
+      if (cameraViewMode !== "z") {
         const emptySpacesY = detectEmptySpacesY(cabinets, viewManager)
 
-        // Group by similar heights and only show leftmost for each group
         const heightGroups = new Map<number, typeof emptySpacesY>()
         const SIMILAR_HEIGHT_TOLERANCE = 1
 
         emptySpacesY.forEach((space) => {
           let foundGroup = false
-          for (const [groupHeight, spaces] of Array.from(
-            heightGroups.entries()
-          )) {
-            if (
-              Math.abs(space.height - groupHeight) <= SIMILAR_HEIGHT_TOLERANCE
-            ) {
+          for (const [groupHeight, spaces] of Array.from(heightGroups.entries())) {
+            if (Math.abs(space.height - groupHeight) <= SIMILAR_HEIGHT_TOLERANCE) {
               spaces.push(space)
               foundGroup = true
               break
@@ -298,54 +322,55 @@ export const useDimensionLines = (
           }
         })
 
-        // For each height group, only show the leftmost dimension
+        let emptyYIndex = 0
         heightGroups.forEach((spaces) => {
           const leftmostSpace = spaces.reduce((prev, curr) =>
             curr.leftmostX < prev.leftmostX ? curr : prev
           )
 
-          const viewCabinetIds = viewManager.getCabinetsInView(
-            leftmostSpace.viewId
-          )
-          const viewCabinets = cabinets.filter((c) =>
-            viewCabinetIds.includes(c.cabinetId)
-          )
+          const viewCabinetIds = viewManager.getCabinetsInView(leftmostSpace.viewId)
+          const viewCabinets = cabinets.filter((c) => viewCabinetIds.includes(c.cabinetId))
+
           if (viewCabinets.length > 0) {
             const zPos = 30
-
-            const emptySpaceYDimension = createEmptySpaceYDimension(
-              leftmostSpace.bottomY,
-              leftmostSpace.topY,
-              leftmostSpace.height,
-              leftmostSpace.leftmostX,
-              zPos
+            addDimensionGroup(
+              createEmptySpaceYDimensionEnhanced(
+                leftmostSpace.bottomY,
+                leftmostSpace.topY,
+                leftmostSpace.height,
+                leftmostSpace.leftmostX,
+                zPos,
+                leftmostSpace.viewId,
+                emptyYIndex++,
+                offsets
+              )
             )
-            sceneRef.current!.add(emptySpaceYDimension)
-            dimensionLinesRef.current.push(emptySpaceYDimension)
           }
         })
       }
 
-      // Detect and render X-axis empty spaces (X-axis) - hide in X view
-      if (cameraViewMode !== 'x') {
+      // X-axis empty spaces - hide in X view
+      if (cameraViewMode !== "x") {
         const emptySpacesX = detectEmptySpacesX(cabinets, viewManager)
 
-        emptySpacesX.forEach((space) => {
+        emptySpacesX.forEach((space, index) => {
           const zPos = 30
-
-          const emptySpaceXDimension = createEmptySpaceXDimension(
-            space.leftX,
-            space.rightX,
-            space.width,
-            space.topY,
-            space.leftCabinetType,
-            space.rightCabinetType,
-            space.baseTopY,
-            zPos,
-            wallOffsetContext
+          addDimensionGroup(
+            createEmptySpaceXDimensionEnhanced(
+              space.leftX,
+              space.rightX,
+              space.width,
+              space.topY,
+              space.leftCabinetType,
+              space.rightCabinetType,
+              space.baseTopY,
+              zPos,
+              wallOffsetContext,
+              space.viewId,
+              index,
+              offsets
+            )
           )
-          sceneRef.current!.add(emptySpaceXDimension)
-          dimensionLinesRef.current.push(emptySpaceXDimension)
         })
       }
     }
@@ -356,36 +381,27 @@ export const useDimensionLines = (
     viewManager,
     wallDimensions,
     getWallOffsetContext,
-    cameraViewMode, // Add cameraViewMode to dependencies
+    cameraViewMode,
+    offsets,
   ])
 
-  // Store cabinets ref and previous positions to track changes
+  // Store cabinets ref and previous positions
   const cabinetsRef = useRef<CabinetData[]>([])
   const previousPositionsRef = useRef<
-    Map<
-      string,
-      {
-        x: number
-        y: number
-        z: number
-        width: number
-        height: number
-        depth: number
-      }
-    >
+    Map<string, { x: number; y: number; z: number; width: number; height: number; depth: number }>
   >(new Map())
   const animationFrameRef = useRef<number | null>(null)
+  const lastRedrawTriggerRef = useRef(0)
 
   // Update dimension lines when visibility changes
   useEffect(() => {
     updateDimensionLines()
   }, [visible, updateDimensionLines])
 
-  // Update dimension lines when cabinets array changes (add/remove)
+  // Update dimension lines when cabinets array changes
   useEffect(() => {
     cabinetsRef.current = cabinets
     updateDimensionLines()
-    // Update previous positions
     previousPositionsRef.current.clear()
     cabinets.forEach((cab) => {
       previousPositionsRef.current.set(cab.cabinetId, {
@@ -397,13 +413,18 @@ export const useDimensionLines = (
         depth: cab.carcass.dimensions.depth,
       })
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cabinets.length, updateDimensionLines])
 
-  // Update dimension lines continuously in animation loop to track position changes
+  // Animation loop for tracking position changes and redraw triggers
   useEffect(() => {
     const updateLoop = () => {
       let needsUpdate = false
+
+      // Check for redraw trigger from interactions
+      if (redrawTriggerRef.current !== lastRedrawTriggerRef.current) {
+        needsUpdate = true
+        lastRedrawTriggerRef.current = redrawTriggerRef.current
+      }
 
       // Check if number of cabinets changed
       if (cabinetsRef.current.length !== previousPositionsRef.current.size) {
@@ -427,7 +448,6 @@ export const useDimensionLines = (
             depth: cabinet.carcass.dimensions.depth,
           }
 
-          // Check if position or dimensions changed
           if (
             Math.abs(prev.x - current.x) > 0.1 ||
             Math.abs(prev.y - current.y) > 0.1 ||
@@ -444,7 +464,6 @@ export const useDimensionLines = (
 
       if (needsUpdate) {
         updateDimensionLines()
-        // Update all positions after update
         cabinetsRef.current.forEach((cab) => {
           previousPositionsRef.current.set(cab.cabinetId, {
             x: cab.group.position.x,
@@ -471,5 +490,11 @@ export const useDimensionLines = (
 
   return {
     updateDimensionLines,
+    // Interaction controls
+    selectedDimLineId: interaction.selectedId,
+    hasModifications: interaction.hasModifications,
+    hideSelected: interaction.hideSelected,
+    resetAllLines: interaction.resetAllLines,
+    deselect: interaction.deselect,
   }
 }

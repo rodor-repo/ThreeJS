@@ -111,16 +111,25 @@ These hooks add specific features to the scene.
 - **Responsibilities**:
   - Renders dashed `THREE.Line` objects to show where a cabinet is snapping (vertical/horizontal alignment).
 
-### 4. `useDimensionLines`
+### 4. `useDimensionLinesEnhanced`
 
-- **Location**: `src/features/scene/hooks/useDimensionLines.ts`
-- **Purpose**: Measurement visualization.
+- **Location**: `src/features/scene/hooks/useDimensionLinesEnhanced.ts`
+- **Purpose**: Interactive measurement visualization with drag support.
 - **Responsibilities**:
   - Renders dynamic 3D lines and text sprites to show:
     - Cabinet dimensions (Width, Height, Depth).
     - Kicker height.
     - Overall view dimensions (Total Width, Total Height).
+    - Empty space gaps (vertical and horizontal).
   - Updates automatically as cabinets move or resize.
+  - **Draggable** in orthographic views (perpendicular to extension lines).
+  - **Hide/Show** controls via `DimensionLineControls` UI component.
+  - **Reset** positions to original offsets.
+- **Key Supporting Files**:
+  - `dimensionLineState.ts`: State management with 3D offsets (`{x, y, z}`), visibility, and view-dependent drag axis calculation.
+  - `dimensionLineDrag.ts`: Drag interaction with raycasting and axis tracking.
+  - `dimensionLineCreatorsEnhanced.ts`: Enhanced creators that apply 3D offsets.
+  - `dimensionLineDetection.ts`: Utility functions for detecting empty spaces and penetration checks.
 
 ### 5. `useCabinetNumbers`
 

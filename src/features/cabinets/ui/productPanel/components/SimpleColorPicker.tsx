@@ -5,6 +5,8 @@ export interface SimpleColorPickerProps {
   color: string
   /** Color change callback */
   onChange: (color: string) => void
+  /** If true, renders only inner content without card wrapper */
+  noWrapper?: boolean
 }
 
 /**
@@ -12,8 +14,30 @@ export interface SimpleColorPickerProps {
  */
 export const SimpleColorPicker: React.FC<SimpleColorPickerProps> = ({
   color,
-  onChange
+  onChange,
+  noWrapper = false,
 }) => {
+  const content = (
+    <div className="flex items-center gap-1.5">
+      <input
+        type="color"
+        className="w-10 h-8 border border-gray-300 rounded-md cursor-pointer"
+        value={color}
+        onChange={e => onChange(e.target.value)}
+      />
+      <input
+        type="text"
+        className="flex-1 text-sm px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent leading-tight"
+        value={color}
+        onChange={e => onChange(e.target.value)}
+      />
+    </div>
+  )
+
+  if (noWrapper) {
+    return content
+  }
+
   return (
     <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-200">
       <div className="flex items-center space-x-2 mb-2.5 text-gray-700 font-medium">
@@ -36,20 +60,7 @@ export const SimpleColorPicker: React.FC<SimpleColorPickerProps> = ({
         </svg>
         <h3>Material</h3>
       </div>
-      <div className="flex items-center gap-1.5">
-        <input
-          type="color"
-          className="w-10 h-8 border border-gray-300 rounded-md cursor-pointer"
-          value={color}
-          onChange={e => onChange(e.target.value)}
-        />
-        <input
-          type="text"
-          className="flex-1 text-sm px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent leading-tight"
-          value={color}
-          onChange={e => onChange(e.target.value)}
-        />
-      </div>
+      {content}
     </div>
   )
 }

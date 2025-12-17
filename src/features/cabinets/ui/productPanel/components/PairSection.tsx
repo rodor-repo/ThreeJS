@@ -22,6 +22,8 @@ export interface PairSectionProps {
   groupCabinets: GroupCabinet[]
   /** Group change callback */
   onGroupChange: (group: GroupCabinet[]) => void
+  /** If true, renders only inner content without card wrapper */
+  noWrapper?: boolean
 }
 
 /**
@@ -42,7 +44,8 @@ export const PairSection: React.FC<PairSectionProps> = ({
   cabinetsInView,
   allCabinets,
   groupCabinets,
-  onGroupChange
+  onGroupChange,
+  noWrapper = false,
 }) => {
   const handleAddCabinet = (cabinetToAdd: string) => {
     if (!cabinetToAdd || groupCabinets.find(g => g.cabinetId === cabinetToAdd)) {
@@ -128,6 +131,74 @@ export const PairSection: React.FC<PairSectionProps> = ({
 
   const totalPercentage = groupCabinets.reduce((sum, g) => sum + g.percentage, 0)
 
+  const content = (
+    <div className="space-y-3">
+      {/* Dropdown - auto-adds on selection */}
+      <select
+        className="w-full text-sm px-2 py-1.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        value=""
+        onChange={e => handleAddCabinet(e.target.value)}
+      >
+        <option value="">Select a cabinet to add...</option>
+        {availableCabinets.map(cabinet => (
+          <option key={cabinet.cabinetId} value={cabinet.cabinetId}>
+            {getCabinetDisplayName(cabinet, cabinet.cabinetId)}
+          </option>
+        ))}
+      </select>
+
+      {/* Pair List */}
+      {groupCabinets.length > 0 && (
+        <div className="space-y-2">
+          {groupCabinets.map((groupCabinet, index) => {
+            const cabinet = allCabinets.find(c => c.cabinetId === groupCabinet.cabinetId)
+
+            return (
+              <div
+                key={groupCabinet.cabinetId}
+                className="flex items-center gap-2 p-2 bg-gray-50 rounded-md"
+              >
+                <span className="flex-1 text-sm text-gray-700 truncate">
+                  {getCabinetDisplayName(cabinet, groupCabinet.cabinetId)}
+                </span>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  className="w-20 text-center text-sm px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  value={groupCabinet.percentage}
+                  onChange={e => handlePercentageChange(index, parseFloat(e.target.value) || 0)}
+                />
+                <span className="text-sm text-gray-600">%</span>
+                <button
+                  onClick={() => handleRemoveCabinet(groupCabinet.cabinetId)}
+                  className="text-gray-400 hover:text-red-600 transition-colors"
+                  title="Remove from pair"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            )
+          })}
+
+          {/* Total Percentage Display */}
+          <div className="flex justify-between items-center pt-2 border-t border-gray-200">
+            <span className="text-sm font-medium text-gray-700">Total:</span>
+            <span className={`text-sm font-semibold ${totalPercentage === 100 ? 'text-green-600' : 'text-red-600'
+              }`}>
+              {totalPercentage.toFixed(2)}%
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+
+  if (noWrapper) {
+    return content
+  }
+
   return (
     <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-200">
       <div className="flex items-center space-x-2 mb-2.5 text-gray-700 font-medium">
@@ -148,68 +219,7 @@ export const PairSection: React.FC<PairSectionProps> = ({
         </svg>
         <h3>Pair</h3>
       </div>
-
-      <div className="space-y-3">
-        {/* Dropdown - auto-adds on selection */}
-        <select
-          className="w-full text-sm px-2 py-1.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          value=""
-          onChange={e => handleAddCabinet(e.target.value)}
-        >
-          <option value="">Select a cabinet to add...</option>
-          {availableCabinets.map(cabinet => (
-            <option key={cabinet.cabinetId} value={cabinet.cabinetId}>
-              {getCabinetDisplayName(cabinet, cabinet.cabinetId)}
-            </option>
-          ))}
-        </select>
-
-        {/* Pair List */}
-        {groupCabinets.length > 0 && (
-          <div className="space-y-2">
-            {groupCabinets.map((groupCabinet, index) => {
-              const cabinet = allCabinets.find(c => c.cabinetId === groupCabinet.cabinetId)
-
-              return (
-                <div
-                  key={groupCabinet.cabinetId}
-                  className="flex items-center gap-2 p-2 bg-gray-50 rounded-md"
-                >
-                  <span className="flex-1 text-sm text-gray-700 truncate">
-                    {getCabinetDisplayName(cabinet, groupCabinet.cabinetId)}
-                  </span>
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    step="0.01"
-                    className="w-20 text-center text-sm px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    value={groupCabinet.percentage}
-                    onChange={e => handlePercentageChange(index, parseFloat(e.target.value) || 0)}
-                  />
-                  <span className="text-sm text-gray-600">%</span>
-                  <button
-                    onClick={() => handleRemoveCabinet(groupCabinet.cabinetId)}
-                    className="text-gray-400 hover:text-red-600 transition-colors"
-                    title="Remove from pair"
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-              )
-            })}
-
-            {/* Total Percentage Display */}
-            <div className="flex justify-between items-center pt-2 border-t border-gray-200">
-              <span className="text-sm font-medium text-gray-700">Total:</span>
-              <span className={`text-sm font-semibold ${totalPercentage === 100 ? 'text-green-600' : 'text-red-600'
-                }`}>
-                {totalPercentage.toFixed(2)}%
-              </span>
-            </div>
-          </div>
-        )}
-      </div>
+      {content}
     </div>
   )
 }

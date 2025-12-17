@@ -17,6 +17,8 @@ export interface MaterialsSectionProps {
   onSelectionChange: (materialId: string, selection: MaterialSelection) => void
   /** Open color picker callback */
   onOpenColorPicker: (materialId: string) => void
+  /** If true, renders only inner content without card wrapper */
+  noWrapper?: boolean
 }
 
 /**
@@ -27,8 +29,44 @@ export const MaterialsSection: React.FC<MaterialsSectionProps> = ({
   materialOptions,
   materialSelections,
   onSelectionChange,
-  onOpenColorPicker
+  onOpenColorPicker,
+  noWrapper = false,
 }) => {
+  const content = (
+    <div className="space-y-4">
+      {_(wsProduct.materials)
+        .toPairs()
+        .filter(([, m]) => m.visible !== false)
+        .sortBy(([, m]) => Number(m.sortNum))
+        .map(([materialId, material]) => {
+          const mOpts = materialOptions?.[materialId]
+          const selection = materialSelections[materialId]
+
+          const handlePriceRangeChange = (newPriceRangeId: string) => {
+            const newSelection = updateSelectionForPriceRange(newPriceRangeId, mOpts)
+            onSelectionChange(materialId, newSelection)
+          }
+
+          return (
+            <MaterialCard
+              key={materialId}
+              materialId={materialId}
+              material={material}
+              materialOptions={mOpts}
+              selection={selection}
+              onPriceRangeChange={handlePriceRangeChange}
+              onOpenColorPicker={() => onOpenColorPicker(materialId)}
+            />
+          )
+        })
+        .value()}
+    </div>
+  )
+
+  if (noWrapper) {
+    return content
+  }
+
   return (
     <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-200">
       <div className="flex items-center space-x-2 mb-2.5 text-gray-700 font-medium">
@@ -49,34 +87,7 @@ export const MaterialsSection: React.FC<MaterialsSectionProps> = ({
         </svg>
         <h3>Materials</h3>
       </div>
-      <div className="space-y-4">
-        {_(wsProduct.materials)
-          .toPairs()
-          .filter(([, m]) => m.visible !== false)
-          .sortBy(([, m]) => Number(m.sortNum))
-          .map(([materialId, material]) => {
-            const mOpts = materialOptions?.[materialId]
-            const selection = materialSelections[materialId]
-
-            const handlePriceRangeChange = (newPriceRangeId: string) => {
-              const newSelection = updateSelectionForPriceRange(newPriceRangeId, mOpts)
-              onSelectionChange(materialId, newSelection)
-            }
-
-            return (
-              <MaterialCard
-                key={materialId}
-                materialId={materialId}
-                material={material}
-                materialOptions={mOpts}
-                selection={selection}
-                onPriceRangeChange={handlePriceRangeChange}
-                onOpenColorPicker={() => onOpenColorPicker(materialId)}
-              />
-            )
-          })
-          .value()}
-      </div>
+      {content}
     </div>
   )
 }

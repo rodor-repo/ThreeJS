@@ -8,3 +8,5 @@ export * from "./useDimensionSync"
 export * from "./useInitialization"
 export * from "./useOffTheFloor"
 export * from "./useCabinetGroups"
+export * from "./useCollapsibleSections"
+

@@ -2,12 +2,14 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion } from 'framer-motion'
-import { X } from 'lucide-react'
+import { X, Maximize, Move, Eye, Settings } from 'lucide-react'
 import type { CabinetData, WallDimensions } from '@/features/scene/types'
 import { ViewId } from '@/features/cabinets/ViewManager'
 import { repositionViewCabinets, checkLeftWallOverflow } from '@/features/scene/utils/handlers/viewRepositionHandler'
 import { applyWidthChangeWithLock } from '@/features/scene/utils/handlers/lockBehaviorHandler'
 import { toastThrottled } from './ProductPanel'
+import { CollapsibleSection } from './productPanel/components/CollapsibleSection'
+import { useCollapsibleSections } from './productPanel/hooks/useCollapsibleSections'
 
 // Appliance type labels and icons
 const APPLIANCE_INFO: Record<string, { label: string; icon: string }> = {
@@ -104,6 +106,23 @@ const SliderInput: React.FC<SliderInputProps> = ({
   )
 }
 
+// Icons for collapsible sections
+const SizeIcon = () => (
+  <Maximize size={20} />
+)
+
+const GapsIcon = () => (
+  <Move size={20} />
+)
+
+const FridgeIcon = () => (
+  <Settings size={20} />
+)
+
+const ViewIcon = () => (
+  <Eye size={20} />
+)
+
 export const AppliancePanel: React.FC<AppliancePanelProps> = ({
   isVisible,
   selectedCabinet,
@@ -123,6 +142,9 @@ export const AppliancePanel: React.FC<AppliancePanelProps> = ({
   const [topGap, setTopGap] = useState(0)
   const [leftGap, setLeftGap] = useState(0)
   const [rightGap, setRightGap] = useState(0)
+
+  // Panel expand/collapse state (matching ProductPanel)
+  const [isExpanded, setIsExpanded] = useState(true)
 
   // Get appliance type from config
   const applianceType = selectedCabinet?.carcass?.config?.applianceType || 'dishwasher'
@@ -215,7 +237,7 @@ export const AppliancePanel: React.FC<AppliancePanelProps> = ({
         // Check for left wall overflow
         if (widthDelta > 0) {
           const pushAmount = rightLock ? widthDelta : (!leftLock && !rightLock) ? widthDelta / 2 : 0
-          
+
           if (pushAmount > 0) {
             // Check if THIS cabinet hits the wall
             if (oldX - pushAmount < -0.1) {
@@ -277,7 +299,7 @@ export const AppliancePanel: React.FC<AppliancePanelProps> = ({
         triggerViewReposition(widthDelta, oldX, oldShellWidth)
       }
     }
-  }, [selectedCabinet, visualWidth, visualHeight, visualDepth, topGap, leftGap, rightGap, triggerViewReposition])
+  }, [selectedCabinet, visualWidth, visualHeight, visualDepth, topGap, leftGap, rightGap, triggerViewReposition, cabinets, cabinetGroups, viewManager])
 
   // Update gaps when changed
   // This changes the shell size while keeping visual size the same
@@ -314,7 +336,7 @@ export const AppliancePanel: React.FC<AppliancePanelProps> = ({
         // Check for left wall overflow
         if (widthDelta > 0) {
           const pushAmount = rightLock ? widthDelta : (!leftLock && !rightLock) ? widthDelta / 2 : 0
-          
+
           if (pushAmount > 0) {
             // Check if THIS cabinet hits the wall
             if (oldX - pushAmount < -0.1) {
@@ -383,7 +405,7 @@ export const AppliancePanel: React.FC<AppliancePanelProps> = ({
     if (Math.abs(widthDelta) > 0.1) {
       triggerViewReposition(widthDelta, oldX, oldShellWidth)
     }
-  }, [selectedCabinet, visualWidth, visualHeight, visualDepth, topGap, leftGap, rightGap, triggerViewReposition])
+  }, [selectedCabinet, visualWidth, visualHeight, visualDepth, topGap, leftGap, rightGap, triggerViewReposition, cabinets, cabinetGroups, viewManager])
 
   // Calculate displayed shell dimensions for info display
   const shellWidth = useMemo(() => visualWidth + leftGap + rightGap, [visualWidth, leftGap, rightGap])
@@ -392,195 +414,224 @@ export const AppliancePanel: React.FC<AppliancePanelProps> = ({
   if (!isVisible || !selectedCabinet) return null
 
   return (
-    <motion.div
-      initial={{ x: '100%' }}
-      animate={{ x: 0 }}
-      exit={{ x: '100%' }}
-      transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-      className="fixed right-0 top-0 h-full w-96 max-w-[90vw] bg-white shadow-2xl z-40 flex flex-col productPanel"
+    <div
+      className="fixed right-0 top-0 h-full bg-white shadow-lg border-l border-gray-200 transition-all duration-300 ease-in-out z-50 productPanel"
       data-product-panel
       onClick={(e) => e.stopPropagation()}
       onMouseDown={(e) => e.stopPropagation()}
       onMouseUp={(e) => e.stopPropagation()}
       onWheel={(e) => e.stopPropagation()}
     >
-      {/* Header */}
-      <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-gradient-to-r from-blue-50 to-white">
-        <div className="flex items-center gap-3">
-          <span className="text-3xl">{applianceInfo.icon}</span>
-          <div>
-            <h2 className="text-lg font-bold text-gray-800">{applianceInfo.label}</h2>
-            <p className="text-sm text-gray-500">#{selectedCabinet.sortNumber}</p>
-          </div>
-        </div>
-        <button
-          onClick={onClose}
-          className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-        >
-          <X size={20} className="text-gray-600" />
-        </button>
-      </div>
+      {/* Expand/Collapse button */}
+      <button
+        onClick={(e) => {
+          e.stopPropagation()
+          setIsExpanded(!isExpanded)
+        }}
+        onMouseDown={(e) => e.stopPropagation()}
+        onMouseUp={(e) => e.stopPropagation()}
+        className="absolute -left-3 top-1/2 transform -translate-y-1/2 bg-blue-600 text-white rounded-full p-1 hover:bg-blue-700 transition-colors"
+      >
+        {isExpanded ? '<' : '>'}
+      </button>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-6">
-        {/* Appliance Dimensions Section */}
-        <div className="space-y-4">
-          <h3 className="text-sm font-semibold text-gray-800 uppercase tracking-wide">Appliance Size</h3>
-          <p className="text-xs text-gray-500">Size of the appliance itself</p>
-
-          <SliderInput
-            label="Width"
-            value={visualWidth}
-            min={300}
-            max={1200}
-            step={10}
-            onChange={(v) => handleDimensionChange('width', v)}
-          />
-
-          <SliderInput
-            label="Height"
-            value={visualHeight}
-            min={600}
-            max={2400}
-            step={10}
-            onChange={(v) => handleDimensionChange('height', v)}
-          />
-
-          <SliderInput
-            label="Depth"
-            value={visualDepth}
-            min={400}
-            max={800}
-            step={10}
-            onChange={(v) => handleDimensionChange('depth', v)}
-          />
-        </div>
-
-        {/* Gaps Section */}
-        <div className="space-y-4">
-          <h3 className="text-sm font-semibold text-gray-800 uppercase tracking-wide">Gaps</h3>
-          <p className="text-xs text-gray-500">Extra space around appliance (expands cabinet opening)</p>
-
-          <SliderInput
-            label="Top Gap"
-            value={topGap}
-            min={0}
-            max={100}
-            step={1}
-            onChange={(v) => handleGapChange('top', v)}
-          />
-
-          <SliderInput
-            label="Left Gap"
-            value={leftGap}
-            min={0}
-            max={50}
-            step={1}
-            onChange={(v) => handleGapChange('left', v)}
-          />
-
-          <SliderInput
-            label="Right Gap"
-            value={rightGap}
-            min={0}
-            max={50}
-            step={1}
-            onChange={(v) => handleGapChange('right', v)}
-          />
-
-          {/* Shell dimensions info */}
-          <div className="mt-3 p-3 bg-blue-50 rounded-lg">
-            <p className="text-xs text-blue-700 font-medium">Cabinet Opening (Shell)</p>
-            <p className="text-xs text-blue-600">
-              {shellWidth}mm × {shellHeight}mm × {visualDepth}mm
-            </p>
-          </div>
-        </div>
-
-        {/* Fridge Configuration */}
-        {applianceType === 'sideBySideFridge' && selectedCabinet?.carcass?.config && (
-          <div className="space-y-4 pt-4 border-t border-gray-200">
-            <h3 className="text-sm font-semibold text-gray-800 uppercase tracking-wide">Fridge Options</h3>
-
-            <div className="space-y-3">
+      <div
+        className={`h-full transition-all duration-300 ease-in-out ${isExpanded ? 'w-80 sm:w-96 max-w-[90vw]' : 'w-0'
+          } overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100`}
+      >
+        {/* Header - matching ProductPanel style */}
+        <div className="sticky top-0 bg-gradient-to-r from-blue-50 to-white border-b border-gray-200 px-4 py-3 z-10">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-3xl">{applianceInfo.icon}</span>
               <div>
-                <label className="text-xs text-gray-500 block mb-1.5">Door Configuration</label>
-                <div className="flex bg-gray-100 p-1 rounded-lg">
-                  <button
-                    onClick={() => handleFridgeConfigChange('doorCount', 1)}
-                    className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${selectedCabinet.carcass.config.fridgeDoorCount === 1
-                        ? 'bg-white text-blue-600 shadow-sm'
-                        : 'text-gray-500 hover:text-gray-700'
-                      }`}
-                  >
-                    1 Door
-                  </button>
-                  <button
-                    onClick={() => handleFridgeConfigChange('doorCount', 2)}
-                    className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${(selectedCabinet.carcass.config.fridgeDoorCount !== 1) // Default 2
-                        ? 'bg-white text-blue-600 shadow-sm'
-                        : 'text-gray-500 hover:text-gray-700'
-                      }`}
-                  >
-                    2 Doors
-                  </button>
-                </div>
+                <h2 className="text-lg font-bold text-gray-800">{applianceInfo.label}</h2>
+                <p className="text-sm text-gray-500">#{selectedCabinet.sortNumber}</p>
               </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+            >
+              <X size={20} className="text-gray-600" />
+            </button>
+          </div>
+        </div>
 
-              {selectedCabinet.carcass.config.fridgeDoorCount === 1 && (
+        {/* Content with collapsible sections */}
+        <div className="p-4 space-y-4">
+          {/* Appliance Size Section */}
+          <CollapsibleSection
+            id="applianceSize"
+            title="Appliance Size"
+            icon={<SizeIcon />}
+          >
+            <div className="space-y-4">
+              <p className="text-xs text-gray-500 mb-3">Size of the appliance itself</p>
+              <SliderInput
+                label="Width"
+                value={visualWidth}
+                min={300}
+                max={1200}
+                step={10}
+                onChange={(v) => handleDimensionChange('width', v)}
+              />
+              <SliderInput
+                label="Height"
+                value={visualHeight}
+                min={600}
+                max={2400}
+                step={10}
+                onChange={(v) => handleDimensionChange('height', v)}
+              />
+              <SliderInput
+                label="Depth"
+                value={visualDepth}
+                min={400}
+                max={800}
+                step={10}
+                onChange={(v) => handleDimensionChange('depth', v)}
+              />
+            </div>
+          </CollapsibleSection>
+
+          {/* Gaps Section */}
+          <CollapsibleSection
+            id="applianceGaps"
+            title="Gaps"
+            icon={<GapsIcon />}
+          >
+            <div className="space-y-4">
+              <p className="text-xs text-gray-500 mb-3">Extra space around appliance (expands cabinet opening)</p>
+              <SliderInput
+                label="Top Gap"
+                value={topGap}
+                min={0}
+                max={100}
+                step={1}
+                onChange={(v) => handleGapChange('top', v)}
+              />
+              <SliderInput
+                label="Left Gap"
+                value={leftGap}
+                min={0}
+                max={50}
+                step={1}
+                onChange={(v) => handleGapChange('left', v)}
+              />
+              <SliderInput
+                label="Right Gap"
+                value={rightGap}
+                min={0}
+                max={50}
+                step={1}
+                onChange={(v) => handleGapChange('right', v)}
+              />
+              {/* Shell dimensions info */}
+              <div className="mt-3 p-3 bg-blue-50 rounded-lg">
+                <p className="text-xs text-blue-700 font-medium">Cabinet Opening (Shell)</p>
+                <p className="text-xs text-blue-600">
+                  {shellWidth}mm × {shellHeight}mm × {visualDepth}mm
+                </p>
+              </div>
+            </div>
+          </CollapsibleSection>
+
+          {/* Fridge Configuration - only for sideBySideFridge */}
+          {applianceType === 'sideBySideFridge' && selectedCabinet?.carcass?.config && (
+            <CollapsibleSection
+              id="applianceFridge"
+              title="Fridge Options"
+              icon={<FridgeIcon />}
+            >
+              <div className="space-y-3">
                 <div>
-                  <label className="text-xs text-gray-500 block mb-1.5">Handle Position</label>
+                  <label className="text-xs text-gray-500 block mb-1.5">Door Configuration</label>
                   <div className="flex bg-gray-100 p-1 rounded-lg">
                     <button
-                      onClick={() => handleFridgeConfigChange('doorSide', 'left')}
-                      className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${(selectedCabinet.carcass.config.fridgeDoorSide !== 'right') // Default left
+                      onClick={() => handleFridgeConfigChange('doorCount', 1)}
+                      className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${selectedCabinet.carcass.config.fridgeDoorCount === 1
                           ? 'bg-white text-blue-600 shadow-sm'
                           : 'text-gray-500 hover:text-gray-700'
                         }`}
                     >
-                      Left
+                      1 Door
                     </button>
                     <button
-                      onClick={() => handleFridgeConfigChange('doorSide', 'right')}
-                      className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${selectedCabinet.carcass.config.fridgeDoorSide === 'right'
+                      onClick={() => handleFridgeConfigChange('doorCount', 2)}
+                      className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${(selectedCabinet.carcass.config.fridgeDoorCount !== 1) // Default 2
                           ? 'bg-white text-blue-600 shadow-sm'
                           : 'text-gray-500 hover:text-gray-700'
                         }`}
                     >
-                      Right
+                      2 Doors
                     </button>
                   </div>
                 </div>
-              )}
-            </div>
-          </div>
-        )}
 
-        {/* View Assignment */}
-        <div className="space-y-2">
-          <h3 className="text-sm font-semibold text-gray-800 uppercase tracking-wide">View Assignment</h3>
-          <select
-            value={selectedCabinet.viewId || 'none'}
-            onChange={(e) => onViewChange(selectedCabinet.cabinetId, e.target.value)}
-            className="w-full p-2 border border-gray-300 rounded-lg text-sm"
+                {selectedCabinet.carcass.config.fridgeDoorCount === 1 && (
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1.5">Handle Position</label>
+                    <div className="flex bg-gray-100 p-1 rounded-lg">
+                      <button
+                        onClick={() => handleFridgeConfigChange('doorSide', 'left')}
+                        className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${(selectedCabinet.carcass.config.fridgeDoorSide !== 'right') // Default left
+                            ? 'bg-white text-blue-600 shadow-sm'
+                            : 'text-gray-500 hover:text-gray-700'
+                          }`}
+                      >
+                        Left
+                      </button>
+                      <button
+                        onClick={() => handleFridgeConfigChange('doorSide', 'right')}
+                        className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${selectedCabinet.carcass.config.fridgeDoorSide === 'right'
+                            ? 'bg-white text-blue-600 shadow-sm'
+                            : 'text-gray-500 hover:text-gray-700'
+                          }`}
+                      >
+                        Right
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </CollapsibleSection>
+          )}
+
+          {/* View Assignment Section */}
+          <CollapsibleSection
+            id="applianceView"
+            title="View Assignment"
+            icon={<ViewIcon />}
           >
-            <option value="none">No View</option>
-            {viewManager.activeViews.map((view) => (
-              <option key={view.id} value={view.id}>
-                {view.name}
-              </option>
-            ))}
-          </select>
+            <div className="space-y-2">
+              <select
+                value={selectedCabinet.viewId || 'none'}
+                onChange={(e) => onViewChange(selectedCabinet.cabinetId, e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="none">No View</option>
+                {viewManager.activeViews.map((view) => (
+                  <option key={view.id} value={view.id}>
+                    {view.name}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500">
+                Assign this appliance to a view for grouped movement.
+              </p>
+            </div>
+          </CollapsibleSection>
+        </div>
+
+        {/* Footer */}
+        <div className="p-4 border-t border-gray-200 bg-gray-50">
+          <p className="text-xs text-gray-500 text-center">
+            Appliances are not included in nesting exports
+          </p>
         </div>
       </div>
-
-      {/* Footer */}
-      <div className="p-4 border-t border-gray-200 bg-gray-50">
-        <p className="text-xs text-gray-500 text-center">
-          Appliances are not included in nesting exports
-        </p>
-      </div>
-    </motion.div>
+    </div>
   )
 }
 

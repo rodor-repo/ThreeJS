@@ -23,7 +23,6 @@ import { useOffTheFloor } from "./hooks/useOffTheFloor"
 import { useCabinetGroups } from "./hooks/useCabinetGroups"
 
 // Import components
-import { ViewSelector } from "../ViewSelector"
 import {
   PanelHeader,
   DimensionsSection,
@@ -33,6 +32,8 @@ import {
   SyncSection,
   OffTheFloorControl,
   SimpleColorPicker,
+  CollapsibleSection,
+  GroupingSection,
 } from "./components"
 
 // Import utils
@@ -374,12 +375,6 @@ export const DynamicPanel: React.FC<DynamicPanelProps> = ({
 
   if (!isVisible) return null
 
-  // Get cabinets in view for pair/sync sections
-  const cabinetsInView =
-    viewManager && selectedCabinet?.viewId && selectedCabinet.viewId !== "none"
-      ? viewManager.getCabinetsInView(selectedCabinet.viewId as ViewId)
-      : []
-
   return (
     <div
       className="fixed right-0 top-0 h-full bg-white shadow-lg border-l border-gray-200 transition-all duration-300 ease-in-out z-50 productPanel"
@@ -430,127 +425,156 @@ export const DynamicPanel: React.FC<DynamicPanelProps> = ({
           </div>
         ) : (
           <div className="p-4 space-y-4">
-            {/* View Selector */}
+            {/* Grouping Section (View + Pair + Sync merged) */}
             {viewManager && selectedCabinet && (
-              <ViewSelector
-                selectedViewId={selectedCabinet.viewId as ViewId | undefined}
-                activeViews={viewManager.activeViews}
-                onViewChange={(viewId) => {
-                  if (selectedCabinet?.cabinetId) {
-                    if (viewId === "none") {
-                      viewManager.assignCabinetToView(
-                        selectedCabinet.cabinetId,
-                        "none"
-                      )
-                      onViewChange?.(selectedCabinet.cabinetId, "none")
-                    } else {
-                      viewManager.assignCabinetToView(
-                        selectedCabinet.cabinetId,
-                        viewId
-                      )
-                      onViewChange?.(selectedCabinet.cabinetId, viewId)
-                    }
-                  }
+              <GroupingSection
+                viewManager={viewManager}
+                selectedCabinet={{
+                  cabinetId: selectedCabinet.cabinetId,
+                  sortNumber: selectedCabinet.sortNumber,
+                  viewId: selectedCabinet.viewId as ViewId | 'none' | undefined,
                 }}
-                onCreateView={() => {
-                  const newView = viewManager.createView()
-                  if (selectedCabinet?.cabinetId) {
-                    viewManager.assignCabinetToView(
-                      selectedCabinet.cabinetId,
-                      newView.id
-                    )
-                    onViewChange?.(selectedCabinet.cabinetId, newView.id)
-                  }
-                }}
-                cabinetId={selectedCabinet?.cabinetId}
                 allCabinets={allCabinets}
+                groups={groups}
+                onViewChange={onViewChange}
               />
             )}
 
-            {/* Pair Section */}
-            {viewManager &&
-              selectedCabinet &&
-              selectedCabinet.viewId &&
-              selectedCabinet.viewId !== "none" && (
-                <PairSection
-                  selectedCabinet={{
-                    cabinetId: selectedCabinet.cabinetId,
-                    sortNumber: selectedCabinet.sortNumber,
-                  }}
-                  cabinetsInView={cabinetsInView}
-                  allCabinets={(allCabinets || []).map((c) => ({
-                    cabinetId: c.cabinetId,
-                    sortNumber: c.sortNumber,
-                  }))}
-                  groupCabinets={groups.groupCabinets}
-                  onGroupChange={groups.handleGroupChange}
-                />
-              )}
-
-            {/* Sync Section */}
-            {viewManager &&
-              selectedCabinet &&
-              selectedCabinet.viewId &&
-              selectedCabinet.viewId !== "none" && (
-                <SyncSection
-                  selectedCabinet={{
-                    cabinetId: selectedCabinet.cabinetId,
-                    sortNumber: selectedCabinet.sortNumber,
-                  }}
-                  cabinetsInView={cabinetsInView}
-                  allCabinets={(allCabinets || []).map((c) => ({
-                    cabinetId: c.cabinetId,
-                    sortNumber: c.sortNumber,
-                  }))}
-                  syncCabinets={groups.syncCabinets}
-                  onSyncChange={groups.handleSyncChange}
-                />
-              )}
-
             {/* Dimensions */}
-            <DimensionsSection
-              dimsList={dimsList}
-              values={panelState.values}
-              editingValues={panelState.editingValues}
-              gdMapping={gdMapping}
-              drawerQty={drawerQty}
-              isModalFillerOrPanel={isModalFillerOrPanel}
-              onValueChange={handleValueChange}
-              onEditingChange={panelState.updateEditingValue}
-              onReset={handleResetDimension}
-              onResetAll={handleResetAll}
-              onValidate={handleDimensionValidate}
-            />
+            <CollapsibleSection
+              id="dimensions"
+              title="Dimensions"
+              icon={
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M16 3h5v5" />
+                  <path d="M8 21H3v-5" />
+                  <path d="M21 3l-7 7" />
+                  <path d="M3 21l7-7" />
+                </svg>
+              }
+            >
+              <DimensionsSection
+                dimsList={dimsList}
+                values={panelState.values}
+                editingValues={panelState.editingValues}
+                gdMapping={gdMapping}
+                drawerQty={drawerQty}
+                isModalFillerOrPanel={isModalFillerOrPanel}
+                onValueChange={handleValueChange}
+                onEditingChange={panelState.updateEditingValue}
+                onReset={handleResetDimension}
+                onResetAll={handleResetAll}
+                onValidate={handleDimensionValidate}
+                noWrapper
+              />
+            </CollapsibleSection>
 
             {/* Off the Floor - Only for Fillers and Panels */}
             {(selectedCabinet?.cabinetType === "filler" ||
               selectedCabinet?.cabinetType === "panel") && (
-              <OffTheFloorControl
-                value={offTheFloorState.offTheFloor}
-                editingValue={offTheFloorState.editingOffTheFloor}
-                onValueChange={offTheFloorState.handleOffTheFloorChange}
-                onEditingChange={offTheFloorState.setEditingOffTheFloor}
-              />
+              <CollapsibleSection
+                id="offTheFloor"
+                title="Off The Floor"
+                icon={
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <line x1="12" y1="19" x2="12" y2="5" />
+                    <polyline points="5 12 12 5 19 12" />
+                  </svg>
+                }
+              >
+                <OffTheFloorControl
+                  value={offTheFloorState.offTheFloor}
+                  editingValue={offTheFloorState.editingOffTheFloor}
+                  onValueChange={offTheFloorState.handleOffTheFloorChange}
+                  onEditingChange={offTheFloorState.setEditingOffTheFloor}
+                />
+              </CollapsibleSection>
             )}
 
             {/* Materials selection */}
             {wsProduct && (
-              <MaterialsSection
-                wsProduct={wsProduct}
-                materialOptions={materialOptions}
-                materialSelections={panelState.materialSelections}
-                onSelectionChange={handleMaterialSelectionChange}
-                onOpenColorPicker={(materialId) =>
-                  setOpenMaterialId(materialId)
+              <CollapsibleSection
+                id="materials"
+                title="Materials"
+                icon={
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <rect x="3" y="3" width="7" height="7" />
+                    <rect x="14" y="3" width="7" height="7" />
+                    <rect x="14" y="14" width="7" height="7" />
+                    <rect x="3" y="14" width="7" height="7" />
+                  </svg>
                 }
-              />
+              >
+                <MaterialsSection
+                  wsProduct={wsProduct}
+                  materialOptions={materialOptions}
+                  materialSelections={panelState.materialSelections}
+                  onSelectionChange={handleMaterialSelectionChange}
+                  onOpenColorPicker={(materialId) =>
+                    setOpenMaterialId(materialId)
+                  }
+                  noWrapper
+                />
+              </CollapsibleSection>
             )}
 
             {/* Material color selection (simple) */}
-            <SimpleColorPicker
-              color={panelState.materialColor}
-              onChange={handleMaterialColorChange}
-            />
+            <CollapsibleSection
+              id="color"
+              title="Material Color"
+              icon={
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M14.31 8l5.74 9.94" />
+                  <path d="M9.69 8h11.48" />
+                  <path d="M7.38 12l5.74-9.94" />
+                  <path d="M9.69 16L3.95 6.06" />
+                  <path d="M14.31 16H2.83" />
+                </svg>
+              }
+            >
+              <SimpleColorPicker
+                color={panelState.materialColor}
+                onChange={handleMaterialColorChange}
+                noWrapper
+              />
+            </CollapsibleSection>
 
             {/* Bottom actions */}
             <div className="pt-1.5">

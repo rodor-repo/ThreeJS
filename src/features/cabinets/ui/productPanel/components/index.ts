@@ -28,3 +28,10 @@ export type { SyncSectionProps } from "./SyncSection"
 
 export { OffTheFloorControl } from "./OffTheFloorControl"
 export type { OffTheFloorControlProps } from "./OffTheFloorControl"
+
+export { CollapsibleSection } from "./CollapsibleSection"
+export type { CollapsibleSectionProps } from "./CollapsibleSection"
+
+export { GroupingSection } from "./GroupingSection"
+export type { GroupingSectionProps } from "./GroupingSection"
+

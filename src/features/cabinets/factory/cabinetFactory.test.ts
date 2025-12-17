@@ -12,6 +12,13 @@ describe("cabinetFactory", () => {
     expect(getDefaultDimensions("tall").height).toBeGreaterThan(0)
   })
 
+  it("getDefaultDimensions returns appliance defaults", () => {
+    const dims = getDefaultDimensions("appliance")
+    expect(dims.width).toBe(600)
+    expect(dims.height).toBe(820)
+    expect(dims.depth).toBe(600)
+  })
+
   it("createCabinet returns group and CarcassAssembly for base standard", () => {
     const cab = createCabinet("base", "standard", { productId })
     expect(cab.group).toBeInstanceOf(THREE.Group)
@@ -24,5 +31,22 @@ describe("cabinetFactory", () => {
     // drawers are enabled in drawer base variant
     expect(cab.carcass["config"].drawerEnabled).toBe(true)
     expect(cab.carcass.group.position.x).toBeTypeOf("number")
+  })
+
+  it("createCabinet creates appliance cabinet with correct config", () => {
+    const cab = createCabinet("appliance", "dishwasher", { productId })
+    expect(cab.group).toBeInstanceOf(THREE.Group)
+    expect(cab.carcass).toBeInstanceOf(CarcassAssembly)
+    expect(cab.cabinetType).toBe("appliance")
+    expect(cab.carcass.config.applianceType).toBe("dishwasher")
+    expect(cab.carcass.config.applianceTopGap).toBe(0)
+    expect(cab.carcass.config.applianceLeftGap).toBe(0)
+    expect(cab.carcass.config.applianceRightGap).toBe(0)
+  })
+
+  it("createCabinet appliance has shell and visual parts", () => {
+    const cab = createCabinet("appliance", "dishwasher", { productId })
+    expect(cab.carcass._applianceShell).toBeDefined()
+    expect(cab.carcass._applianceVisual).toBeDefined()
   })
 })

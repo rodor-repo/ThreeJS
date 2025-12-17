@@ -46,6 +46,11 @@ export interface CarcassConfig {
   // Wardrobe-specific options
   wardrobeDrawerHeight?: number // Fixed drawer height for wardrobe (default 220mm)
   wardrobeDrawerBuffer?: number // Buffer space between drawers and shelves (default 50mm)
+  // Appliance-specific options
+  applianceType?: "dishwasher" | "washingMachine" | "sideBySideFridge"
+  applianceTopGap?: number // Gap at top between visual and shell (default: 0mm)
+  applianceLeftGap?: number // Gap on left side (default: 0mm)
+  applianceRightGap?: number // Gap on right side (default: 0mm)
 }
 
 export { type CabinetType } from "../scene/types"
@@ -85,6 +90,10 @@ export class CarcassAssembly {
   public _bulkheadFace?: BulkheadFace // For bulkhead type cabinet
   public _bulkheadReturnLeft?: BulkheadReturn // Left return for bulkhead cabinet
   public _bulkheadReturnRight?: BulkheadReturn // Right return for bulkhead cabinet
+
+  // Appliance specific parts
+  public _applianceShell?: { group: THREE.Group; dispose: () => void } // Transparent functional shell
+  public _applianceVisual?: { group: THREE.Group; dispose: () => void } // Decorative inner visual
 
   public productId!: string
   public cabinetId!: string
@@ -411,6 +420,8 @@ export class CarcassAssembly {
     if (this._bulkheadReturnRight) { this._bulkheadReturnRight.dispose(); this._bulkheadReturnRight = undefined }
     if (this._kickerFace) { this._kickerFace.dispose(); this._kickerFace = undefined }
     if (this._underPanelFace) { this._underPanelFace.dispose(); this._underPanelFace = undefined }
+    if (this._applianceShell) { this._applianceShell.dispose(); this._applianceShell = undefined }
+    if (this._applianceVisual) { this._applianceVisual.dispose(); this._applianceVisual = undefined }
     
     if (this.leftEnd) this.leftEnd.dispose()
     if (this.rightEnd) this.rightEnd.dispose()

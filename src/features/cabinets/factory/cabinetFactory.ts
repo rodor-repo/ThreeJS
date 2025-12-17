@@ -34,6 +34,8 @@ const defaultDimensions: Defaults = {
   // UnderPanel: width = cabinet width, height = thickness (16mm), depth = parent depth - 20
   underPanel: { width: 600, height: 16, depth: 280 },
   benchtop: { width: 2000, height: 40, depth: 600 }, // Standard benchtop size
+  // Appliance: standard built-in appliance dimensions
+  appliance: { width: 600, height: 820, depth: 600 },
 }
 
 const getProductDefaultDimensions = (productId: string | undefined) => {
@@ -71,6 +73,7 @@ const getDefaultConfig = (
     wardrobeDrawerQuantity?: number
     wardrobeDrawerHeight?: number
     wardrobeDrawerBuffer?: number
+    applianceType?: "dishwasher" | "washingMachine" | "sideBySideFridge"
   }
 ): Partial<CarcassConfig> => {
   const baseConfig: Partial<CarcassConfig> = {
@@ -118,6 +121,14 @@ const getDefaultConfig = (
     case "bulkhead":
     case "underPanel":
       return baseConfig
+    case "appliance":
+      return {
+        ...baseConfig,
+        applianceType: opts?.applianceType || "dishwasher",
+        applianceTopGap: 0,
+        applianceLeftGap: 0,
+        applianceRightGap: 0,
+      }
     default:
       return { shelfCount: 2, shelfSpacing: 300 }
   }
@@ -137,6 +148,8 @@ export const createCabinet = (
     wardrobeDrawerQuantity?: number // Number of drawers at bottom (0 or more)
     wardrobeDrawerHeight?: number // Fixed drawer height (default 220mm)
     wardrobeDrawerBuffer?: number // Buffer between drawers and shelves (default 50mm)
+    // Appliance-specific options
+    applianceType?: "dishwasher" | "washingMachine" | "sideBySideFridge"
   }
 ): CabinetData => {
   const productId = opts?.productId

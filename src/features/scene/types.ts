@@ -42,6 +42,7 @@ export type CabinetType =
   | "bulkhead"
   | "benchtop"
   | "underPanel"
+  | "appliance"
 
 export type CabinetData = {
   group: THREE.Group

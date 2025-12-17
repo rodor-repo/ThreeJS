@@ -1,0 +1,249 @@
+{
+  "id": "room-1765806062426-8fk8p44ph",
+  "name": "new 1",
+  "category": "Kitchen",
+  "savedAt": "2025-12-15T13:41:02.426Z",
+  "wallSettings": {
+    "height": 2700,
+    "length": 1451,
+    "color": "#dcbfa0",
+    "backWallLength": 1451,
+    "leftWallLength": 600,
+    "rightWallLength": 600,
+    "leftWallVisible": true,
+    "rightWallVisible": true,
+    "additionalWalls": []
+  },
+  "cabinets": [
+    {
+      "cabinetId": "cabinet-1-2eeh5b",
+      "productId": "8253380207266-Product-30b830e9-8889-4693-99d8-a17e5aec04b5",
+      "productName": "Base Double Door Cabinet",
+      "cabinetType": "base",
+      "subcategoryId": "standard",
+      "dimensions": {
+        "width": 851,
+        "height": 720,
+        "depth": 600
+      },
+      "viewId": "A",
+      "position": {
+        "x": 600,
+        "y": 64,
+        "z": 0
+      },
+      "materialSelections": {
+        "8261315543186-ebc50a1c-c56e-417f-91f7-07c1c482c084": {
+          "priceRangeId": "8267397881822-e37c1cb7-7204-4c15-86c8-31c559626784",
+          "colorId": "8267768680717-color-bf7856ce-77f4-4413-96aa-02ef4df44793",
+          "finishId": "8267769252261-finish-29d69792-7601-4912-b1f2-f6fe7cee4104"
+        },
+        "8258413213288-886694e9-db95-427a-ac62-a20422aca3cf": {
+          "priceRangeId": "8267602758367-50d4a8bc-e4fc-430e-95d7-d59022992fc6",
+          "colorId": "8252116682325-color-fb3e0766-5137-4b8a-860f-a585e0934bdf",
+          "finishId": "8253753365439-finish-b25f9fc2-672e-4831-aa88-3cfade50dfa7"
+        }
+      },
+      "materialColor": "#ffffff",
+      "dimensionValues": {
+        "1": 1,
+        "2": 2,
+        "8258155301514-dim-d340a151-df72-4ea7-81ba-21564d7805ae": 2,
+        "8261314903663-dim-5e312aa4-a998-4369-92d6-1288fc9f77dc": 851,
+        "8261315085495-dim-40d0af67-6436-4be6-a8eb-499733c38e6e": 720,
+        "8260381186817-dim-847ff9ec-3631-48f4-a0f7-f016272146ec": 600,
+        "8259832525570-dim-665fcc5e-ba1e-46dd-9956-d65942ec8ab0": 1
+      },
+      "shelfCount": 1,
+      "doorEnabled": true,
+      "doorCount": 2,
+      "overhangDoor": false,
+      "drawerEnabled": false,
+      "drawerQuantity": 3,
+      "drawerHeights": [],
+      "kickerHeight": 64,
+      "leftLock": false,
+      "rightLock": true,
+      "group": [
+        {
+          "cabinetId": "cabinet-3-1o1pb0",
+          "percentage": 100
+        }
+      ],
+      "sortNumber": 1
+    },
+    {
+      "cabinetId": "cabinet-2-grswl6",
+      "productId": "8253380113595-Product-2ae6de80-0818-440b-be32-ba84f6224395",
+      "productName": "Wardrobe 3 Drawers set - No Soft Close",
+      "cabinetType": "wardrobe",
+      "subcategoryId": "standard",
+      "dimensions": {
+        "width": 600,
+        "height": 2400,
+        "depth": 600
+      },
+      "viewId": "A",
+      "position": {
+        "x": 0,
+        "y": 100,
+        "z": 0
+      },
+      "materialSelections": {
+        "8261315543186-ebc50a1c-c56e-417f-91f7-07c1c482c084": {
+          "priceRangeId": "8267397881822-e37c1cb7-7204-4c15-86c8-31c559626784",
+          "colorId": "8267768680717-color-bf7856ce-77f4-4413-96aa-02ef4df44793",
+          "finishId": "8267769252261-finish-29d69792-7601-4912-b1f2-f6fe7cee4104"
+        }
+      },
+      "materialColor": "#ffffff",
+      "dimensionValues": {
+        "1": 1,
+        "2": 2,
+        "8261315085495-dim-40d0af67-6436-4be6-a8eb-499733c38e6e": 2400,
+        "8260381186817-dim-847ff9ec-3631-48f4-a0f7-f016272146ec": 600,
+        "8248968261822-dim-145da56b-feab-4b1b-9213-9460d6c940f3": 100,
+        "8261314903663-dim-5e312aa4-a998-4369-92d6-1288fc9f77dc": 600,
+        "8256621221664-dim-abd0cf66-0631-4ff9-9763-a4e17da5e852": 220,
+        "8251240821516-dim-6f5de689-a5f7-468e-9fc1-b18ec614434f": 1,
+        "8256099627969-dim-be15eaa6-6df5-41b2-ab7f-6dbe230e6cd9": 3
+      },
+      "shelfCount": 1,
+      "doorEnabled": false,
+      "doorCount": 2,
+      "overhangDoor": false,
+      "drawerEnabled": true,
+      "drawerQuantity": 3,
+      "drawerHeights": [
+        220,
+        220,
+        220
+      ],
+      "sortNumber": 2
+    },
+    {
+      "cabinetId": "cabinet-3-1o1pb0",
+      "productId": "8253466694538-Product-9de4f16b-eeb9-4efb-ab90-227e56e7264c",
+      "productName": "Top Double door Custom Cabinet",
+      "cabinetType": "top",
+      "subcategoryId": "standard",
+      "dimensions": {
+        "width": 447,
+        "height": 600,
+        "depth": 300
+      },
+      "viewId": "A",
+      "position": {
+        "x": 599.9999999999991,
+        "y": 1891.2815338042383,
+        "z": 0
+      },
+      "materialSelections": {
+        "8261315543186-ebc50a1c-c56e-417f-91f7-07c1c482c084": {
+          "priceRangeId": "8267397881822-e37c1cb7-7204-4c15-86c8-31c559626784",
+          "colorId": "8267768680717-color-bf7856ce-77f4-4413-96aa-02ef4df44793",
+          "finishId": "8267769252261-finish-29d69792-7601-4912-b1f2-f6fe7cee4104"
+        },
+        "8258413213288-886694e9-db95-427a-ac62-a20422aca3cf": {
+          "priceRangeId": "8267602758367-50d4a8bc-e4fc-430e-95d7-d59022992fc6",
+          "colorId": "8252116682325-color-fb3e0766-5137-4b8a-860f-a585e0934bdf",
+          "finishId": "8253753365439-finish-b25f9fc2-672e-4831-aa88-3cfade50dfa7"
+        }
+      },
+      "materialColor": "#ffffff",
+      "dimensionValues": {
+        "1": 1,
+        "2": 2,
+        "8261315085495-dim-40d0af67-6436-4be6-a8eb-499733c38e6e": 600,
+        "8260381186817-dim-847ff9ec-3631-48f4-a0f7-f016272146ec": 300,
+        "8259832525570-dim-665fcc5e-ba1e-46dd-9956-d65942ec8ab0": 1,
+        "8261314903663-dim-5e312aa4-a998-4369-92d6-1288fc9f77dc": 512,
+        "8258155301514-dim-d340a151-df72-4ea7-81ba-21564d7805ae": 2,
+        "8251321365125-dim-14bac23a-23f2-4cd9-a3b5-9e5148fc4397": "YES"
+      },
+      "shelfCount": 1,
+      "doorEnabled": true,
+      "doorCount": 2,
+      "overhangDoor": true,
+      "drawerEnabled": false,
+      "drawerQuantity": 3,
+      "drawerHeights": [],
+      "leftLock": false,
+      "rightLock": true,
+      "group": [
+        {
+          "cabinetId": "cabinet-1-2eeh5b",
+          "percentage": 100
+        }
+      ],
+      "sortNumber": 3
+    },
+    {
+      "cabinetId": "cabinet-4-rp7ltb",
+      "productId": "8253379775080-Product-9258687e-53db-4833-9a43-6d1f58229605",
+      "productName": "Under Top Cabinets Panel",
+      "cabinetType": "underPanel",
+      "subcategoryId": "8257878090411-SubCategory-029bbd4a-3c04-47ff-abae-59ebfa2e380d",
+      "dimensions": {
+        "width": 447,
+        "height": 16,
+        "depth": 280
+      },
+      "viewId": "A",
+      "position": {
+        "x": 597.9999999999991,
+        "y": 1891.2815338042383,
+        "z": 0
+      },
+      "shelfCount": 0,
+      "doorEnabled": false,
+      "doorCount": 2,
+      "overhangDoor": false,
+      "drawerEnabled": false,
+      "drawerQuantity": 3,
+      "drawerHeights": [],
+      "sortNumber": 4,
+      "hideLockIcons": true
+    },
+    {
+      "cabinetId": "cabinet-5-4fk9vq",
+      "productId": "8253380277860-Product-ea21d38a-eb89-40b5-8cdc-c96405e41333",
+      "productName": "Linear Melamine Bulkhead",
+      "cabinetType": "bulkhead",
+      "subcategoryId": "8257879054453-SubCategory-dd2dac3d-180b-419e-9cb3-ba55f44ee420",
+      "dimensions": {
+        "width": 447,
+        "height": 208.71846619576172,
+        "depth": 16
+      },
+      "position": {
+        "x": 823.4999999999991,
+        "y": 2595.640766902119,
+        "z": 292
+      },
+      "shelfCount": 0,
+      "doorEnabled": false,
+      "doorCount": 2,
+      "overhangDoor": false,
+      "drawerEnabled": false,
+      "drawerQuantity": 3,
+      "drawerHeights": [],
+      "sortNumber": 5,
+      "hideLockIcons": true,
+      "bulkheadParentCabinetId": "cabinet-3-1o1pb0"
+    }
+  ],
+  "views": [
+    {
+      "id": "A",
+      "name": "View A",
+      "cabinetIds": [
+        "cabinet-2-grswl6",
+        "cabinet-3-1o1pb0",
+        "cabinet-4-rp7ltb",
+        "cabinet-1-2eeh5b"
+      ]
+    }
+  ],
+  "cabinetSyncs": []
+}

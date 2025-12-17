@@ -20,9 +20,10 @@ interface MainMenuProps {
   wsProducts: WsProducts | null
   setWsProducts: React.Dispatch<React.SetStateAction<WsProducts | null>>
   onLoadRoom?: (savedRoom: import('@/data/savedRooms').SavedRoom) => Promise<void>
+  onApplianceSelect?: (applianceType: 'dishwasher' | 'washingMachine' | 'sideBySideFridge') => void
 }
 
-const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect: _onCategorySelect, onSubcategorySelect, selectedCategory: _selectedCategory, onMenuStateChange, wsProducts, setWsProducts, onLoadRoom }) => {
+const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect: _onCategorySelect, onSubcategorySelect, selectedCategory: _selectedCategory, onMenuStateChange, wsProducts, setWsProducts, onLoadRoom, onApplianceSelect }) => {
   const [isOpen, setIsOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -206,6 +207,17 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect: _onCategorySelect
 
     onSubcategorySelect?.(demoCategory, demoSub, productId)
   }, [onSubcategorySelect])
+
+  // Handle appliance selection - bypasses product prefetch
+  const handleApplianceClick = useCallback((applianceType: 'dishwasher' | 'washingMachine' | 'sideBySideFridge') => {
+    // Close menus immediately
+    setShowSubmenu(false)
+    setIsOpen(false)
+    onMenuStateChange?.(false)
+    
+    // Trigger appliance creation (no product prefetch needed)
+    onApplianceSelect?.(applianceType)
+  }, [onApplianceSelect, onMenuStateChange])
 
   const toggleMenu = () => {
     const newState = !isOpen
@@ -582,11 +594,54 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect: _onCategorySelect
                 </div>
               )}
 
-              {/* Appliances Subcategories (placeholder for future implementation) */}
+              {/* Appliances Menu */}
               {selectedTopLevelMenu === 'appliances' && (
                 <div className="p-2 sm:p-4">
-                  <div className="text-center py-8">
-                    <p className="text-gray-500 text-sm">Appliances coming soon</p>
+                  <div className="space-y-3">
+                    <motion.button
+                      onClick={() => handleApplianceClick('dishwasher')}
+                      className="w-full p-4 rounded-lg border-2 border-gray-200 hover:border-blue-500 hover:shadow-md transition-all duration-150"
+                      whileHover={{ scale: 1.01 }}
+                      whileTap={{ scale: 0.99 }}
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">🍽️</span>
+                        <div className="text-left">
+                          <h3 className="font-semibold text-gray-800">Dishwasher</h3>
+                          <p className="text-sm text-gray-500">Standard dishwasher unit</p>
+                        </div>
+                      </div>
+                    </motion.button>
+
+                    <motion.button
+                      onClick={() => handleApplianceClick('washingMachine')}
+                      className="w-full p-4 rounded-lg border-2 border-gray-200 hover:border-blue-500 hover:shadow-md transition-all duration-150"
+                      whileHover={{ scale: 1.01 }}
+                      whileTap={{ scale: 0.99 }}
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">🧺</span>
+                        <div className="text-left">
+                          <h3 className="font-semibold text-gray-800">Washing Machine</h3>
+                          <p className="text-sm text-gray-500">Front-loading washer</p>
+                        </div>
+                      </div>
+                    </motion.button>
+
+                    <motion.button
+                      onClick={() => handleApplianceClick('sideBySideFridge')}
+                      className="w-full p-4 rounded-lg border-2 border-gray-200 hover:border-blue-500 hover:shadow-md transition-all duration-150"
+                      whileHover={{ scale: 1.01 }}
+                      whileTap={{ scale: 0.99 }}
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">🧊</span>
+                        <div className="text-left">
+                          <h3 className="font-semibold text-gray-800">Side-by-Side Fridge</h3>
+                          <p className="text-sm text-gray-500">Large refrigerator unit</p>
+                        </div>
+                      </div>
+                    </motion.button>
                   </div>
                 </div>
               )}

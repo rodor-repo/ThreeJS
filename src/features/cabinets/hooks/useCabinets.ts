@@ -42,11 +42,12 @@ export const useCabinets = (
         fillerReturnPosition?: "left" | "right"
         customDimensions?: Partial<CarcassDimensions>
         additionalProps?: AdditionalCabinetProps
+        applianceType?: "dishwasher" | "washingMachine" | "sideBySideFridge"
       }
     ) => {
       if (!sceneRef.current) return
 
-      const { productId, productName, fillerReturnPosition, customDimensions, additionalProps } = options || {}
+      const { productId, productName, fillerReturnPosition, customDimensions, additionalProps, applianceType } = options || {}
 
       const fillerType =
         categoryType === "filler"
@@ -58,7 +59,8 @@ export const useCabinets = (
         productId,
         fillerType,
         fillerReturnPosition,
-        customDimensions
+        customDimensions,
+        applianceType
       })
       // Add sortNumber based on order added to scene, plus any additional properties
       const cabinetWithProps: CabinetData = { 

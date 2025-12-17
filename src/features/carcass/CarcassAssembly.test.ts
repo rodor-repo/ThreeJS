@@ -243,6 +243,84 @@ describe("CarcassAssembly", () => {
     })
   })
 
+  describe("Construction - Appliance Cabinet", () => {
+    beforeEach(() => {
+      assembly = CarcassAssembly.create(
+        "appliance",
+        createTestDimensions(600, 820, 600),
+        {
+          applianceType: "dishwasher",
+          applianceTopGap: 10,
+          applianceLeftGap: 5,
+          applianceRightGap: 5,
+        },
+        productId,
+        cabinetId
+      )
+    })
+
+    it("creates appliance cabinet with shell and visual", () => {
+      expect(assembly.cabinetType).toBe("appliance")
+      expect(assembly._applianceShell).toBeDefined()
+      expect(assembly._applianceVisual).toBeDefined()
+    })
+
+    it("stores appliance config correctly", () => {
+      expect(assembly.config.applianceType).toBe("dishwasher")
+      expect(assembly.config.applianceTopGap).toBe(10)
+      expect(assembly.config.applianceLeftGap).toBe(5)
+      expect(assembly.config.applianceRightGap).toBe(5)
+    })
+
+    it("has group with children (shell and visual)", () => {
+      expect(assembly.group.children.length).toBeGreaterThan(0)
+    })
+
+    it("does not create traditional carcass parts", () => {
+      expect(assembly.shelves.length).toBe(0)
+      expect(assembly.legs.length).toBe(0)
+      expect(assembly.doors.length).toBe(0)
+      expect(assembly.drawers.length).toBe(0)
+    })
+
+    it("getPartDimensions returns empty array (appliances excluded from exports)", () => {
+      const parts = assembly.getPartDimensions()
+      expect(Array.isArray(parts)).toBe(true)
+      expect(parts.length).toBe(0)
+    })
+
+    it("supports different appliance types", () => {
+      assembly.dispose()
+      
+      const types: Array<"dishwasher" | "washingMachine" | "sideBySideFridge"> = [
+        "dishwasher",
+        "washingMachine", 
+        "sideBySideFridge"
+      ]
+      
+      types.forEach((applianceType) => {
+        const testAssembly = CarcassAssembly.create(
+          "appliance",
+          createTestDimensions(600, 820, 600),
+          { applianceType },
+          productId,
+          cabinetId
+        )
+        expect(testAssembly.config.applianceType).toBe(applianceType)
+        testAssembly.dispose()
+      })
+    })
+
+    it("handles dimension updates", () => {
+      const newDims = createTestDimensions(700, 900, 650)
+      assembly.updateDimensions(newDims)
+      
+      expect(assembly.dimensions.width).toBe(700)
+      expect(assembly.dimensions.height).toBe(900)
+      expect(assembly.dimensions.depth).toBe(650)
+    })
+  })
+
   // ============================================
   // CONFIGURATION DEFAULTS
   // ============================================
@@ -646,6 +724,7 @@ describe("CarcassAssembly", () => {
         "kicker",
         "underPanel",
         "bulkhead",
+        "appliance",
       ]
 
       types.forEach((type) => {
@@ -679,6 +758,7 @@ describe("CarcassAssembly", () => {
         "kicker",
         "underPanel",
         "bulkhead",
+        "appliance",
       ]
 
       types.forEach((type) => {

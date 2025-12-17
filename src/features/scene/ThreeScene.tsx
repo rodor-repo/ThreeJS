@@ -8,6 +8,7 @@ import { useViewManager } from '../cabinets/hooks/useViewManager'
 import { CabinetLockIcons } from './ui/CabinetLockIcons'
 import ProductPanel from '../cabinets/ui/ProductPanel'
 import { cabinetPanelState } from '../cabinets/ui/ProductPanel'
+import AppliancePanel from '../cabinets/ui/AppliancePanel'
 import { useRoomPersistence } from './hooks/useRoomPersistence'
 import { useUndoRedo } from './hooks/useUndoRedo'
 import { useCameraDrag } from './hooks/useCameraDrag'
@@ -73,9 +74,13 @@ interface ThreeSceneProps {
   wsProducts?: WsProducts | null
   /** Callback to get the loadRoom function for restoring saved rooms */
   onLoadRoomReady?: (loadRoom: (savedRoom: SavedRoom) => Promise<void>) => void
+  /** Selected appliance type from menu */
+  selectedApplianceType?: 'dishwasher' | 'washingMachine' | 'sideBySideFridge' | null
+  /** Callback when appliance is created */
+  onApplianceCreated?: () => void
 }
 
-const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChange, selectedCategory, selectedSubcategory, isMenuOpen = false, selectedProductId, wsProducts, onLoadRoomReady }) => {
+const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChange, selectedCategory, selectedSubcategory, isMenuOpen = false, selectedProductId, wsProducts, onLoadRoomReady, selectedApplianceType, onApplianceCreated }) => {
   const mountRef = useRef<HTMLDivElement>(null);
   const [cameraMode, setCameraMode] = useState<'constrained' | 'free'>('constrained')
   const [dimensionsVisible, setDimensionsVisible] = useState(true)
@@ -242,6 +247,26 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     createCabinet,
     setSelectedCabinet,
   })
+
+  // Handle appliance creation from menu
+  useEffect(() => {
+    if (!selectedApplianceType || !sceneRef.current) return
+
+    // Create appliance cabinet with synthetic productId
+    const cabinet = createCabinet("appliance", "appliance", {
+      productId: `appliance-${selectedApplianceType}`,
+      applianceType: selectedApplianceType,
+    })
+
+    if (cabinet) {
+      // Auto-select the new appliance
+      setSelectedCabinet(cabinet)
+      setShowProductPanel(true)  // Will show AppliancePanel due to type check
+    }
+
+    // Notify parent that appliance was created
+    onApplianceCreated?.()
+  }, [selectedApplianceType, sceneRef, createCabinet, setSelectedCabinet, setShowProductPanel, onApplianceCreated])
 
   // initial wall/floor creation is handled by useThreeRenderer
 
@@ -691,9 +716,26 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
 
       {/* Info Panel */}
 
-      {/* Product Panel */}
-      <ProductPanel
-        isVisible={showProductPanel}
+      {/* Appliance Panel - shown when appliance is selected */}
+      {showProductPanel && selectedCabinet?.cabinetType === 'appliance' && (
+        <AppliancePanel
+          isVisible={true}
+          selectedCabinet={selectedCabinet}
+          onClose={() => {
+            setShowProductPanel(false)
+            setSelectedCabinet(null)
+          }}
+          viewManager={viewManager}
+          onViewChange={(cabinetId, viewId) => {
+            updateCabinetViewId(cabinetId, viewId === 'none' ? undefined : viewId)
+          }}
+        />
+      )}
+
+      {/* Product Panel - shown when NON-appliance cabinet is selected */}
+      {showProductPanel && selectedCabinet?.cabinetType !== 'appliance' && (
+        <ProductPanel
+          isVisible={true}
         onClose={() => {
           setShowProductPanel(false);
           setSelectedCabinet(null);
@@ -1025,6 +1067,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
           }
         }}
       />
+      )}
 
       {/* Save Modal */}
       <SaveModal

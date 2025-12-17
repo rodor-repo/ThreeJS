@@ -39,6 +39,7 @@ export default function Home() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [wsProducts, setWsProducts] = useState<WsProducts | null>(null)
   const loadRoomRef = useRef<((savedRoom: SavedRoom) => Promise<void>) | null>(null)
+  const [selectedApplianceType, setSelectedApplianceType] = useState<'dishwasher' | 'washingMachine' | 'sideBySideFridge' | null>(null)
 
 
   const handleCategorySelect = (category: Category) => {
@@ -61,6 +62,14 @@ export default function Home() {
     setIsMenuOpen(isOpen)
   }
 
+  const handleApplianceSelect = (applianceType: 'dishwasher' | 'washingMachine' | 'sideBySideFridge') => {
+    setSelectedApplianceType(applianceType)
+    // Clear cabinet selection to avoid conflicts
+    setSelectedCategory(null)
+    setSelectedSubcategory(null)
+    setSelectedProductId(undefined)
+  }
+
   return (
     <main className="h-screen w-full relative">
       {/* Main Menu */}
@@ -76,6 +85,7 @@ export default function Home() {
             await loadRoomRef.current(savedRoom)
           }
         }}
+        onApplianceSelect={handleApplianceSelect}
       />
 
       {/* Three.js Scene */}
@@ -87,6 +97,8 @@ export default function Home() {
         selectedProductId={selectedProductId}
         isMenuOpen={isMenuOpen}
         wsProducts={wsProducts}
+        selectedApplianceType={selectedApplianceType}
+        onApplianceCreated={() => setSelectedApplianceType(null)}
         onLoadRoomReady={(loadRoom) => {
           loadRoomRef.current = loadRoom
         }}

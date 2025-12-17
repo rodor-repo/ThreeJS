@@ -296,6 +296,11 @@ export class PartDataManager {
    * Extracts actual part dimensions from CarcassAssembly
    */
   public updateCabinetParts(cabinet: CabinetData): void {
+    // Skip appliance cabinets entirely - they are not manufactured parts
+    if (cabinet.cabinetType === 'appliance') {
+      return
+    }
+
     try {
       const carcass = cabinet.carcass
       const partDimensions = carcass.getPartDimensions()
@@ -394,13 +399,16 @@ export class PartDataManager {
    * Update all cabinets in the scene
    */
   public updateAllCabinets(cabinets: CabinetData[]): void {
+    // Filter out appliance cabinets - they should not be in the parts database
+    const filteredCabinets = cabinets.filter(c => c.cabinetType !== 'appliance')
+    
     // Update existing cabinets
-    cabinets.forEach((cabinet) => {
+    filteredCabinets.forEach((cabinet) => {
       this.updateCabinetParts(cabinet)
     })
 
-    // Remove cabinets that no longer exist
-    const currentCabinetIds = new Set(cabinets.map((c) => c.cabinetId))
+    // Remove cabinets that no longer exist (including any appliances that might have been added previously)
+    const currentCabinetIds = new Set(filteredCabinets.map((c) => c.cabinetId))
     const cabinetsToRemove: string[] = []
     this.partDatabase.forEach((_, cabinetId) => {
       if (!currentCabinetIds.has(cabinetId)) {
@@ -457,6 +465,7 @@ export class PartDataManager {
       wardrobe: 'Wardrobe',
       kicker: 'Kicker',
       bulkhead: 'Bulkhead',
+      appliance: 'Appliance',
     }
     return typeMap[cabinetType.toLowerCase()] || 
            cabinetType.charAt(0).toUpperCase() + cabinetType.slice(1) + ' Cabinet'

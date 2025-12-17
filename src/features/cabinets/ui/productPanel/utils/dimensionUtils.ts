@@ -140,25 +140,25 @@ export interface ExtractedDimensions {
 }
 
 /**
- * Extract primary dimension values from the values object using GD mappings
+ * Pure utility to extract dimensions from a values object based on GD mapping
+ * Can be used by both ProductPanel and CabinetFactory
  */
-export function extractPrimaryDimensions(
+export function getExtractedDimensions(
   vals: Record<string, number | string>,
   dimsList: DimEntry[],
   gdMapping: GDMapping,
-  selectedCabinet: SelectedCabinetSnapshot,
-  isModalFillerOrPanel: boolean,
+  initialDefaults?: Partial<ExtractedDimensions>,
+  isModalFillerOrPanel = false,
   changedId?: string
 ): ExtractedDimensions {
-  let width = selectedCabinet.dimensions.width
-  let height = selectedCabinet.dimensions.height
-  let depth = selectedCabinet.dimensions.depth
-  let overhangDoor = selectedCabinet.overhangDoor ?? false
-  let shelfCount: number | undefined =
-    selectedCabinet.carcass?.config?.shelfCount
-  let drawerQty: number | undefined =
-    selectedCabinet.carcass?.config?.drawerQuantity
-  let doorQty: number | undefined = selectedCabinet.carcass?.config?.doorCount
+  let width = initialDefaults?.width ?? 0
+  let height = initialDefaults?.height ?? 0
+  let depth = initialDefaults?.depth ?? 0
+  let overhangDoor = initialDefaults?.overhangDoor ?? false
+  let shelfCount = initialDefaults?.shelfCount
+  let drawerQty = initialDefaults?.drawerQty
+  let doorQty = initialDefaults?.doorQty
+  
   const pendingDrawerHeights: Record<number, number> = {}
 
   dimsList.forEach(([id, dimObj]) => {
@@ -227,6 +227,35 @@ export function extractPrimaryDimensions(
     doorQty,
     pendingDrawerHeights,
   }
+}
+
+/**
+ * Extract primary dimension values from the values object using GD mappings
+ */
+export function extractPrimaryDimensions(
+  vals: Record<string, number | string>,
+  dimsList: DimEntry[],
+  gdMapping: GDMapping,
+  selectedCabinet: SelectedCabinetSnapshot,
+  isModalFillerOrPanel: boolean,
+  changedId?: string
+): ExtractedDimensions {
+  return getExtractedDimensions(
+    vals,
+    dimsList,
+    gdMapping,
+    {
+      width: selectedCabinet.dimensions.width,
+      height: selectedCabinet.dimensions.height,
+      depth: selectedCabinet.dimensions.depth,
+      overhangDoor: selectedCabinet.overhangDoor,
+      shelfCount: selectedCabinet.carcass?.config?.shelfCount,
+      drawerQty: selectedCabinet.carcass?.config?.drawerQuantity,
+      doorQty: selectedCabinet.carcass?.config?.doorCount,
+    },
+    isModalFillerOrPanel,
+    changedId
+  )
 }
 
 /**

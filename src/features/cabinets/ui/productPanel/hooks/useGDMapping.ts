@@ -16,6 +16,30 @@ export interface GDMapping {
 }
 
 /**
+ * Creates a GD mapping object from raw threeJsGDs data
+ */
+export function getGDMapping(
+  threeJsGDs: Record<GDThreeJsType, string[]> | undefined
+): GDMapping {
+  return {
+    widthGDIds: threeJsGDs?.width || [],
+    heightGDIds: threeJsGDs?.height || [],
+    depthGDIds: threeJsGDs?.depth || [],
+    doorOverhangGDIds: threeJsGDs?.doorOverhang || [],
+    shelfQtyGDIds: threeJsGDs?.shelfQty || [],
+    drawerQtyGDIds: threeJsGDs?.drawerQty || [],
+    doorQtyGDIds: threeJsGDs?.doorQty || [],
+    drawerHeightGDMap: {
+      0: threeJsGDs?.drawerH1 || [],
+      1: threeJsGDs?.drawerH2 || [],
+      2: threeJsGDs?.drawerH3 || [],
+      3: threeJsGDs?.drawerH4 || [],
+      4: threeJsGDs?.drawerH5 || [],
+    },
+  }
+}
+
+/**
  * Hook to derive GD ID lists from threeJsGDs configuration
  * Memoized to prevent unnecessary recalculations
  */
@@ -23,22 +47,7 @@ export function useGDMapping(
   threeJsGDs: Record<GDThreeJsType, string[]> | undefined
 ): GDMapping {
   return useMemo(
-    () => ({
-      widthGDIds: threeJsGDs?.width || [],
-      heightGDIds: threeJsGDs?.height || [],
-      depthGDIds: threeJsGDs?.depth || [],
-      doorOverhangGDIds: threeJsGDs?.doorOverhang || [],
-      shelfQtyGDIds: threeJsGDs?.shelfQty || [],
-      drawerQtyGDIds: threeJsGDs?.drawerQty || [],
-      doorQtyGDIds: threeJsGDs?.doorQty || [],
-      drawerHeightGDMap: {
-        0: threeJsGDs?.drawerH1 || [],
-        1: threeJsGDs?.drawerH2 || [],
-        2: threeJsGDs?.drawerH3 || [],
-        3: threeJsGDs?.drawerH4 || [],
-        4: threeJsGDs?.drawerH5 || [],
-      },
-    }),
+    () => getGDMapping(threeJsGDs),
     [threeJsGDs]
   )
 }

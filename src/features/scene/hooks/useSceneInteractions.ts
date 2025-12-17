@@ -5,9 +5,13 @@ import {
   calculateSnapPosition,
   getSnapGuides,
   DEFAULT_SNAP_CONFIG,
+  getCabinetRelativeEffectiveBounds,
 } from "../lib/snapUtils"
 import { updateKickerPosition } from "../utils/handlers/kickerPositionHandler"
-import { updateBulkheadPosition, updateReturnBulkheads } from "../utils/handlers/bulkheadPositionHandler"
+import {
+  updateBulkheadPosition,
+  updateReturnBulkheads,
+} from "../utils/handlers/bulkheadPositionHandler"
 import { updateUnderPanelPosition } from "../utils/handlers/underPanelPositionHandler"
 import type { ViewManager, ViewId } from "../../cabinets/ViewManager"
 import { updateChildCabinets } from "../utils/handlers/childCabinetHandler"
@@ -196,8 +200,23 @@ export const useSceneInteractions = (
       // Apply boundary clamping FIRST to get valid target position
       // Note: Right wall and internal walls are excluded from boundary checks - cabinets can penetrate them
       // Only left boundary (X=0) and top/bottom boundaries are enforced
+
+      // For single cabinets not in a view, account for left-side children (fillers/panels)
+      // to prevent them from going through the left wall
+      // Use getCabinetRelativeEffectiveBounds which returns the relative offsets considering children
+      let minX = 0
+      if (!draggedCabinet.viewId || draggedCabinet.viewId === "none") {
+        const { leftOffset } = getCabinetRelativeEffectiveBounds(
+          draggedCabinet,
+          cabinets
+        )
+        // leftOffset is negative for left-side children (e.g., -16 for a 16mm panel)
+        // So minX = -leftOffset ensures the effective left edge stays at x >= 0
+        minX = -leftOffset
+      }
+
       if (draggedCabinet.cabinetType === "top") {
-        newX = Math.max(0, newX) // Only clamp left boundary, allow penetration into right wall
+        newX = Math.max(minX, newX) // Clamp left boundary accounting for children
         newY = Math.max(
           0,
           Math.min(
@@ -206,7 +225,7 @@ export const useSceneInteractions = (
           )
         )
       } else {
-        newX = Math.max(0, newX) // Only clamp left boundary, allow penetration into right wall
+        newX = Math.max(minX, newX) // Clamp left boundary accounting for children
         newY = currentY // Base/tall cabinets stay on ground
       }
 

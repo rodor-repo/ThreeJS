@@ -6,6 +6,13 @@ import {
   CarcassConfig,
 } from "@/features/carcass"
 import { CabinetData } from "@/features/scene/types"
+import { fetchProductData } from "@/features/carcass/utils/drawer-constraint-utils"
+import { getGDMapping } from "../ui/productPanel/hooks/useGDMapping"
+import {
+  buildDefaultValues,
+  buildDimsList,
+  getExtractedDimensions,
+} from "../ui/productPanel/utils/dimensionUtils"
 
 type Defaults = Record<CabinetType, CarcassDimensions>
 
@@ -27,6 +34,31 @@ const defaultDimensions: Defaults = {
   // UnderPanel: width = cabinet width, height = thickness (16mm), depth = parent depth - 20
   underPanel: { width: 600, height: 16, depth: 280 },
   benchtop: { width: 2000, height: 40, depth: 600 }, // Standard benchtop size
+}
+
+const getProductDefaultDimensions = (productId: string | undefined) => {
+  if (!productId) return {}
+
+  const productData = fetchProductData(productId)
+  const wsProduct = productData?.product
+  const threeJsGDs = productData?.threeJsGDs
+  if (!wsProduct || !threeJsGDs) return {}
+
+  const gdMapping = getGDMapping(threeJsGDs)
+  const defaults = buildDefaultValues(wsProduct.dims)
+  const dimsList = buildDimsList(wsProduct.dims)
+
+  const extracted = getExtractedDimensions(
+    defaults,
+    dimsList,
+    gdMapping
+  )
+
+  return {
+    width: extracted.width || undefined,
+    height: extracted.height || undefined,
+    depth: extracted.depth || undefined,
+  }
 }
 
 // Default configurations per cabinet type
@@ -120,14 +152,16 @@ export const createCabinet = (
   }
   const resolvedType = hasDefaults ? type : "tall"
   const baseDims = _.cloneDeep(defaultDimensions[resolvedType])
+  const productDefaultDims = getProductDefaultDimensions(productId)
   
   // Handle special dimension case for drawer base cabinets
   const dimensions: CarcassDimensions = {
-    width: opts?.customDimensions?.width ?? baseDims.width,
-    height: type === "base" && subcategoryId === "drawer" 
-      ? 730 
-      : (opts?.customDimensions?.height ?? baseDims.height),
-    depth: opts?.customDimensions?.depth ?? baseDims.depth,
+    width: opts?.customDimensions?.width ?? productDefaultDims.width ?? baseDims.width,
+    height:
+      opts?.customDimensions?.height ??
+      productDefaultDims.height ??
+      baseDims.height,
+    depth: opts?.customDimensions?.depth ?? productDefaultDims.depth ?? baseDims.depth,
   }
 
   // Use lodash uniqueId + random suffix to avoid collisions when creating multiple cabinets quickly

@@ -60,6 +60,7 @@ export interface SavedCabinet {
   applianceTopGap?: number
   applianceLeftGap?: number
   applianceRightGap?: number
+  applianceKickerHeight?: number
 }
 
 export interface SavedView {

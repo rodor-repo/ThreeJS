@@ -53,6 +53,7 @@ export interface CarcassConfig {
   applianceRightGap?: number // Gap on right side (default: 0mm)
   fridgeDoorCount?: 1 | 2 // Number of doors for fridge (default: 2)
   fridgeDoorSide?: "left" | "right" // Handle side/door pivot for 1-door fridge (default: left)
+  applianceKickerHeight?: number // Height of appliance kicker panels (default: 100mm)
 }
 
 export { type CabinetType } from "../scene/types"
@@ -96,6 +97,7 @@ export class CarcassAssembly {
   // Appliance specific parts
   public _applianceShell?: { group: THREE.Group; dispose: () => void } // Transparent functional shell
   public _applianceVisual?: { group: THREE.Group; dispose: () => void } // Decorative inner visual
+  public _applianceKicker?: { front: THREE.Mesh; left: THREE.Mesh; right: THREE.Mesh; group: THREE.Group } // Kicker panels
 
   public productId!: string
   public cabinetId!: string
@@ -424,6 +426,15 @@ export class CarcassAssembly {
     if (this._underPanelFace) { this._underPanelFace.dispose(); this._underPanelFace = undefined }
     if (this._applianceShell) { this._applianceShell.dispose(); this._applianceShell = undefined }
     if (this._applianceVisual) { this._applianceVisual.dispose(); this._applianceVisual = undefined }
+    if (this._applianceKicker) {
+      this._applianceKicker.front.geometry.dispose();
+      (this._applianceKicker.front.material as THREE.Material).dispose();
+      this._applianceKicker.left.geometry.dispose();
+      (this._applianceKicker.left.material as THREE.Material).dispose();
+      this._applianceKicker.right.geometry.dispose();
+      (this._applianceKicker.right.material as THREE.Material).dispose();
+      this._applianceKicker = undefined
+    }
     
     if (this.leftEnd) this.leftEnd.dispose()
     if (this.rightEnd) this.rightEnd.dispose()

@@ -47,6 +47,7 @@ export class ApplianceVisual {
   public topGap: number = 0
   public leftGap: number = 0
   public rightGap: number = 0
+  public kickerHeight: number = 0
 
   constructor(props: ApplianceVisualProps) {
     this.width = props.width
@@ -280,16 +281,18 @@ export class ApplianceVisual {
     shellDepth: number,
     topGap: number = 0,
     leftGap: number = 0,
-    rightGap: number = 0
+    rightGap: number = 0,
+    kickerHeight: number = 0
   ): void {
     this.topGap = topGap
     this.leftGap = leftGap
     this.rightGap = rightGap
+    this.kickerHeight = kickerHeight
 
-    // Calculate visual dimensions (shell minus gaps)
+    // Calculate visual dimensions (shell minus gaps and kicker)
     const horizontalGap = leftGap + rightGap
     this.width = Math.max(10, shellWidth - horizontalGap)
-    this.height = Math.max(10, shellHeight - topGap)
+    this.height = Math.max(10, shellHeight - topGap - kickerHeight)
     this.depth = shellDepth
 
     // Rebuild visual with new dimensions
@@ -304,7 +307,8 @@ export class ApplianceVisual {
     shellDepth: number
   ): void {
     const xOffset = (this.leftGap - this.rightGap) / 2
-    const yPosition = this.height / 2
+    // Position visual so its bottom sits on top of the kicker
+    const yPosition = this.kickerHeight + this.height / 2
 
     this.group.position.set(shellWidth / 2 + xOffset, yPosition, shellDepth / 2)
   }

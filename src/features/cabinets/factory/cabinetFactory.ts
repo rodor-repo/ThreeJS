@@ -34,8 +34,32 @@ const defaultDimensions: Defaults = {
   // UnderPanel: width = cabinet width, height = thickness (16mm), depth = parent depth - 20
   underPanel: { width: 600, height: 16, depth: 280 },
   benchtop: { width: 2000, height: 40, depth: 600 }, // Standard benchtop size
-  // Appliance: standard built-in appliance dimensions
+  // Appliance: standard built-in appliance dimensions (fallback)
   appliance: { width: 600, height: 820, depth: 600 },
+}
+
+// Per-appliance-type defaults based on real appliance specifications
+const APPLIANCE_DEFAULTS = {
+  dishwasher: {
+    dimensions: { width: 595, height: 740, depth: 560 },
+    topGap: 30,
+    sideGap: 12.5,
+    kickerHeight: 100,
+  },
+  sideBySideFridge: {
+    dimensions: { width: 900, height: 1780, depth: 600 },
+    topGap: 30,
+    sideGap: 50,
+    kickerHeight: 100,
+    fridgeDoorCount: 2 as const,
+    fridgeDoorSide: "left" as const,
+  },
+  washingMachine: {
+    dimensions: { width: 595, height: 740, depth: 650 },
+    topGap: 30,
+    sideGap: 12.5,
+    kickerHeight: 100,
+  },
 }
 
 const getProductDefaultDimensions = (productId: string | undefined) => {
@@ -121,16 +145,20 @@ const getDefaultConfig = (
     case "bulkhead":
     case "underPanel":
       return baseConfig
-    case "appliance":
+    case "appliance": {
+      const appType = opts?.applianceType || "dishwasher"
+      const appDefaults = APPLIANCE_DEFAULTS[appType]
       return {
         ...baseConfig,
-        applianceType: opts?.applianceType || "dishwasher",
-        applianceTopGap: 0,
-        applianceLeftGap: 0,
-        applianceRightGap: 0,
-        fridgeDoorCount: 2,
-        fridgeDoorSide: "left",
+        applianceType: appType,
+        applianceTopGap: appDefaults.topGap,
+        applianceLeftGap: appDefaults.sideGap,
+        applianceRightGap: appDefaults.sideGap,
+        applianceKickerHeight: appDefaults.kickerHeight,
+        fridgeDoorCount: APPLIANCE_DEFAULTS.sideBySideFridge.fridgeDoorCount,
+        fridgeDoorSide: APPLIANCE_DEFAULTS.sideBySideFridge.fridgeDoorSide,
       }
+    }
     default:
       return { shelfCount: 2, shelfSpacing: 300 }
   }
@@ -169,14 +197,32 @@ export const createCabinet = (
   const baseDims = _.cloneDeep(defaultDimensions[resolvedType])
   const productDefaultDims = getProductDefaultDimensions(productId)
   
+  // For appliances, use per-type dimensions from APPLIANCE_DEFAULTS
+  // Note: APPLIANCE_DEFAULTS.dimensions are VISUAL dimensions
+  // Shell dimensions = visual dimensions + gaps + kicker height
+  let applianceDims: Partial<CarcassDimensions> = {}
+  if (resolvedType === "appliance" && opts?.applianceType) {
+    const appDefaults = APPLIANCE_DEFAULTS[opts.applianceType]
+    // Shell width = visual width + left gap + right gap
+    const shellWidth = appDefaults.dimensions.width + (appDefaults.sideGap * 2)
+    // Shell height = visual height + top gap + kicker height
+    const shellHeight = appDefaults.dimensions.height + appDefaults.topGap + appDefaults.kickerHeight
+    applianceDims = {
+      width: shellWidth,
+      height: shellHeight,
+      depth: appDefaults.dimensions.depth,
+    }
+  }
+  
   // Handle special dimension case for drawer base cabinets
   const dimensions: CarcassDimensions = {
-    width: opts?.customDimensions?.width ?? productDefaultDims.width ?? baseDims.width,
+    width: opts?.customDimensions?.width ?? applianceDims.width ?? productDefaultDims.width ?? baseDims.width,
     height:
       opts?.customDimensions?.height ??
+      applianceDims.height ??
       productDefaultDims.height ??
       baseDims.height,
-    depth: opts?.customDimensions?.depth ?? productDefaultDims.depth ?? baseDims.depth,
+    depth: opts?.customDimensions?.depth ?? applianceDims.depth ?? productDefaultDims.depth ?? baseDims.depth,
   }
 
   // Use lodash uniqueId + random suffix to avoid collisions when creating multiple cabinets quickly

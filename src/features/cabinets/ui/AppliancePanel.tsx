@@ -1,9 +1,13 @@
 'use client'
 
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { X } from 'lucide-react'
-import type { CabinetData } from '@/features/scene/types'
+import type { CabinetData, WallDimensions } from '@/features/scene/types'
+import { ViewId } from '@/features/cabinets/ViewManager'
+import { repositionViewCabinets } from '@/features/scene/utils/handlers/viewRepositionHandler'
+import { applyWidthChangeWithLock } from '@/features/scene/utils/handlers/lockBehaviorHandler'
+import { toastThrottled } from './ProductPanel'
 
 // Appliance type labels and icons
 const APPLIANCE_INFO: Record<string, { label: string; icon: string }> = {
@@ -12,14 +16,23 @@ const APPLIANCE_INFO: Record<string, { label: string; icon: string }> = {
   sideBySideFridge: { label: 'Side-by-Side Fridge', icon: '🧊' },
 }
 
+interface ViewManagerResult {
+  getCabinetsInView: (viewId: ViewId) => string[]
+}
+
 interface AppliancePanelProps {
   isVisible: boolean
   selectedCabinet: CabinetData | null
   onClose: () => void
   viewManager: {
     activeViews: Array<{ id: string; name: string }>
+    getCabinetsInView: (viewId: ViewId) => string[]
   }
   onViewChange: (cabinetId: string, viewId: string) => void
+  // New props for view integration
+  cabinets: CabinetData[]
+  cabinetGroups: Map<string, Array<{ cabinetId: string; percentage: number }>>
+  wallDimensions: WallDimensions
 }
 
 interface SliderInputProps {
@@ -97,11 +110,16 @@ export const AppliancePanel: React.FC<AppliancePanelProps> = ({
   onClose,
   viewManager,
   onViewChange,
+  cabinets,
+  cabinetGroups,
+  wallDimensions,
 }) => {
-  // Local state for dimensions and gaps
-  const [width, setWidth] = useState(600)
-  const [height, setHeight] = useState(820)
-  const [depth, setDepth] = useState(600)
+  // Local state for VISUAL dimensions and gaps
+  // Visual dimensions = what the user sees as the appliance size
+  // Shell dimensions (stored in carcass.dimensions) = visual + gaps
+  const [visualWidth, setVisualWidth] = useState(600)
+  const [visualHeight, setVisualHeight] = useState(820)
+  const [visualDepth, setVisualDepth] = useState(600)
   const [topGap, setTopGap] = useState(0)
   const [leftGap, setLeftGap] = useState(0)
   const [rightGap, setRightGap] = useState(0)
@@ -111,53 +129,174 @@ export const AppliancePanel: React.FC<AppliancePanelProps> = ({
   const applianceInfo = APPLIANCE_INFO[applianceType] || APPLIANCE_INFO.dishwasher
 
   // Initialize from selected cabinet
+  // Shell dimensions are stored in carcass.dimensions
+  // Visual dimensions = shell - gaps
   useEffect(() => {
     if (selectedCabinet?.carcass) {
-      const dims = selectedCabinet.carcass.dimensions
+      const shellDims = selectedCabinet.carcass.dimensions
       const config = selectedCabinet.carcass.config
-      setWidth(dims.width)
-      setHeight(dims.height)
-      setDepth(dims.depth)
-      setTopGap(config.applianceTopGap || 0)
-      setLeftGap(config.applianceLeftGap || 0)
-      setRightGap(config.applianceRightGap || 0)
+      const tGap = config.applianceTopGap || 0
+      const lGap = config.applianceLeftGap || 0
+      const rGap = config.applianceRightGap || 0
+
+      // Calculate visual dimensions from shell - gaps
+      setVisualWidth(shellDims.width - lGap - rGap)
+      setVisualHeight(shellDims.height - tGap)
+      setVisualDepth(shellDims.depth)
+      setTopGap(tGap)
+      setLeftGap(lGap)
+      setRightGap(rGap)
     }
   }, [selectedCabinet])
 
-  // Update dimensions when changed
+  // Helper to trigger view cabinet repositioning
+  const triggerViewReposition = useCallback((
+    widthDelta: number,
+    oldX: number,
+    oldWidth: number
+  ) => {
+    if (!selectedCabinet || !selectedCabinet.viewId || selectedCabinet.viewId === 'none') {
+      return
+    }
+
+    repositionViewCabinets(
+      selectedCabinet,
+      widthDelta,
+      oldX,
+      oldWidth,
+      cabinets,
+      cabinetGroups,
+      viewManager as ViewManagerResult,
+      wallDimensions
+    )
+  }, [selectedCabinet, cabinets, cabinetGroups, viewManager, wallDimensions])
+
+  // Update VISUAL dimensions when changed
+  // This changes the appliance size, which also changes the shell size (visual + gaps)
   const handleDimensionChange = useCallback((dimension: 'width' | 'height' | 'depth', value: number) => {
     if (!selectedCabinet?.carcass) return
 
-    const newDims = {
-      width: dimension === 'width' ? value : width,
-      height: dimension === 'height' ? value : height,
-      depth: dimension === 'depth' ? value : depth,
+    // Store old shell dimensions and position for view repositioning
+    const oldShellWidth = selectedCabinet.carcass.dimensions.width
+    const oldX = selectedCabinet.group.position.x
+
+    // Calculate new shell dimensions (visual + gaps)
+    const newShellWidth = dimension === 'width' ? value + leftGap + rightGap : visualWidth + leftGap + rightGap
+    const newShellHeight = dimension === 'height' ? value + topGap : visualHeight + topGap
+    const newShellDepth = dimension === 'depth' ? value : visualDepth
+
+    const newShellDims = {
+      width: newShellWidth,
+      height: newShellHeight,
+      depth: newShellDepth,
     }
 
-    selectedCabinet.carcass.updateDimensions(newDims)
+    // Apply lock behavior if width changed
+    if (dimension === 'width' && newShellWidth !== oldShellWidth) {
+      const lockResult = applyWidthChangeWithLock(
+        selectedCabinet,
+        newShellWidth,
+        oldShellWidth,
+        oldX
+      )
 
-    if (dimension === 'width') setWidth(value)
-    if (dimension === 'height') setHeight(value)
-    if (dimension === 'depth') setDepth(value)
-  }, [selectedCabinet, width, height, depth])
+      if (!lockResult) {
+        toastThrottled('Cannot resize width when both left and right edges are locked')
+        return
+      }
+
+      const { newX } = lockResult
+      selectedCabinet.group.position.x = newX
+    }
+
+    // Update carcass dimensions (this is the shell)
+    selectedCabinet.carcass.updateDimensions(newShellDims)
+
+    // Update local visual state
+    if (dimension === 'width') setVisualWidth(value)
+    if (dimension === 'height') setVisualHeight(value)
+    if (dimension === 'depth') setVisualDepth(value)
+
+    // Trigger view repositioning if width changed and cabinet is in a view
+    if (dimension === 'width') {
+      const widthDelta = newShellWidth - oldShellWidth
+      if (Math.abs(widthDelta) > 0.1) {
+        triggerViewReposition(widthDelta, oldX, oldShellWidth)
+      }
+    }
+  }, [selectedCabinet, visualWidth, visualHeight, visualDepth, topGap, leftGap, rightGap, triggerViewReposition])
 
   // Update gaps when changed
+  // This changes the shell size while keeping visual size the same
   const handleGapChange = useCallback((gap: 'top' | 'left' | 'right', value: number) => {
     if (!selectedCabinet?.carcass) return
 
-    const newConfig = {
-      applianceTopGap: gap === 'top' ? value : topGap,
-      applianceLeftGap: gap === 'left' ? value : leftGap,
-      applianceRightGap: gap === 'right' ? value : rightGap,
+    // Store old shell dimensions and position for view repositioning
+    const oldShellWidth = selectedCabinet.carcass.dimensions.width
+    const oldX = selectedCabinet.group.position.x
+
+    // Calculate new gaps
+    const newTopGap = gap === 'top' ? value : topGap
+    const newLeftGap = gap === 'left' ? value : leftGap
+    const newRightGap = gap === 'right' ? value : rightGap
+
+    // Calculate new shell dimensions (visual dimensions stay the same!)
+    const newShellWidth = visualWidth + newLeftGap + newRightGap
+    const newShellHeight = visualHeight + newTopGap
+    const newShellDepth = visualDepth
+
+    const newShellDims = {
+      width: newShellWidth,
+      height: newShellHeight,
+      depth: newShellDepth,
     }
 
-    // Update config and rebuild
+    // Apply lock behavior if shell width changed
+    const widthDelta = newShellWidth - oldShellWidth
+    if (Math.abs(widthDelta) > 0.1) {
+      const lockResult = applyWidthChangeWithLock(
+        selectedCabinet,
+        newShellWidth,
+        oldShellWidth,
+        oldX
+      )
+
+      if (!lockResult) {
+        toastThrottled('Cannot resize gaps when both left and right edges are locked')
+        return
+      }
+
+      const { newX } = lockResult
+      selectedCabinet.group.position.x = newX
+    }
+
+    // Update config with new gap values
+    const newConfig = {
+      applianceTopGap: newTopGap,
+      applianceLeftGap: newLeftGap,
+      applianceRightGap: newRightGap,
+    }
+
+    // Update carcass dimensions first (the shell)
+    selectedCabinet.carcass.updateDimensions(newShellDims)
+
+    // Update config (this also rebuilds, but dimensions are already set)
     selectedCabinet.carcass.updateConfig(newConfig)
 
+    // Update local gap state
     if (gap === 'top') setTopGap(value)
     if (gap === 'left') setLeftGap(value)
     if (gap === 'right') setRightGap(value)
-  }, [selectedCabinet, topGap, leftGap, rightGap])
+
+    // Trigger view repositioning if shell width changed
+    if (Math.abs(widthDelta) > 0.1) {
+      triggerViewReposition(widthDelta, oldX, oldShellWidth)
+    }
+  }, [selectedCabinet, visualWidth, visualHeight, visualDepth, topGap, leftGap, rightGap, triggerViewReposition])
+
+  // Calculate displayed shell dimensions for info display
+  const shellWidth = useMemo(() => visualWidth + leftGap + rightGap, [visualWidth, leftGap, rightGap])
+  const shellHeight = useMemo(() => visualHeight + topGap, [visualHeight, topGap])
 
   if (!isVisible || !selectedCabinet) return null
 
@@ -193,13 +332,14 @@ export const AppliancePanel: React.FC<AppliancePanelProps> = ({
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
-        {/* Dimensions Section */}
+        {/* Appliance Dimensions Section */}
         <div className="space-y-4">
-          <h3 className="text-sm font-semibold text-gray-800 uppercase tracking-wide">Dimensions</h3>
+          <h3 className="text-sm font-semibold text-gray-800 uppercase tracking-wide">Appliance Size</h3>
+          <p className="text-xs text-gray-500">Size of the appliance itself</p>
 
           <SliderInput
             label="Width"
-            value={width}
+            value={visualWidth}
             min={300}
             max={1200}
             step={10}
@@ -208,7 +348,7 @@ export const AppliancePanel: React.FC<AppliancePanelProps> = ({
 
           <SliderInput
             label="Height"
-            value={height}
+            value={visualHeight}
             min={600}
             max={2400}
             step={10}
@@ -217,7 +357,7 @@ export const AppliancePanel: React.FC<AppliancePanelProps> = ({
 
           <SliderInput
             label="Depth"
-            value={depth}
+            value={visualDepth}
             min={400}
             max={800}
             step={10}
@@ -228,7 +368,7 @@ export const AppliancePanel: React.FC<AppliancePanelProps> = ({
         {/* Gaps Section */}
         <div className="space-y-4">
           <h3 className="text-sm font-semibold text-gray-800 uppercase tracking-wide">Gaps</h3>
-          <p className="text-xs text-gray-500">Spacing between appliance and cabinet shell</p>
+          <p className="text-xs text-gray-500">Extra space around appliance (expands cabinet opening)</p>
 
           <SliderInput
             label="Top Gap"
@@ -256,6 +396,14 @@ export const AppliancePanel: React.FC<AppliancePanelProps> = ({
             step={1}
             onChange={(v) => handleGapChange('right', v)}
           />
+
+          {/* Shell dimensions info */}
+          <div className="mt-3 p-3 bg-blue-50 rounded-lg">
+            <p className="text-xs text-blue-700 font-medium">Cabinet Opening (Shell)</p>
+            <p className="text-xs text-blue-600">
+              {shellWidth}mm × {shellHeight}mm × {visualDepth}mm
+            </p>
+          </div>
         </div>
 
         {/* View Assignment */}

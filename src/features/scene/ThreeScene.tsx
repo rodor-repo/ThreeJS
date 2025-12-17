@@ -729,6 +729,9 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
           onViewChange={(cabinetId, viewId) => {
             updateCabinetViewId(cabinetId, viewId === 'none' ? undefined : viewId)
           }}
+          cabinets={cabinets}
+          cabinetGroups={cabinetGroups}
+          wallDimensions={wallDimensions}
         />
       )}
 

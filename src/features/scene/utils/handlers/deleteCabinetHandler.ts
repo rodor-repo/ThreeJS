@@ -1,10 +1,55 @@
 import { CabinetData } from "../../types"
 import { ViewId } from "../../../cabinets/ViewManager"
 import { updateKickerPosition } from "./kickerPositionHandler"
+import { Benchtop } from "@/features/carcass/parts/Benchtop"
 
 interface ViewManagerResult {
   viewManager: {
     assignCabinetToView: (cabinetId: string, viewId: ViewId) => void
+  }
+}
+
+/**
+ * Find all child products for a given parent cabinet
+ * Child products include: fillers, panels, kickers, bulkheads, underPanels, benchtops
+ */
+const findChildCabinets = (parentCabinetId: string, allCabinets: CabinetData[]): CabinetData[] => {
+  return allCabinets.filter(c =>
+    // Fillers and panels attached via modal
+    (c.parentCabinetId === parentCabinetId && c.hideLockIcons === true) ||
+    // Kickers
+    c.kickerParentCabinetId === parentCabinetId ||
+    // Bulkheads
+    c.bulkheadParentCabinetId === parentCabinetId ||
+    // UnderPanels
+    c.underPanelParentCabinetId === parentCabinetId ||
+    // Benchtops
+    c.benchtopParentCabinetId === parentCabinetId
+  )
+}
+
+/**
+ * Dispose child cabinet's geometry based on its type
+ */
+const disposeChildCabinet = (child: CabinetData): void => {
+  // Dispose carcass if it exists
+  if (child.carcass && typeof child.carcass.dispose === 'function') {
+    child.carcass.dispose()
+  }
+
+  // Dispose benchtop-specific geometry
+  if (child.cabinetType === 'benchtop' && child.group.userData.benchtop) {
+    const benchtop = child.group.userData.benchtop as Benchtop
+    if (typeof benchtop.dispose === 'function') {
+      benchtop.dispose()
+    }
+  }
+
+  // Dispose kicker-specific geometry
+  if (child.cabinetType === 'kicker' && child.carcass?.kickerFace) {
+    if (typeof child.carcass.kickerFace.dispose === 'function') {
+      child.carcass.kickerFace.dispose()
+    }
   }
 }
 
@@ -19,7 +64,7 @@ export const handleDeleteCabinet = (
     ) => void
     deleteCabinet: (id: string) => void
     setCabinetToDelete: (cabinet: CabinetData | null) => void
-    allCabinets: CabinetData[] // Add allCabinets to update kicker after deletion
+    allCabinets: CabinetData[]
   }
 ) => {
   const { viewManager, setCabinetGroups, deleteCabinet, setCabinetToDelete, allCabinets } =
@@ -39,6 +84,29 @@ export const handleDeleteCabinet = (
       })
     }
   }
+
+  // If deleting a parent cabinet, delete all its children first
+  const childCabinets = findChildCabinets(cabinetToDelete.cabinetId, allCabinets)
+  
+  childCabinets.forEach(child => {
+    // Dispose child geometry
+    disposeChildCabinet(child)
+
+    // Remove from ViewManager if assigned to a view
+    if (child.viewId && child.viewId !== "none") {
+      viewManager.viewManager.assignCabinetToView(child.cabinetId, "none")
+    }
+
+    // Remove group data for this child
+    setCabinetGroups((prev) => {
+      const newMap = new Map(prev)
+      newMap.delete(child.cabinetId)
+      return newMap
+    })
+
+    // Delete the child cabinet
+    deleteCabinet(child.cabinetId)
+  })
 
   // Remove from ViewManager if assigned to a view
   if (cabinetToDelete.viewId && cabinetToDelete.viewId !== "none") {
@@ -87,7 +155,7 @@ export const handleDeleteCabinet = (
     return newMap
   })
 
-  // Delete the cabinet
+  // Delete the parent cabinet
   deleteCabinet(cabinetToDelete.cabinetId)
   setCabinetToDelete(null)
 }

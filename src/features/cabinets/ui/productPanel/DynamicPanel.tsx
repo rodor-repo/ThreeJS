@@ -101,6 +101,8 @@ export const DynamicPanel: React.FC<DynamicPanelProps> = ({
   initialGroupData,
   onSyncChange,
   initialSyncData,
+  onBenchtopOverhangChange,
+  onBenchtopHeightFromFloorChange,
 }) => {
   const cabinetId = selectedCabinet?.cabinetId
 
@@ -114,7 +116,7 @@ export const DynamicPanel: React.FC<DynamicPanelProps> = ({
   // Panel state hook
   const panelState = usePanelState({
     initialDims: wsProduct?.dims,
-    initialMaterialColor: selectedCabinet?.material.getColour() || "#ffffff",
+    initialMaterialColor: selectedCabinet?.material?.getColour?.() || "#ffffff",
   })
 
   // Persistence hook
@@ -268,7 +270,7 @@ export const DynamicPanel: React.FC<DynamicPanelProps> = ({
   // Initialize material color when cabinet changes
   useEffect(() => {
     panelState.setMaterialColor(
-      selectedCabinet?.material.getColour() || "#ffffff"
+      selectedCabinet?.material?.getColour?.() || "#ffffff"
     )
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCabinet])
@@ -469,12 +471,38 @@ export const DynamicPanel: React.FC<DynamicPanelProps> = ({
                 gdMapping={gdMapping}
                 drawerQty={drawerQty}
                 isModalFillerOrPanel={isModalFillerOrPanel}
+                isChildBenchtop={selectedCabinet?.cabinetType === 'benchtop' && !!selectedCabinet?.benchtopParentCabinetId}
                 onValueChange={handleValueChange}
                 onEditingChange={panelState.updateEditingValue}
                 onReset={handleResetDimension}
                 onResetAll={handleResetAll}
                 onValidate={handleDimensionValidate}
                 noWrapper
+                benchtopOverhangs={
+                  selectedCabinet?.cabinetType === 'benchtop' && selectedCabinet?.benchtopParentCabinetId
+                    ? {
+                        front: selectedCabinet.benchtopFrontOverhang ?? 20,
+                        left: selectedCabinet.benchtopLeftOverhang ?? 0,
+                        right: selectedCabinet.benchtopRightOverhang ?? 0,
+                      }
+                    : undefined
+                }
+                onOverhangChange={
+                  selectedCabinet?.cabinetType === 'benchtop' && selectedCabinet?.benchtopParentCabinetId && onBenchtopOverhangChange
+                    ? (type, value) => onBenchtopOverhangChange(selectedCabinet.cabinetId, type, value)
+                    : undefined
+                }
+                isIndependentBenchtop={selectedCabinet?.cabinetType === 'benchtop' && !selectedCabinet?.benchtopParentCabinetId}
+                benchtopHeightFromFloor={
+                  selectedCabinet?.cabinetType === 'benchtop' && !selectedCabinet?.benchtopParentCabinetId
+                    ? selectedCabinet.benchtopHeightFromFloor ?? 740
+                    : undefined
+                }
+                onHeightFromFloorChange={
+                  selectedCabinet?.cabinetType === 'benchtop' && !selectedCabinet?.benchtopParentCabinetId && onBenchtopHeightFromFloorChange
+                    ? (value) => onBenchtopHeightFromFloorChange(selectedCabinet.cabinetId, value)
+                    : undefined
+                }
               />
             </CollapsibleSection>
 
@@ -545,10 +573,10 @@ export const DynamicPanel: React.FC<DynamicPanelProps> = ({
               </CollapsibleSection>
             )}
 
-            {/* Material color selection (simple) */}
+            {/* Object color selection (simple) */}
             <CollapsibleSection
               id="color"
-              title="Material Color"
+              title="Object Color"
               icon={
                 <svg
                   width="20"

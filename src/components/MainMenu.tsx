@@ -35,6 +35,7 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect: _onCategorySelect
   const [loadingRooms, setLoadingRooms] = useState(false) // Loading state for rooms
   const [selectedSubcategoryForDesigns, setSelectedSubcategoryForDesigns] = useState<Subcategory | null>(null)
   const [expandedDesigns, setExpandedDesigns] = useState<Record<string, boolean>>({})
+  const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({})
 
   // Fetch actual data from server
   const loadCategories = async () => {
@@ -152,7 +153,17 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect: _onCategorySelect
   }
 
   const toggleDesignExpand = (designId: string) => {
-    setExpandedDesigns(prev => ({ ...prev, [designId]: !prev[designId] }))
+    setExpandedDesigns(prev => ({ 
+      ...prev, 
+      [designId]: prev[designId] === false ? true : false 
+    }))
+  }
+
+  const toggleCategoryExpand = (categoryId: string) => {
+    setExpandedCategories(prev => ({ 
+      ...prev, 
+      [categoryId]: prev[categoryId] === false ? true : false 
+    }))
   }
 
   // When a product is clicked, we want to add a DEMO 3D object.
@@ -474,37 +485,56 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect: _onCategorySelect
                       </button>
                     </div>
                   ) : (
-                    <div className="space-y-4">
+                    <div className="space-y-3">
                       {mappedCategories
                         .filter((category) => categoriesWithProducts.has(category.id))
                         .map((category) => {
                           const filteredSubs = category.subcategories.filter((sub) => subcategoriesWithProducts.has(sub.id))
                           if (filteredSubs.length === 0) return null
+                          const isCategoryExpanded = expandedCategories[category.id] !== false
                           return (
-                            <div key={category.id}>
-                              {/* Category header - subtle */}
-                              <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2 px-1">
-                                {category.name}
-                              </h4>
-                              {/* Subcategories */}
-                              <div className="space-y-2">
-                                {filteredSubs.map((subcategory) => (
-                                  <motion.button
-                                    key={subcategory.id}
-                                    onClick={() => openDesignsForSubcategory(category, subcategory)}
-                                    className="w-full p-3 rounded-lg border-2 transition-all duration-150 border-gray-200 hover:border-gray-300 hover:shadow-md hover:bg-gray-50"
-                                    whileHover={{ scale: 1.01 }}
-                                    whileTap={{ scale: 0.99 }}
+                            <div key={category.id} className="border-2 rounded-lg overflow-hidden border-gray-200">
+                              {/* Category header - clickable to expand/collapse */}
+                              <button
+                                onClick={() => toggleCategoryExpand(category.id)}
+                                className="w-full p-3 flex items-center justify-between transition-colors duration-150 hover:bg-gray-50 cursor-pointer"
+                              >
+                                <span className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
+                                  {category.name}
+                                </span>
+                                <ChevronRight size={18} className={`transition-transform ${isCategoryExpanded ? 'rotate-90' : ''} text-gray-500`} />
+                              </button>
+                              {/* Subcategories - only shown when expanded */}
+                              <AnimatePresence initial={false}>
+                                {isCategoryExpanded && (
+                                  <motion.div
+                                    initial={{ height: 0, opacity: 0 }}
+                                    animate={{ height: 'auto', opacity: 1 }}
+                                    exit={{ height: 0, opacity: 0 }}
+                                    transition={{ duration: 0.2 }}
+                                    className="px-2 pb-2"
                                   >
-                                    <div className="flex items-center justify-between">
-                                      <h3 className="font-semibold text-gray-800 text-left">
-                                        {subcategory.name}
-                                      </h3>
-                                      <ChevronRight size={18} className="text-gray-400" />
+                                    <div className="space-y-2">
+                                      {filteredSubs.map((subcategory) => (
+                                        <motion.button
+                                          key={subcategory.id}
+                                          onClick={() => openDesignsForSubcategory(category, subcategory)}
+                                          className="w-full p-3 rounded-lg border-2 transition-all duration-150 border-gray-200 hover:border-gray-300 hover:shadow-md hover:bg-gray-50"
+                                          whileHover={{ scale: 1.01 }}
+                                          whileTap={{ scale: 0.99 }}
+                                        >
+                                          <div className="flex items-center justify-between">
+                                            <h3 className="font-semibold text-gray-800 text-left">
+                                              {subcategory.name}
+                                            </h3>
+                                            <ChevronRight size={18} className="text-gray-400" />
+                                          </div>
+                                        </motion.button>
+                                      ))}
                                     </div>
-                                  </motion.button>
-                                ))}
-                              </div>
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
                             </div>
                           )
                         })}
@@ -604,12 +634,9 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect: _onCategorySelect
                       whileHover={{ scale: 1.01 }}
                       whileTap={{ scale: 0.99 }}
                     >
-                      <div className="flex items-center gap-3">
-                        <span className="text-2xl">🍽️</span>
-                        <div className="text-left">
-                          <h3 className="font-semibold text-gray-800">Dishwasher</h3>
-                          <p className="text-sm text-gray-500">Standard dishwasher unit</p>
-                        </div>
+                      <div className="text-left">
+                        <h3 className="font-semibold text-gray-800">Dishwasher</h3>
+                        <p className="text-sm text-gray-500">Standard dishwasher unit</p>
                       </div>
                     </motion.button>
 
@@ -619,12 +646,9 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect: _onCategorySelect
                       whileHover={{ scale: 1.01 }}
                       whileTap={{ scale: 0.99 }}
                     >
-                      <div className="flex items-center gap-3">
-                        <span className="text-2xl">🧺</span>
-                        <div className="text-left">
-                          <h3 className="font-semibold text-gray-800">Washing Machine</h3>
-                          <p className="text-sm text-gray-500">Front-loading washer</p>
-                        </div>
+                      <div className="text-left">
+                        <h3 className="font-semibold text-gray-800">Washing Machine</h3>
+                        <p className="text-sm text-gray-500">Front-loading washer</p>
                       </div>
                     </motion.button>
 
@@ -634,12 +658,9 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect: _onCategorySelect
                       whileHover={{ scale: 1.01 }}
                       whileTap={{ scale: 0.99 }}
                     >
-                      <div className="flex items-center gap-3">
-                        <span className="text-2xl">🧊</span>
-                        <div className="text-left">
-                          <h3 className="font-semibold text-gray-800">Side-by-Side Fridge</h3>
-                          <p className="text-sm text-gray-500">Large refrigerator unit</p>
-                        </div>
+                      <div className="text-left">
+                        <h3 className="font-semibold text-gray-800">Side-by-Side Fridge</h3>
+                        <p className="text-sm text-gray-500">Large refrigerator unit</p>
                       </div>
                     </motion.button>
                   </div>
@@ -689,7 +710,7 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect: _onCategorySelect
                       {(designsBySubId[selectedSubcategoryForDesigns.id] || [])
                         .filter((design) => designsWithProducts.has(design.id))
                         .map((design) => {
-                          const isExpanded = !!expandedDesigns[design.id]
+                          const isExpanded = expandedDesigns[design.id] !== false
                           const products = productsByDesignId[design.id] || []
                           return (
                             <div key={design.id} className="border-2 rounded-lg overflow-hidden border-gray-200">

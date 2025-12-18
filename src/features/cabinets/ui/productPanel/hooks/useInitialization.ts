@@ -118,7 +118,7 @@ export function useInitialization(options: UseInitializationOptions): void {
     // Material color
     const nextColor =
       saved?.materialColor ??
-      (selectedCabinet?.material.getColour() || "#ffffff")
+      (selectedCabinet?.material?.getColour?.() || "#ffffff")
 
     // Build API defaults for materials
     const apiDefaults = buildApiDefaults(

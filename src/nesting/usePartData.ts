@@ -40,12 +40,12 @@ export function usePartData(cabinets: CabinetData[], wsProducts?: WsProducts | n
       cabinets.map((c) => ({
         id: c.cabinetId,
         // Include key properties that affect parts
-        width: c.carcass.dimensions.width,
-        height: c.carcass.dimensions.height,
-        depth: c.carcass.dimensions.depth,
-        doorCount: c.carcass.config.doorCount,
-        drawerQuantity: c.carcass.config.drawerQuantity,
-        shelfCount: c.carcass.config.shelfCount,
+        width: c.carcass?.dimensions?.width,
+        height: c.carcass?.dimensions?.height,
+        depth: c.carcass?.dimensions?.depth,
+        doorCount: c.carcass?.config?.doorCount,
+        drawerQuantity: c.carcass?.config?.drawerQuantity,
+        shelfCount: c.carcass?.config?.shelfCount,
       }))
     )
 

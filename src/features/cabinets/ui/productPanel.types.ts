@@ -28,6 +28,14 @@ export interface SelectedCabinetSnapshot {
   cabinetId: string
   viewId?: string
   hideLockIcons?: boolean
+  /** For benchtop type: parent cabinet ID that this benchtop belongs to */
+  benchtopParentCabinetId?: string
+  /** Benchtop overhangs - only for child benchtops */
+  benchtopFrontOverhang?: number
+  benchtopLeftOverhang?: number
+  benchtopRightOverhang?: number
+  /** Benchtop height from floor - only for independent benchtops */
+  benchtopHeightFromFloor?: number
 }
 
 export interface ProductPanelCallbacks {
@@ -53,6 +61,10 @@ export interface ProductPanelCallbacks {
   onViewChange?: (cabinetId: string, viewId: string) => void
   onGroupChange?: (cabinetId: string, groupCabinets: Array<{ cabinetId: string; percentage: number }>) => void
   onSyncChange?: (cabinetId: string, syncCabinets: string[]) => void
+  /** Benchtop overhang change callback - only for child benchtops */
+  onBenchtopOverhangChange?: (cabinetId: string, type: 'front' | 'left' | 'right', value: number) => void
+  /** Benchtop height from floor change callback - only for independent benchtops */
+  onBenchtopHeightFromFloorChange?: (cabinetId: string, value: number) => void
 }
 
 export interface ProductPanelProps extends ProductPanelCallbacks {

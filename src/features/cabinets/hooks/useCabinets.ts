@@ -77,6 +77,22 @@ export const useCabinets = (
     [sceneRef, cabinetCounter, sortNumberCounter]
   )
 
+  /**
+   * Add a raw CabinetData object directly to the scene and state.
+   * Used for objects that don't go through the standard cabinetFactory (like Benchtops).
+   */
+  const addCabinetData = useCallback(
+    (cabinetData: CabinetData) => {
+      if (!sceneRef.current) return null
+      
+      sceneRef.current.add(cabinetData.group)
+      setCabinets((prev) => [...prev, cabinetData])
+      setSortNumberCounter((prev) => prev + 1)
+      return cabinetData
+    },
+    [sceneRef]
+  )
+
   const clearCabinets = useCallback(() => {
     if (!sceneRef.current) return
     
@@ -322,6 +338,7 @@ export const useCabinets = (
     showProductPanel,
     setShowProductPanel,
     createCabinet,
+    addCabinetData, // For adding raw CabinetData (e.g., benchtops)
     clearCabinets,
     addHoverEffect,
     removeHoverEffect,

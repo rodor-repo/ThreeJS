@@ -811,3 +811,62 @@ export function createEmptySpaceXDimensionEnhanced(
   setDimensionLineMetadata(dimension, id, "empty-x")
   return dimension
 }
+
+/**
+ * Create height from floor dimension line for independent benchtops
+ * Shows vertical dimension from floor (Y=0) to benchtop position
+ * Returns null if hidden or if benchtop has a parent
+ */
+export function createBenchtopHeightFromFloorDimension(
+  cabinet: CabinetData,
+  offsets?: DimensionLineOffsets
+): THREE.Group | null {
+  // Only for independent benchtops (no parent)
+  if (cabinet.cabinetType !== "benchtop" || cabinet.benchtopParentCabinetId) {
+    return null
+  }
+
+  const id = createDimensionLineId("benchtop-height", cabinet.cabinetId)
+  
+  if (offsets?.isHidden(id)) return null
+  
+  // Get 3D offset
+  const offset3D = offsets?.getOffset(id) ?? { x: 0, y: 0, z: 0 }
+  
+  const color = DIMENSION_CONSTANTS.colors.cabinet
+  const arrowColor = DIMENSION_CONSTANTS.colors.arrow
+  const lineWidth = DIMENSION_CONSTANTS.defaults.lineWidth
+  const baseOffset = DIMENSION_CONSTANTS.defaults.offset
+
+  const { width, depth } = cabinet.carcass.dimensions
+  const pos = cabinet.group.position
+  const x = pos.x
+  const y = pos.y  // This is the height from floor
+  const z = pos.z
+
+  // Dimension line at the front-right edge of the benchtop
+  const frontZ = z + depth + baseOffset
+  const rightX = x + width
+
+  // Apply offsets
+  const dimensionLineX = rightX + baseOffset + offset3D.x
+  const dimensionLineZ = frontZ + offset3D.z
+
+  // Create dimension from floor (Y=0) to benchtop Y position
+  const dimension = createCompleteDimension({
+    extensionStart1: new THREE.Vector3(rightX, 0, frontZ),
+    extensionStart2: new THREE.Vector3(rightX, y, frontZ),
+    dimensionPoint1: new THREE.Vector3(dimensionLineX, 0, dimensionLineZ),
+    dimensionPoint2: new THREE.Vector3(dimensionLineX, y, dimensionLineZ),
+    labelText: `${Math.ceil(y)}mm`,
+    labelPosition: new THREE.Vector3(dimensionLineX + 40, y / 2, dimensionLineZ),
+    color,
+    arrowColor,
+    textColor: DIMENSION_CONSTANTS.colorStrings.cabinet,
+    lineWidth,
+    isVerticalText: true,
+  })
+
+  setDimensionLineMetadata(dimension, id, "benchtop-height")
+  return dimension
+}

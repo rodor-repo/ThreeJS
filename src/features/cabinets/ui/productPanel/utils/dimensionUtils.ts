@@ -162,23 +162,39 @@ export function getExtractedDimensions(
   const pendingDrawerHeights: Record<number, number> = {}
 
   dimsList.forEach(([id, dimObj]) => {
-    if (!dimObj.GDId) return
     const v = vals[id]
     const gdId = dimObj.GDId
+    const dimName = (dimObj.dim || '').toLowerCase()
 
-    if (gdMapping.widthGDIds.includes(gdId)) {
+    // Check by GDId first, then also check by dimension name
+    const isWidthByGD = gdId && gdMapping.widthGDIds.includes(gdId)
+    const isWidthByName = dimName.includes('length') || dimName.includes('width')
+    const isWidthDim = isWidthByGD || isWidthByName
+    
+    const isHeightByGD = gdId && gdMapping.heightGDIds.includes(gdId)
+    const isHeightByName = dimName.includes('thickness') || dimName.includes('height')
+    const isHeightDim = isHeightByGD || isHeightByName
+    
+    const isDepthByGD = gdId && gdMapping.depthGDIds.includes(gdId)
+    const isDepthByName = dimName.includes('depth')
+    const isDepthDim = isDepthByGD || isDepthByName
+
+    if (isWidthDim) {
       width = toNum(v) || width
     }
 
     // Skip height and depth updates for modal fillers/panels
     if (!isModalFillerOrPanel) {
-      if (gdMapping.heightGDIds.includes(gdId)) {
+      if (isHeightDim) {
         height = toNum(v) || height
       }
-      if (gdMapping.depthGDIds.includes(gdId)) {
+      if (isDepthDim) {
         depth = toNum(v) || depth
       }
     }
+
+    // Only process GD-based properties if GDId is set
+    if (!gdId) return
 
     if (gdMapping.doorOverhangGDIds.includes(gdId)) {
       overhangDoor =
@@ -372,14 +388,28 @@ export function syncCabinetDimensionsToValues(
   const nextValues = { ...currentValues }
 
   for (const [dimId, dimObj] of Object.entries(dims)) {
-    if (dimObj.GDId) {
-      if (gdMapping.widthGDIds.includes(dimObj.GDId)) {
-        nextValues[dimId] = cabinetDimensions.width
-      } else if (gdMapping.heightGDIds.includes(dimObj.GDId)) {
-        nextValues[dimId] = cabinetDimensions.height
-      } else if (gdMapping.depthGDIds.includes(dimObj.GDId)) {
-        nextValues[dimId] = cabinetDimensions.depth
-      }
+    const gdId = dimObj.GDId
+    const dimName = (dimObj.dim || '').toLowerCase()
+    
+    // Check by GDId first, then fallback to dimension name
+    const isWidthByGD = gdId && gdMapping.widthGDIds.includes(gdId)
+    const isWidthByName = dimName.includes('length') || dimName.includes('width')
+    const isWidthDim = isWidthByGD || isWidthByName
+    
+    const isHeightByGD = gdId && gdMapping.heightGDIds.includes(gdId)
+    const isHeightByName = dimName.includes('thickness') || dimName.includes('height')
+    const isHeightDim = isHeightByGD || isHeightByName
+    
+    const isDepthByGD = gdId && gdMapping.depthGDIds.includes(gdId)
+    const isDepthByName = dimName.includes('depth')
+    const isDepthDim = isDepthByGD || isDepthByName
+
+    if (isWidthDim) {
+      nextValues[dimId] = cabinetDimensions.width
+    } else if (isHeightDim) {
+      nextValues[dimId] = cabinetDimensions.height
+    } else if (isDepthDim) {
+      nextValues[dimId] = cabinetDimensions.depth
     }
   }
 

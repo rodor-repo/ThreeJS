@@ -13,6 +13,7 @@ import {
   updateReturnBulkheads,
 } from "../utils/handlers/bulkheadPositionHandler"
 import { updateUnderPanelPosition } from "../utils/handlers/underPanelPositionHandler"
+import { updateBenchtopPosition } from "../utils/handlers/benchtopPositionHandler"
 import type { ViewManager, ViewId } from "../../cabinets/ViewManager"
 import { updateChildCabinets } from "../utils/handlers/childCabinetHandler"
 
@@ -174,6 +175,18 @@ export const useSceneInteractions = (
     []
   )
 
+  // Helper function to check if a cabinet is a child product that cannot be dragged
+  const isChildProduct = useCallback((cabinet: CabinetData): boolean => {
+    // Check all child product types
+    if (cabinet.kickerParentCabinetId) return true
+    if (cabinet.bulkheadParentCabinetId) return true
+    if (cabinet.underPanelParentCabinetId) return true
+    if (cabinet.benchtopParentCabinetId) return true
+    // Fillers and panels attached via modal (hideLockIcons = true)
+    if (cabinet.parentCabinetId && cabinet.hideLockIcons === true) return true
+    return false
+  }, [])
+
   const moveCabinetWithMouse = useCallback(
     (event: MouseEvent) => {
       if (selectedCabinets.length === 0 || !isDraggingCabinetRef.current) return
@@ -189,6 +202,12 @@ export const useSceneInteractions = (
       // Use the cabinet being dragged (the one that was clicked on)
       const draggedCabinet = clickStartCabinetRef.current || selectedCabinets[0]
       if (!draggedCabinet) return
+
+      // Prevent child products from being dragged - they follow their parent
+      if (isChildProduct(draggedCabinet)) {
+        isDraggingCabinetRef.current = false
+        return
+      }
 
       const currentX = draggedCabinet.group.position.x
       const currentY = draggedCabinet.group.position.y
@@ -326,6 +345,13 @@ export const useSceneInteractions = (
           positionChanged: true
         })
       }
+
+      // Update benchtop position when base cabinet moves
+      if (draggedCabinet.cabinetType === 'base') {
+        updateBenchtopPosition(draggedCabinet, cabinets, {
+          positionChanged: true
+        })
+      }
       
       // If dragged cabinet is a child filler/panel, update parent kicker when child position changes
       if (
@@ -428,6 +454,13 @@ export const useSceneInteractions = (
             // Update kicker position when cabinet in view moves
             if (cabinetInView.cabinetType === 'base' || cabinetInView.cabinetType === 'tall') {
               updateKickerPosition(cabinetInView, cabinets, {
+                positionChanged: true
+              })
+            }
+
+            // Update benchtop position when base cabinet in view moves
+            if (cabinetInView.cabinetType === 'base') {
+              updateBenchtopPosition(cabinetInView, cabinets, {
                 positionChanged: true
               })
             }

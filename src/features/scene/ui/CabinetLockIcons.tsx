@@ -1,12 +1,10 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useMemo } from 'react'
 import { Lock, Unlock } from 'lucide-react'
 import * as THREE from 'three'
+import _ from 'lodash'
 import type { CabinetData } from '../types'
 import type { WsProducts } from '@/types/erpTypes'
 import { FillersModal } from './FillersModal'
-import { KickersModal } from './KickersModal'
-import { BulkheadsModal } from './BulkheadsModal'
-import { UnderPanelsModal } from './UnderPanelsModal'
 
 type Props = {
   cabinet: CabinetData
@@ -23,6 +21,8 @@ type Props = {
   onKickerSelect?: (cabinetId: string, productId: string) => void
   onBulkheadSelect?: (cabinetId: string, productId: string) => void
   onUnderPanelSelect?: (cabinetId: string, productId: string) => void
+  onBenchtopToggle?: (cabinetId: string, enabled: boolean) => void
+  onBenchtopSelect?: (cabinetId: string, productId: string | null) => void
 }
 
 export const CabinetLockIcons: React.FC<Props> = ({
@@ -39,7 +39,9 @@ export const CabinetLockIcons: React.FC<Props> = ({
   onFillerToggle,
   onKickerSelect,
   onBulkheadSelect,
-  onUnderPanelSelect
+  onUnderPanelSelect,
+  onBenchtopToggle,
+  onBenchtopSelect
 }) => {
   const [positions, setPositions] = useState({ center: { x: 0, y: 0 }, left: { x: 0, y: 0 }, right: { x: 0, y: 0 } })
 
@@ -121,14 +123,89 @@ export const CabinetLockIcons: React.FC<Props> = ({
   const [showFillersModal, setShowFillersModal] = useState(false)
   const [fillerSide, setFillerSide] = useState<'left' | 'right' | null>(null)
 
-  // Modal state for Kickers
-  const [showKickersModal, setShowKickersModal] = useState(false)
+  // Get the first available kicker product ID (for auto-adding kicker without modal)
+  const defaultKickerProductId = useMemo(() => {
+    if (!wsProducts) return null
+    const kickerProducts = Object.entries(wsProducts.products).filter(([, p]) => {
+      if (p.status !== 'Active' || p.enabled3D !== true) return false
+      const designEntry = wsProducts.designs[p.designId]
+      return designEntry?.type3D === 'kicker'
+    })
+    const productsWithData = kickerProducts.map(([id, p]) => ({
+      id,
+      name: p.product,
+      sortNum: Number(p.sortNum),
+    }))
+    const sorted = _.sortBy(productsWithData, ['sortNum'])
+    return sorted.length > 0 ? sorted[0].id : null
+  }, [wsProducts])
 
-  // Modal state for Bulkheads
-  const [showBulkheadsModal, setShowBulkheadsModal] = useState(false)
+  // Get the first available bulkhead product ID (for auto-adding bulkhead without modal)
+  const defaultBulkheadProductId = useMemo(() => {
+    if (!wsProducts) return null
+    const bulkheadProducts = Object.entries(wsProducts.products).filter(([, p]) => {
+      if (p.status !== 'Active' || p.enabled3D !== true) return false
+      const designEntry = wsProducts.designs[p.designId]
+      return designEntry?.type3D === 'bulkhead'
+    })
+    const productsWithData = bulkheadProducts.map(([id, p]) => ({
+      id,
+      name: p.product,
+      sortNum: Number(p.sortNum),
+    }))
+    const sorted = _.sortBy(productsWithData, ['sortNum'])
+    return sorted.length > 0 ? sorted[0].id : null
+  }, [wsProducts])
 
-  // Modal state for UnderPanels
-  const [showUnderPanelsModal, setShowUnderPanelsModal] = useState(false)
+  // Get the first available underPanel product ID (for auto-adding underPanel without modal)
+  const defaultUnderPanelProductId = useMemo(() => {
+    if (!wsProducts) return null
+    const underPanelProducts = Object.entries(wsProducts.products).filter(([, p]) => {
+      if (p.status !== 'Active' || p.enabled3D !== true) return false
+      const designEntry = wsProducts.designs[p.designId]
+      return designEntry?.type3D === 'underPanel'
+    })
+    const productsWithData = underPanelProducts.map(([id, p]) => ({
+      id,
+      name: p.product,
+      sortNum: Number(p.sortNum),
+    }))
+    const sorted = _.sortBy(productsWithData, ['sortNum'])
+    return sorted.length > 0 ? sorted[0].id : null
+  }, [wsProducts])
+
+  // Initialize T state based on whether benchtop exists as a separate CabinetData entry (only for base cabinets)
+  const [isTOn, setIsTOn] = useState(() => {
+    if (cabinet.cabinetType === 'base') {
+      // Check if benchtop exists as a separate CabinetData entry
+      const existingBenchtopCabinet = allCabinets.find(
+        (c) => c.cabinetType === 'benchtop' && c.benchtopParentCabinetId === cabinet.cabinetId
+      )
+      return !!existingBenchtopCabinet
+    }
+    return false
+  })
+
+  // Sync T state with actual benchtop existence when cabinet dimensions change (only for base cabinets)
+  useEffect(() => {
+    if (cabinet.cabinetType === 'base') {
+      // Check if benchtop exists as a separate CabinetData entry
+      const existingBenchtopCabinet = allCabinets.find(
+        (c) => c.cabinetType === 'benchtop' && c.benchtopParentCabinetId === cabinet.cabinetId
+      )
+      const benchtopExists = !!existingBenchtopCabinet
+      // Sync state with actual benchtop existence
+      setIsTOn(benchtopExists)
+    }
+  }, [
+    cabinet.cabinetId,
+    cabinet.cabinetType,
+    cabinet.carcass.dimensions.width,
+    cabinet.carcass.dimensions.height,
+    cabinet.carcass.dimensions.depth,
+    cabinet.group.position.y,
+    allCabinets,
+  ])
 
   // Initialize K state based on whether kicker exists as a separate CabinetData entry
   const [isKOn, setIsKOn] = useState(() => {
@@ -241,10 +318,13 @@ export const CabinetLockIcons: React.FC<Props> = ({
 
   if (!camera) return null
 
-  // Hide F, B, U, K icons for independent fillers/panels (added from drawer, not modal)
+  // Hide F, B, U, K, T icons for:
+  // - Independent fillers/panels (added from drawer, not modal)
+  // - Standalone benchtops (they only need lock icons for length extension)
   // Lock icons should always be visible
   const isIndependentFillerOrPanel = (cabinet.cabinetType === 'filler' || cabinet.cabinetType === 'panel') && !cabinet.hideLockIcons
-  const showLetterIcons = !isIndependentFillerOrPanel
+  const isStandaloneBenchtop = cabinet.cabinetType === 'benchtop'
+  const showLetterIcons = !isIndependentFillerOrPanel && !isStandaloneBenchtop
 
   return (
     <>
@@ -318,10 +398,13 @@ export const CabinetLockIcons: React.FC<Props> = ({
         )}
       </div>
 
-      {/* T Icon above Center Lock - For Base cabinets only (no functionality) */}
+      {/* T Icon above Center Lock - Toggleable, for Base cabinets only (Benchtop) */}
       {showLetterIcons && cabinet.cabinetType === 'base' && (
         <div
-          className="fixed z-50 bg-white rounded-full shadow-lg border-2 border-gray-300 flex items-center justify-center"
+          className={`fixed z-50 bg-white rounded-full shadow-lg border-2 transition-colors cursor-pointer flex items-center justify-center ${isTOn
+              ? 'border-blue-600 hover:border-blue-700'
+              : 'border-gray-300 hover:border-gray-400'
+            }`}
           style={{
             left: `${positions.center.x}px`,
             top: `${positions.center.y - 35}px`,
@@ -330,8 +413,24 @@ export const CabinetLockIcons: React.FC<Props> = ({
             width: '29px',
             height: '29px',
           }}
+          onClick={(e) => {
+            e.stopPropagation()
+            if (isTOn) {
+              // Benchtop exists - remove it
+              setIsTOn(false)
+              if (onBenchtopToggle) {
+                onBenchtopToggle(cabinet.cabinetId, false)
+              }
+            } else {
+              // Benchtop doesn't exist - automatically add
+              if (onBenchtopSelect) {
+                onBenchtopSelect(cabinet.cabinetId, null) // null means use default product
+                setIsTOn(true)
+              }
+            }
+          }}
         >
-          <span className="font-bold text-sm text-gray-400">T</span>
+          <span className={`font-bold text-sm ${isTOn ? 'text-blue-600' : 'text-gray-400'}`}>T</span>
         </div>
       )}
 
@@ -359,8 +458,11 @@ export const CabinetLockIcons: React.FC<Props> = ({
                 onBulkheadToggle(cabinet.cabinetId, false)
               }
             } else {
-              // Bulkhead doesn't exist - open modal to select product
-              setShowBulkheadsModal(true)
+              // Bulkhead doesn't exist - automatically add with default product
+              if (defaultBulkheadProductId && onBulkheadSelect) {
+                onBulkheadSelect(cabinet.cabinetId, defaultBulkheadProductId)
+                setIsBOn(true)
+              }
             }
           }}
         >
@@ -419,8 +521,11 @@ export const CabinetLockIcons: React.FC<Props> = ({
                 onKickerToggle(cabinet.cabinetId, false)
               }
             } else {
-              // Kicker doesn't exist - open modal to select product
-              setShowKickersModal(true)
+              // Kicker doesn't exist - automatically add with default product
+              if (defaultKickerProductId && onKickerSelect) {
+                onKickerSelect(cabinet.cabinetId, defaultKickerProductId)
+                setIsKOn(true)
+              }
             }
           }}
         >
@@ -452,8 +557,11 @@ export const CabinetLockIcons: React.FC<Props> = ({
                 onUnderPanelToggle(cabinet.cabinetId, false)
               }
             } else {
-              // UnderPanel doesn't exist - open modal to select product
-              setShowUnderPanelsModal(true)
+              // UnderPanel doesn't exist - automatically add with default product
+              if (defaultUnderPanelProductId && onUnderPanelSelect) {
+                onUnderPanelSelect(cabinet.cabinetId, defaultUnderPanelProductId)
+                setIsUOn(true)
+              }
             }
           }}
         >
@@ -546,53 +654,6 @@ export const CabinetLockIcons: React.FC<Props> = ({
         }}
       />
 
-      {/* Kickers Modal */}
-      <KickersModal
-        isOpen={showKickersModal}
-        onClose={() => {
-          setShowKickersModal(false)
-        }}
-        wsProducts={wsProducts || null}
-        onProductSelect={(productId) => {
-          if (onKickerSelect) {
-            onKickerSelect(cabinet.cabinetId, productId)
-            setIsKOn(true)
-          }
-          setShowKickersModal(false)
-        }}
-      />
-
-      {/* Bulkheads Modal */}
-      <BulkheadsModal
-        isOpen={showBulkheadsModal}
-        onClose={() => {
-          setShowBulkheadsModal(false)
-        }}
-        wsProducts={wsProducts || null}
-        onProductSelect={(productId) => {
-          if (onBulkheadSelect) {
-            onBulkheadSelect(cabinet.cabinetId, productId)
-            setIsBOn(true)
-          }
-          setShowBulkheadsModal(false)
-        }}
-      />
-
-      {/* UnderPanels Modal */}
-      <UnderPanelsModal
-        isOpen={showUnderPanelsModal}
-        onClose={() => {
-          setShowUnderPanelsModal(false)
-        }}
-        wsProducts={wsProducts || null}
-        onProductSelect={(productId) => {
-          if (onUnderPanelSelect) {
-            onUnderPanelSelect(cabinet.cabinetId, productId)
-            setIsUOn(true)
-          }
-          setShowUnderPanelsModal(false)
-        }}
-      />
     </>
   )
 }

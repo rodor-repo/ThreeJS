@@ -3,6 +3,7 @@ import * as THREE from "three"
 import { WsProducts } from "@/types/erpTypes"
 import { CabinetData, CabinetType, WallDimensions } from "../../types"
 import { handleDeleteCabinet } from "./deleteCabinetHandler"
+import { updateBenchtopPosition } from "./benchtopPositionHandler"
 
 type CreateCabinetFn = (
   cabinetType: CabinetType,
@@ -186,6 +187,17 @@ export const handleFillerSelect = (
       }, 0)
     })
   }
+
+  // Update benchtop if parent is a base cabinet
+  if (parentCabinet.cabinetType === "base") {
+    // Use setTimeout to ensure the new cabinet is in the array
+    setTimeout(() => {
+      const updatedCabinets = [...cabinets, newCabinet]
+      updateBenchtopPosition(parentCabinet, updatedCabinets, {
+        childChanged: true,
+      })
+    }, 0)
+  }
 }
 
 interface FillerToggleParams {
@@ -222,6 +234,9 @@ export const handleFillerToggle = (
   )
   if (!childCabinet) return
 
+  // Get parent cabinet before deletion
+  const parentCabinet = cabinets.find((c) => c.cabinetId === cabinetId)
+
   handleDeleteCabinet(childCabinet, {
     viewManager,
     setCabinetGroups,
@@ -232,6 +247,18 @@ export const handleFillerToggle = (
 
   if (removeCabinetParts) {
     removeCabinetParts(childCabinet.cabinetId)
+  }
+
+  // Update benchtop if parent is a base cabinet
+  if (parentCabinet && parentCabinet.cabinetType === "base") {
+    // Use setTimeout to ensure the cabinet is removed from the array
+    setTimeout(() => {
+      // Filter out the removed child cabinet
+      const updatedCabinets = cabinets.filter((c) => c.cabinetId !== childCabinet.cabinetId)
+      updateBenchtopPosition(parentCabinet, updatedCabinets, {
+        childChanged: true,
+      })
+    }, 0)
   }
 }
 

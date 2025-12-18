@@ -3,6 +3,7 @@ import { updateChildCabinets } from "./childCabinetHandler"
 import { updateKickerPosition } from "./kickerPositionHandler"
 import { updateBulkheadPosition } from "./bulkheadPositionHandler"
 import { updateUnderPanelPosition } from "./underPanelPositionHandler"
+import { updateBenchtopPosition } from "./benchtopPositionHandler"
 
 /**
  * Updates all dependent components (children, kicker, bulkhead, underPanel) for a cabinet
@@ -63,6 +64,19 @@ export function updateAllDependentComponents(
         changes.widthChanged ||
         changes.depthChanged ||
         false,
+    })
+  }
+
+  // Update benchtop position for base cabinets
+  if (cabinet.cabinetType === "base") {
+    updateBenchtopPosition(cabinet, allCabinets, {
+      dimensionsChanged:
+        changes.heightChanged ||
+        changes.widthChanged ||
+        changes.depthChanged ||
+        false,
+      positionChanged: changes.positionChanged || false,
+      childChanged: false, // Will be set to true when filler/panel changes
     })
   }
 }

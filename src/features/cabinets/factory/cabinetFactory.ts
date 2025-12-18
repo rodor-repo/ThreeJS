@@ -1,3 +1,4 @@
+import * as THREE from "three"
 import _ from "lodash"
 import {
   CarcassAssembly,
@@ -33,7 +34,7 @@ const defaultDimensions: Defaults = {
   bulkhead: { width: 600, height: 200, depth: 16 },
   // UnderPanel: width = cabinet width, height = thickness (16mm), depth = parent depth - 20
   underPanel: { width: 600, height: 16, depth: 280 },
-  benchtop: { width: 2000, height: 40, depth: 600 }, // Standard benchtop size
+  // benchtop is handled separately by benchtopHandler.ts - not a carcass type
   // Appliance: standard built-in appliance dimensions (fallback)
   appliance: { width: 600, height: 820, depth: 600 },
 }
@@ -230,6 +231,7 @@ export const createCabinet = (
 
   // Get type-specific configuration
   const config = getDefaultConfig(resolvedType, subcategoryId, opts)
+  
   
   // Create carcass using unified factory method
   const carcass = CarcassAssembly.create(

@@ -71,4 +71,12 @@ export type CabinetData = {
   bulkheadParentCabinetId?: string
   /** For underPanel type: parent cabinet ID that this under panel belongs to */
   underPanelParentCabinetId?: string
+  /** For benchtop type: parent cabinet ID that this benchtop belongs to */
+  benchtopParentCabinetId?: string
+  /** Benchtop overhangs - only for child benchtops */
+  benchtopFrontOverhang?: number  // Extends depth toward +Z, default 20mm
+  benchtopLeftOverhang?: number   // Extends from left edge toward -X, default 0
+  benchtopRightOverhang?: number  // Extends from right edge toward +X, default 0
+  /** Benchtop height from floor - only for independent benchtops (Y position) */
+  benchtopHeightFromFloor?: number  // Default 740mm, min 0, max 1200mm
 }

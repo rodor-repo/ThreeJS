@@ -34,6 +34,8 @@ export const DynamicPanelWithQuery: React.FC<ProductPanelProps> = ({
   initialGroupData,
   onSyncChange,
   initialSyncData,
+  onBenchtopOverhangChange,
+  onBenchtopHeightFromFloorChange,
 }) => {
   const productId = selectedCabinet?.productId
 
@@ -124,6 +126,8 @@ export const DynamicPanelWithQuery: React.FC<ProductPanelProps> = ({
       initialGroupData={initialGroupData}
       onSyncChange={onSyncChange}
       initialSyncData={initialSyncData}
+      onBenchtopOverhangChange={onBenchtopOverhangChange}
+      onBenchtopHeightFromFloorChange={onBenchtopHeightFromFloorChange}
       loading={isLoading}
       error={isError}
     />

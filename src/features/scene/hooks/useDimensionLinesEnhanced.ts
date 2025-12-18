@@ -22,6 +22,7 @@ import {
   createBaseTallOverallWidthDimensionEnhanced,
   createEmptySpaceYDimensionEnhanced,
   createEmptySpaceXDimensionEnhanced,
+  createBenchtopHeightFromFloorDimension,
   type DimensionLineOffsets,
 } from "./useDimensionLinesUtils/dimensionLineCreatorsEnhanced"
 import { useDimensionLineInteraction } from "./useDimensionLinesUtils/dimensionLineInteraction"
@@ -116,9 +117,26 @@ export function useDimensionLinesEnhanced(options: UseDimensionLinesEnhancedOpti
 
     const wallOffsetContext = getWallOffsetContext()
 
+    // Helper to check if a cabinet is a child product (should be skipped for dimension lines)
+    const isChildProduct = (cabinet: CabinetData): boolean => {
+      if (cabinet.cabinetType === "kicker") return true
+      if (cabinet.cabinetType === "bulkhead") return true
+      // Only child benchtops (with parent) are skipped; independent benchtops get dimension lines
+      if (cabinet.cabinetType === "benchtop" && cabinet.benchtopParentCabinetId) return true
+      if (cabinet.cabinetType === "underPanel") return true
+      if ((cabinet.cabinetType === "filler" || cabinet.cabinetType === "panel") && cabinet.hideLockIcons === true) return true
+      return false
+    }
+
+    // Helper to check if a cabinet is an independent benchtop
+    const isIndependentBenchtop = (cabinet: CabinetData): boolean => {
+      return cabinet.cabinetType === "benchtop" && !cabinet.benchtopParentCabinetId
+    }
+
     // Group cabinets by height to determine which should show height dimension
     const cabinetsByHeight = new Map<number, CabinetData[]>()
     cabinets.forEach((cabinet) => {
+      if (isChildProduct(cabinet)) return
       const height = cabinet.carcass.dimensions.height
       if (!cabinetsByHeight.has(height)) {
         cabinetsByHeight.set(height, [])
@@ -146,6 +164,7 @@ export function useDimensionLinesEnhanced(options: UseDimensionLinesEnhancedOpti
     // Group cabinets by depth
     const cabinetsByDepth = new Map<number, CabinetData[]>()
     cabinets.forEach((cabinet) => {
+      if (isChildProduct(cabinet)) return
       const depth = cabinet.carcass.dimensions.depth
       if (!cabinetsByDepth.has(depth)) {
         cabinetsByDepth.set(depth, [])
@@ -201,7 +220,8 @@ export function useDimensionLinesEnhanced(options: UseDimensionLinesEnhancedOpti
 
     // Create dimension lines for each cabinet
     cabinets.forEach((cabinet) => {
-      if (cabinet.cabinetType === "kicker") return
+      // Skip all child products - they follow their parent and shouldn't have independent dimension lines
+      if (isChildProduct(cabinet)) return
 
       const height = cabinet.carcass.dimensions.height
       const depth = cabinet.carcass.dimensions.depth
@@ -247,6 +267,11 @@ export function useDimensionLinesEnhanced(options: UseDimensionLinesEnhancedOpti
       if (showDepthDim) {
         addDimensionGroup(createDepthDimension(cabinet, wallOffsetContext, offsets))
       }
+
+      // Add height from floor dimension for independent benchtops
+      if (isIndependentBenchtop(cabinet) && cameraViewMode !== "z") {
+        addDimensionGroup(createBenchtopHeightFromFloorDimension(cabinet, offsets))
+      }
     })
 
     // Create overall width dimension line - hide in X view
@@ -260,7 +285,8 @@ export function useDimensionLinesEnhanced(options: UseDimensionLinesEnhancedOpti
         let allMinX = Infinity
         let allMaxX = -Infinity
         cabinets.forEach((cabinet) => {
-          if (cabinet.cabinetType === "kicker") return
+          // Skip all child products
+          if (isChildProduct(cabinet)) return
           const x = cabinet.group.position.x
           const width = cabinet.carcass.dimensions.width
           allMinX = Math.min(allMinX, x)

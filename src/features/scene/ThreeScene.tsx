@@ -56,6 +56,10 @@ import {
   handleUnderPanelSelect as handleUnderPanelSelectHandler,
   handleUnderPanelToggle as handleUnderPanelToggleHandler
 } from './utils/handlers/underPanelHandler'
+import {
+  handleBenchtopSelect as handleBenchtopSelectHandler,
+  handleBenchtopToggle as handleBenchtopToggleHandler
+} from './utils/handlers/benchtopHandler'
 import { useWallTransparency } from './hooks/useWallTransparency'
 import { ModeToggle } from './ui/ModeToggle'
 import { CartSection } from './ui/CartSection'
@@ -130,6 +134,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     showProductPanel,
     setShowProductPanel,
     createCabinet,
+    addCabinetData,
     clearCabinets,
     updateCabinetViewId,
     updateCabinetLock,
@@ -262,6 +267,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     wsProducts,
     sceneRef,
     createCabinet,
+    addCabinetData,
     setSelectedCabinet,
   })
 
@@ -466,6 +472,26 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
       deleteCabinet
     })
   }, [cabinets, wsProducts, createCabinet, deleteCabinet])
+
+  // Handle benchtop removal for base cabinets
+  const handleBenchtopToggle = useCallback((cabinetId: string, enabled: boolean) => {
+    handleBenchtopToggleHandler(cabinetId, enabled, {
+      cabinets,
+      wsProducts,
+      addCabinetData,
+      deleteCabinet
+    })
+  }, [cabinets, wsProducts, addCabinetData, deleteCabinet])
+
+  // Handle benchtop selection - creates benchtop with proper product association
+  const handleBenchtopSelect = useCallback((cabinetId: string, productId: string | null) => {
+    handleBenchtopSelectHandler(cabinetId, productId, {
+      cabinets,
+      wsProducts,
+      addCabinetData,
+      deleteCabinet
+    })
+  }, [cabinets, wsProducts, addCabinetData, deleteCabinet])
 
   // Handle bulkhead selection from modal - creates bulkhead with proper product association
   const handleBulkheadSelect = useCallback((cabinetId: string, productId: string) => {
@@ -724,6 +750,8 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
             onKickerSelect={handleKickerSelect}
             onBulkheadSelect={handleBulkheadSelect}
             onUnderPanelSelect={handleUnderPanelSelect}
+            onBenchtopToggle={handleBenchtopToggle}
+            onBenchtopSelect={handleBenchtopSelect}
           />
         )}
 
@@ -752,7 +780,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         />
       )}
 
-      {/* Product Panel - shown when NON-appliance cabinet is selected */}
+      {/* Product Panel - shown when NON-appliance cabinet is selected (includes benchtops) */}
       {showProductPanel && selectedCabinet?.cabinetType !== 'appliance' && (
         <ProductPanel
           isVisible={true}
@@ -763,22 +791,27 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         selectedCabinet={selectedCabinet ? {
           group: selectedCabinet.group,
           dimensions: selectedCabinet.carcass.dimensions,
-          material: selectedCabinet.carcass.config.material,
+          material: selectedCabinet.carcass.config?.material,
           cabinetType: selectedCabinet.cabinetType,
           subcategoryId: selectedCabinet.subcategoryId,
           productId: selectedCabinet.productId,
           sortNumber: selectedCabinet.sortNumber,
-          doorEnabled: selectedCabinet.carcass.config.doorEnabled,
-          doorCount: selectedCabinet.carcass.config.doorCount,
-          doorMaterial: selectedCabinet.carcass.config.doorMaterial,
-          overhangDoor: selectedCabinet.carcass.config.overhangDoor,
-          drawerEnabled: selectedCabinet.carcass.config.drawerEnabled,
-          drawerQuantity: selectedCabinet.carcass.config.drawerQuantity,
-          drawerHeights: selectedCabinet.carcass.config.drawerHeights,
+          doorEnabled: selectedCabinet.carcass.config?.doorEnabled,
+          doorCount: selectedCabinet.carcass.config?.doorCount,
+          doorMaterial: selectedCabinet.carcass.config?.doorMaterial,
+          overhangDoor: selectedCabinet.carcass.config?.overhangDoor,
+          drawerEnabled: selectedCabinet.carcass.config?.drawerEnabled,
+          drawerQuantity: selectedCabinet.carcass.config?.drawerQuantity,
+          drawerHeights: selectedCabinet.carcass.config?.drawerHeights,
           cabinetId: selectedCabinet.cabinetId,
           viewId: selectedCabinet.viewId,
           carcass: selectedCabinet.carcass,
-          hideLockIcons: selectedCabinet.hideLockIcons
+          hideLockIcons: selectedCabinet.hideLockIcons,
+          benchtopParentCabinetId: selectedCabinet.benchtopParentCabinetId,
+          benchtopFrontOverhang: selectedCabinet.benchtopFrontOverhang,
+          benchtopLeftOverhang: selectedCabinet.benchtopLeftOverhang,
+          benchtopRightOverhang: selectedCabinet.benchtopRightOverhang,
+          benchtopHeightFromFloor: selectedCabinet.benchtopHeightFromFloor
         } : null}
         viewManager={viewManager}
         allCabinets={cabinets}
@@ -925,6 +958,62 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
 
             return newMap
           })
+        }}
+
+        onBenchtopOverhangChange={(cabinetId, type, value) => {
+          const benchtopCabinet = cabinets.find(c => c.cabinetId === cabinetId)
+          if (!benchtopCabinet || benchtopCabinet.cabinetType !== 'benchtop') return
+
+          // Update the overhang value on the CabinetData
+          if (type === 'front') {
+            benchtopCabinet.benchtopFrontOverhang = value
+          } else if (type === 'left') {
+            benchtopCabinet.benchtopLeftOverhang = value
+          } else if (type === 'right') {
+            benchtopCabinet.benchtopRightOverhang = value
+          }
+
+          // Find parent cabinet to calculate proper depth
+          const parentCabinet = cabinets.find(c => c.cabinetId === benchtopCabinet.benchtopParentCabinetId)
+          const parentDepth = parentCabinet?.carcass.dimensions.depth ?? 600
+
+          // Calculate new depth: Parent Depth + 20mm (fixed) + Front Overhang
+          const FIXED_DEPTH_EXTENSION = 20 // Fixed 20mm extension beyond cabinet
+          const frontOverhang = benchtopCabinet.benchtopFrontOverhang ?? 20
+          const newDepth = parentDepth + FIXED_DEPTH_EXTENSION + frontOverhang
+
+          // Update carcass dimensions
+          benchtopCabinet.carcass.dimensions.depth = newDepth
+
+          // Update the actual benchtop mesh geometry
+          const benchtop = benchtopCabinet.group.userData.benchtop
+          if (benchtop && typeof benchtop.updateDimensions === 'function') {
+            benchtop.updateDimensions(
+              benchtopCabinet.carcass.dimensions.width,
+              benchtopCabinet.carcass.dimensions.height,
+              newDepth,  // Depth includes front overhang
+              frontOverhang,
+              benchtopCabinet.benchtopLeftOverhang,
+              benchtopCabinet.benchtopRightOverhang
+            )
+          }
+        }}
+
+        onBenchtopHeightFromFloorChange={(cabinetId, value) => {
+          const benchtopCabinet = cabinets.find(c => c.cabinetId === cabinetId)
+          if (!benchtopCabinet || benchtopCabinet.cabinetType !== 'benchtop') return
+          
+          // Only for independent benchtops (no parent)
+          if (benchtopCabinet.benchtopParentCabinetId) return
+
+          // Clamp value between 0 and 1200
+          const clampedValue = Math.max(0, Math.min(1200, value))
+
+          // Update the height from floor value on CabinetData
+          benchtopCabinet.benchtopHeightFromFloor = clampedValue
+
+          // Update the Y position of the benchtop group
+          benchtopCabinet.group.position.setY(clampedValue)
         }}
 
         onShelfCountChange={(newCount: number) => {

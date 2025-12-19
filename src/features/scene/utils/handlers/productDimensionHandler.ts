@@ -268,33 +268,6 @@ export const handleProductDimensionChange = (
       depthChanged,
       positionChanged: false,
     })
-
-    // If selected cabinet is a child filler/panel, update parent kicker when child dimensions change
-    if (
-      selectedCabinet.parentCabinetId &&
-      (selectedCabinet.cabinetType === "filler" ||
-        selectedCabinet.cabinetType === "panel") &&
-      selectedCabinet.hideLockIcons === true &&
-      (widthChanged || depthChanged)
-    ) {
-      const parentCabinet = cabinets.find(
-        (c) => c.cabinetId === selectedCabinet.parentCabinetId
-      )
-      if (
-        parentCabinet &&
-        (parentCabinet.cabinetType === "base" ||
-          parentCabinet.cabinetType === "tall")
-      ) {
-        updateKickerPosition(parentCabinet, cabinets, {
-          dimensionsChanged: true,
-        })
-      }
-      if (parentCabinet && parentCabinet.cabinetType === "top") {
-        updateUnderPanelPosition(parentCabinet, cabinets, {
-          dimensionsChanged: true,
-        })
-      }
-    }
   }
 }
 

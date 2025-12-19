@@ -1,5 +1,13 @@
 import { WsProducts } from "@/types/erpTypes"
 import { CabinetData, CabinetType } from "../../types"
+import { 
+  DEFAULT_BENCHTOP_THICKNESS, 
+  DEFAULT_BENCHTOP_FRONT_OVERHANG 
+} from "@/features/carcass/builders/builder-constants"
+import { 
+  getEffectiveBenchtopDimensions, 
+  calculateBenchtopDepth 
+} from "../benchtopUtils"
 
 type CreateCabinetFn = (
   cabinetType: CabinetType,
@@ -20,52 +28,6 @@ interface BenchtopHandlerParams {
   wsProducts: WsProducts | null | undefined
   createCabinet: CreateCabinetFn
   deleteCabinet: (id: string) => void
-}
-
-/**
- * Calculates the effective benchtop dimensions, considering child fillers/panels
- * 
- * Length = Cabinet Width + any child filler/panel widths
- * Starting X = Lowest X value (cabinet left edge or child filler/panel left edge)
- */
-export function getEffectiveBenchtopDimensions(
-  parentCabinet: CabinetData,
-  allCabinets: CabinetData[]
-): { effectiveLength: number; effectiveLeftX: number } {
-  const parentX = parentCabinet.group.position.x
-  const parentWidth = parentCabinet.carcass.dimensions.width
-  const parentLeftX = parentX
-  const parentRightX = parentX + parentWidth
-
-  let minX = parentLeftX
-  let maxX = parentRightX
-
-  // Find all child fillers/panels attached to this cabinet
-  const childCabinets = allCabinets.filter(
-    (c) =>
-      c.parentCabinetId === parentCabinet.cabinetId &&
-      (c.cabinetType === "filler" || c.cabinetType === "panel") &&
-      c.hideLockIcons === true
-  )
-
-  // Extend benchtop to include children
-  childCabinets.forEach((child) => {
-    const childLeftX = child.group.position.x
-    const childWidth = child.carcass.dimensions.width
-    const childRightX = childLeftX + childWidth
-
-    if (childLeftX < minX) {
-      minX = childLeftX
-    }
-    if (childRightX > maxX) {
-      maxX = childRightX
-    }
-  })
-
-  const effectiveLength = maxX - minX
-  const effectiveLeftX = minX
-
-  return { effectiveLength, effectiveLeftX }
 }
 
 /**
@@ -135,15 +97,14 @@ export const handleBenchtopSelect = (
   // width = effective length (cabinet + children)
   // height = thickness (38mm fixed)
   // depth = parent cabinet depth + 20mm (fixed) + front overhang
-  const benchtopThickness = 38
-  const FIXED_DEPTH_EXTENSION = 20
+  const benchtopThickness = DEFAULT_BENCHTOP_THICKNESS
   
   // Default overhangs for child benchtops
-  const frontOverhang = 20
+  const frontOverhang = DEFAULT_BENCHTOP_FRONT_OVERHANG
   const leftOverhang = 0
   const rightOverhang = 0
 
-  const benchtopDepth = parentCabinet.carcass.dimensions.depth + FIXED_DEPTH_EXTENSION + frontOverhang
+  const benchtopDepth = calculateBenchtopDepth(parentCabinet.carcass.dimensions.depth, frontOverhang)
 
   // Use createCabinet (cabinetFactory) instead of manual creation
   const benchtopCabinet = createCabinet("benchtop", subcategoryId, {

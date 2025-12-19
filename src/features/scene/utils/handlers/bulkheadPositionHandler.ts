@@ -4,6 +4,8 @@ import { WallDimensions } from "../../types"
 import {
   getEffectiveLeftEdge,
   getEffectiveRightEdge,
+  getLeftAdjacentCabinet as getLeftAdjacentCabinetUtil,
+  getRightAdjacentCabinet as getRightAdjacentCabinetUtil,
 } from "../../lib/snapUtils"
 import { WALL_THICKNESS } from "../../lib/sceneUtils"
 
@@ -15,27 +17,10 @@ export function hasLeftAdjacentCabinet(
   cabinet: CabinetData,
   allCabinets: CabinetData[]
 ): CabinetData | null {
-  const cabinetMinX = getEffectiveLeftEdge(cabinet, allCabinets)
-
-  // Find all overhead and tall cabinets (excluding the current one)
-  const adjacentCabinets = allCabinets.filter(
-    (c) =>
-      c.cabinetId !== cabinet.cabinetId &&
-      (c.cabinetType === "top" || c.cabinetType === "tall")
-  )
-
-  // Check if any cabinet's max X equals this cabinet's min X
-  for (const other of adjacentCabinets) {
-    const otherMaxX = getEffectiveRightEdge(other, allCabinets)
-
-    // Use a small epsilon for floating point comparison
-    const EPSILON = 4.0
-    if (Math.abs(otherMaxX - cabinetMinX) < EPSILON) {
-      return other
-    }
-  }
-
-  return null
+  return getLeftAdjacentCabinetUtil(cabinet, allCabinets, {
+    allowedTypes: ["top", "tall"],
+    epsilon: 4.0,
+  })
 }
 
 /**
@@ -46,27 +31,10 @@ export function hasRightAdjacentCabinet(
   cabinet: CabinetData,
   allCabinets: CabinetData[]
 ): CabinetData | null {
-  const cabinetMaxX = getEffectiveRightEdge(cabinet, allCabinets)
-
-  // Find all overhead and tall cabinets (excluding the current one)
-  const adjacentCabinets = allCabinets.filter(
-    (c) =>
-      c.cabinetId !== cabinet.cabinetId &&
-      (c.cabinetType === "top" || c.cabinetType === "tall")
-  )
-
-  // Check if any cabinet's min X equals this cabinet's max X
-  for (const other of adjacentCabinets) {
-    const otherMinX = getEffectiveLeftEdge(other, allCabinets)
-
-    // Use a small epsilon for floating point comparison
-    const EPSILON = 4.0
-    if (Math.abs(otherMinX - cabinetMaxX) < EPSILON) {
-      return other
-    }
-  }
-
-  return null
+  return getRightAdjacentCabinetUtil(cabinet, allCabinets, {
+    allowedTypes: ["top", "tall"],
+    epsilon: 4.0,
+  })
 }
 
 /**

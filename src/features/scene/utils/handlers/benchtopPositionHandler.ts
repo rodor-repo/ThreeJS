@@ -1,5 +1,16 @@
 import { CabinetData } from "../../types"
-import { getEffectiveBenchtopDimensions } from "./benchtopHandler"
+import { 
+  getEffectiveBenchtopDimensions, 
+  calculateBenchtopDepth 
+} from "../benchtopUtils"
+import { 
+  DEFAULT_BENCHTOP_THICKNESS, 
+  DEFAULT_BENCHTOP_FRONT_OVERHANG 
+} from "@/features/carcass/builders/builder-constants"
+import { 
+  getLeftAdjacentCabinet, 
+  getRightAdjacentCabinet 
+} from "../../lib/snapUtils"
 
 /**
  * Updates benchtop position and dimensions when parent cabinet changes
@@ -48,12 +59,11 @@ export const updateBenchtopPosition = (
   // Length = effective length (cabinet + children)
   // Thickness = cabinet property or 38mm (default)
   // Depth = parent cabinet depth + 20mm (fixed) + front overhang
-  const benchtopThickness = benchtopCabinet.benchtopThickness ?? 38
-  const FIXED_DEPTH_EXTENSION = 20 // Fixed 20mm extension beyond cabinet
-  const frontOverhang = benchtopCabinet.benchtopFrontOverhang ?? 20
+  const benchtopThickness = benchtopCabinet.benchtopThickness ?? DEFAULT_BENCHTOP_THICKNESS
+  const frontOverhang = benchtopCabinet.benchtopFrontOverhang ?? DEFAULT_BENCHTOP_FRONT_OVERHANG
   const leftOverhang = benchtopCabinet.benchtopLeftOverhang ?? 0
   const rightOverhang = benchtopCabinet.benchtopRightOverhang ?? 0
-  const benchtopDepth = parentDepth + FIXED_DEPTH_EXTENSION + frontOverhang
+  const benchtopDepth = calculateBenchtopDepth(parentDepth, frontOverhang)
 
   // Update benchtop dimensions if needed
   if (changes.dimensionsChanged || changes.childChanged) {
@@ -95,14 +105,7 @@ export const hasLeftAdjacentCabinet = (
   parentCabinet: CabinetData,
   allCabinets: CabinetData[]
 ): boolean => {
-  const parentLeftX = parentCabinet.group.position.x
-
-  return allCabinets.some(
-    (c) =>
-      c.cabinetType === "base" &&
-      c.cabinetId !== parentCabinet.cabinetId &&
-      Math.abs(c.group.position.x + c.carcass.dimensions.width - parentLeftX) < 1 // Within 1mm tolerance
-  )
+  return !!getLeftAdjacentCabinet(parentCabinet, allCabinets, { allowedTypes: ["base"] })
 }
 
 /**
@@ -112,12 +115,5 @@ export const hasRightAdjacentCabinet = (
   parentCabinet: CabinetData,
   allCabinets: CabinetData[]
 ): boolean => {
-  const parentRightX = parentCabinet.group.position.x + parentCabinet.carcass.dimensions.width
-
-  return allCabinets.some(
-    (c) =>
-      c.cabinetType === "base" &&
-      c.cabinetId !== parentCabinet.cabinetId &&
-      Math.abs(c.group.position.x - parentRightX) < 1 // Within 1mm tolerance
-  )
+  return !!getRightAdjacentCabinet(parentCabinet, allCabinets, { allowedTypes: ["base"] })
 }

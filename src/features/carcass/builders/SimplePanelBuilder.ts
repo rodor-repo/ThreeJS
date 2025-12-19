@@ -5,6 +5,11 @@ import { KickerFace } from "../parts/KickerFace"
 import { UnderPanelFace } from "../parts/UnderPanelFace"
 import { BulkheadFace } from "../parts/BulkheadFace"
 import { Benchtop } from "../parts/Benchtop"
+import { 
+  DEFAULT_BENCHTOP_THICKNESS, 
+  DEFAULT_BENCHTOP_FRONT_OVERHANG,
+  PART_NAMES
+} from "./builder-constants"
 
 export class KickerBuilder implements CabinetBuilder {
   build(assembly: CarcassAssembly): void {
@@ -165,7 +170,7 @@ export class BulkheadBuilder implements CabinetBuilder {
 export class BenchtopBuilder implements CabinetBuilder {
   build(assembly: CarcassAssembly): void {
     // Get overhang values from config
-    const frontOverhang = assembly.config.benchtopFrontOverhang ?? 0
+    const frontOverhang = assembly.config.benchtopFrontOverhang ?? DEFAULT_BENCHTOP_FRONT_OVERHANG
     const leftOverhang = assembly.config.benchtopLeftOverhang ?? 0
     const rightOverhang = assembly.config.benchtopRightOverhang ?? 0
 
@@ -173,7 +178,7 @@ export class BenchtopBuilder implements CabinetBuilder {
     // Note: dimensions.height is used for thickness (following underPanel pattern)
     assembly._benchtop = new Benchtop(
       assembly.dimensions.width,   // length
-      assembly.dimensions.height,  // thickness (38mm default)
+      assembly.dimensions.height || DEFAULT_BENCHTOP_THICKNESS,  // thickness
       assembly.dimensions.depth,   // depth (including front overhang)
       frontOverhang,
       leftOverhang,
@@ -204,7 +209,7 @@ export class BenchtopBuilder implements CabinetBuilder {
     if (assembly._benchtop) {
       const benchtopGeometry = assembly._benchtop.mesh.geometry as THREE.BoxGeometry
       parts.push({
-        partName: "Benchtop",
+        partName: PART_NAMES.BENCHTOP,
         dimX: benchtopGeometry.parameters.width,
         dimY: benchtopGeometry.parameters.height,
         dimZ: benchtopGeometry.parameters.depth,

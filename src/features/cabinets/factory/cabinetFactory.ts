@@ -6,6 +6,10 @@ import {
   CabinetType,
   CarcassConfig,
 } from "@/features/carcass"
+import { 
+  DEFAULT_BENCHTOP_THICKNESS, 
+  DEFAULT_BENCHTOP_FRONT_OVERHANG 
+} from "@/features/carcass/builders/builder-constants"
 import { CabinetData } from "@/features/scene/types"
 import { fetchProductData } from "@/features/carcass/utils/drawer-constraint-utils"
 import { getGDMapping } from "../ui/productPanel/hooks/useGDMapping"
@@ -34,8 +38,8 @@ const defaultDimensions: Defaults = {
   bulkhead: { width: 600, height: 200, depth: 16 },
   // UnderPanel: width = cabinet width, height = thickness (16mm), depth = parent depth - 20
   underPanel: { width: 600, height: 16, depth: 280 },
-  // Benchtop: width = length, height = thickness (38mm), depth = base depth + 20 + front overhang
-  benchtop: { width: 600, height: 38, depth: 560 },
+  // Benchtop: width = length, height = thickness, depth = base depth + 20 + front overhang
+  benchtop: { width: 600, height: DEFAULT_BENCHTOP_THICKNESS, depth: 560 },
   // Appliance: standard built-in appliance dimensions (fallback)
   appliance: { width: 600, height: 820, depth: 600 },
 }
@@ -150,7 +154,7 @@ const getDefaultConfig = (
     case "benchtop":
       return {
         ...baseConfig,
-        benchtopFrontOverhang: 20,  // Default 20mm front overhang
+        benchtopFrontOverhang: DEFAULT_BENCHTOP_FRONT_OVERHANG,
         benchtopLeftOverhang: 0,
         benchtopRightOverhang: 0,
       }

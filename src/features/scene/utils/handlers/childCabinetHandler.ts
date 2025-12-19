@@ -1,6 +1,7 @@
 import { CabinetData } from "../../types"
 import { updateKickerPosition } from "./kickerPositionHandler"
 import { updateUnderPanelPosition } from "./underPanelPositionHandler"
+import { updateBenchtopPosition } from "./benchtopPositionHandler"
 
 /**
  * Updates child fillers/panels when parent cabinet dimensions change
@@ -223,6 +224,18 @@ export const updateChildCabinets = (
   ) {
     updateUnderPanelPosition(parentCabinet, cabinets, {
       dimensionsChanged: true
+    })
+  }
+
+  // Update parent benchtop if parent is base and child dimensions/position changed
+  // (affects benchtop length)
+  if (
+    parentCabinet.cabinetType === 'base' &&
+    (changes.widthChanged || changes.positionChanged)
+  ) {
+    updateBenchtopPosition(parentCabinet, cabinets, {
+      dimensionsChanged: true,
+      childChanged: true
     })
   }
 }

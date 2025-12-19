@@ -3,8 +3,7 @@ import * as THREE from "three"
 import { WsProducts } from "@/types/erpTypes"
 import { CabinetData, CabinetType, WallDimensions } from "../../types"
 import { handleDeleteCabinet } from "./deleteCabinetHandler"
-import { updateBenchtopPosition } from "./benchtopPositionHandler"
-import { updateUnderPanelPosition } from "./underPanelPositionHandler"
+import { updateAllDependentComponents } from "./dependentComponentsHandler"
 
 type CreateCabinetFn = (
   cabinetType: CabinetType,
@@ -177,44 +176,19 @@ export const handleFillerSelect = (
     }
   }
 
-  // Update bulkhead if applicable
-  if (parentCabinet.cabinetType === "top" || parentCabinet.cabinetType === "tall") {
-    import("./bulkheadPositionHandler").then(({ updateBulkheadPosition }) => {
-      setTimeout(() => {
-        const updatedCabinets = [...cabinets, newCabinet]
-        updateBulkheadPosition(parentCabinet, updatedCabinets, wallDimensions, {
-          widthChanged: true,
-        })
-      }, 0)
+  // Update all dependent components of the parent cabinet (benchtop, kicker, bulkhead, underPanel)
+  // Use setTimeout to ensure the new cabinet is in the array
+  setTimeout(() => {
+    const updatedCabinets = [...cabinets, newCabinet]
+    updateAllDependentComponents(parentCabinet, updatedCabinets, wallDimensions, {
+      childChanged: true,
     })
-  }
-
-  // Update benchtop if parent is a base cabinet
-  if (parentCabinet.cabinetType === "base") {
-    // Use setTimeout to ensure the new cabinet is in the array
-    setTimeout(() => {
-      const updatedCabinets = [...cabinets, newCabinet]
-      updateBenchtopPosition(parentCabinet, updatedCabinets, {
-        childChanged: true,
-      })
-    }, 0)
-  }
-
-  // Update underPanel if parent is a top cabinet
-  if (parentCabinet.cabinetType === "top") {
-    // Use setTimeout to ensure the new cabinet is in the array
-    setTimeout(() => {
-      const updatedCabinets = [...cabinets, newCabinet]
-      updateUnderPanelPosition(parentCabinet, updatedCabinets, {
-        dimensionsChanged: true,
-        widthChanged: true,
-      })
-    }, 0)
-  }
+  }, 0)
 }
 
 interface FillerToggleParams {
   cabinets: CabinetData[]
+  wallDimensions: WallDimensions
   viewManager: any
   setCabinetGroups: (
     update: (
@@ -236,7 +210,7 @@ export const handleFillerToggle = (
   params: FillerToggleParams
 ) => {
   if (enabled) return
-  const { cabinets, viewManager, setCabinetGroups, deleteCabinet, setCabinetToDelete, removeCabinetParts } = params
+  const { cabinets, wallDimensions, viewManager, setCabinetGroups, deleteCabinet, setCabinetToDelete, removeCabinetParts } = params
 
   const childCabinet = cabinets.find(
     (c) =>
@@ -256,32 +230,20 @@ export const handleFillerToggle = (
     deleteCabinet,
     setCabinetToDelete,
     allCabinets: cabinets,
+    wallDimensions,
   })
 
   if (removeCabinetParts) {
     removeCabinetParts(childCabinet.cabinetId)
   }
 
-  // Update benchtop if parent is a base cabinet
-  if (parentCabinet && parentCabinet.cabinetType === "base") {
-    // Use setTimeout to ensure the cabinet is removed from the array
+  // Update all dependent components of the parent cabinet (benchtop, kicker, bulkhead, underPanel)
+  // Use setTimeout to ensure the cabinet is removed from the array
+  if (parentCabinet) {
     setTimeout(() => {
-      // Filter out the removed child cabinet
       const updatedCabinets = cabinets.filter((c) => c.cabinetId !== childCabinet.cabinetId)
-      updateBenchtopPosition(parentCabinet, updatedCabinets, {
+      updateAllDependentComponents(parentCabinet, updatedCabinets, wallDimensions, {
         childChanged: true,
-      })
-    }, 0)
-  }
-
-  // Update underPanel if parent is a top cabinet
-  if (parentCabinet && parentCabinet.cabinetType === "top") {
-    // Use setTimeout to ensure the cabinet is removed from the array
-    setTimeout(() => {
-      const updatedCabinets = cabinets.filter((c) => c.cabinetId !== childCabinet.cabinetId)
-      updateUnderPanelPosition(parentCabinet, updatedCabinets, {
-        dimensionsChanged: true,
-        widthChanged: true,
       })
     }, 0)
   }

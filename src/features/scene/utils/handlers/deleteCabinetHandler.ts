@@ -1,6 +1,6 @@
-import { CabinetData } from "../../types"
+import { CabinetData, WallDimensions } from "../../types"
 import { ViewId } from "../../../cabinets/ViewManager"
-import { updateKickerPosition } from "./kickerPositionHandler"
+import { updateAllDependentComponents } from "./dependentComponentsHandler"
 
 interface ViewManagerResult {
   viewManager: {
@@ -49,22 +49,25 @@ export const handleDeleteCabinet = (
     deleteCabinet: (id: string) => void
     setCabinetToDelete: (cabinet: CabinetData | null) => void
     allCabinets: CabinetData[]
+    wallDimensions: WallDimensions
   }
 ) => {
-  const { viewManager, setCabinetGroups, deleteCabinet, setCabinetToDelete, allCabinets } =
+  const { viewManager, setCabinetGroups, deleteCabinet, setCabinetToDelete, allCabinets, wallDimensions } =
     params
 
-  // If deleting a child filler/panel, update parent kicker before deletion
+  // If deleting a child filler/panel, update parent's dependent components
   if (
     cabinetToDelete.parentCabinetId &&
     (cabinetToDelete.cabinetType === 'filler' || cabinetToDelete.cabinetType === 'panel') &&
     cabinetToDelete.hideLockIcons === true
   ) {
     const parentCabinet = allCabinets.find(c => c.cabinetId === cabinetToDelete.parentCabinetId)
-    if (parentCabinet && (parentCabinet.cabinetType === 'base' || parentCabinet.cabinetType === 'tall')) {
-      // Update kicker before deleting child (child still exists in allCabinets at this point)
-      updateKickerPosition(parentCabinet, allCabinets, {
-        dimensionsChanged: true
+    if (parentCabinet) {
+      // Update parent's dependent components (kicker, benchtop, etc.)
+      // We pass a filtered list of cabinets that doesn't include the one being deleted
+      const updatedCabinets = allCabinets.filter(c => c.cabinetId !== cabinetToDelete.cabinetId)
+      updateAllDependentComponents(parentCabinet, updatedCabinets, wallDimensions, {
+        childChanged: true
       })
     }
   }

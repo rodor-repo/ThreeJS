@@ -16,6 +16,11 @@ export const DEFAULT_WARDROBE_DRAWER_BUFFER = 50 // mm - space between drawers a
 // Bulkhead-specific
 export const BULKHEAD_RETURN_THICKNESS = 16 // mm - fixed thickness for bulkhead returns
 
+// Benchtop-specific
+export const DEFAULT_BENCHTOP_THICKNESS = 38 // mm
+export const BENCHTOP_FIXED_DEPTH_EXTENSION = 20 // mm - fixed extension beyond cabinet depth
+export const DEFAULT_BENCHTOP_FRONT_OVERHANG = 20 // mm - default front overhang for child benchtops
+
 // Part naming conventions for export/nesting
 export const PART_NAMES = {
   LEFT_PANEL: "Left Panel",
@@ -27,4 +32,5 @@ export const PART_NAMES = {
   SHELF: "Shelf",
   DOOR: "Door",
   DRAWER_FRONT: "Drawer Front",
+  BENCHTOP: "Benchtop",
 } as const

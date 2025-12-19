@@ -412,13 +412,14 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
   const handleFillerToggle = useCallback((cabinetId: string, side: 'left' | 'right', enabled: boolean) => {
     handleFillerToggleHandler(cabinetId, side, enabled, {
       cabinets,
+      wallDimensions,
       viewManager,
       setCabinetGroups,
       deleteCabinet,
       setCabinetToDelete,
       removeCabinetParts: partData.removeCabinet
     })
-  }, [cabinets, viewManager, setCabinetGroups, deleteCabinet, setCabinetToDelete, partData.removeCabinet])
+  }, [cabinets, wallDimensions, viewManager, setCabinetGroups, deleteCabinet, setCabinetToDelete, partData.removeCabinet])
 
   // Handle kicker selection from modal - creates kicker with proper product association
   const handleKickerSelect = useCallback((cabinetId: string, productId: string) => {
@@ -1234,7 +1235,8 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
               setCabinetGroups,
               deleteCabinet,
               setCabinetToDelete,
-              allCabinets: cabinets
+              allCabinets: cabinets,
+              wallDimensions
             })
             // Remove cabinet from part data database
             partData.removeCabinet(cabinetToDelete.cabinetId)

@@ -283,6 +283,74 @@ export function getEffectiveRightEdge(cabinet: CabinetData, allCabinets: Cabinet
 }
 
 /**
+ * Finds a cabinet adjacent to the left of the given cabinet
+ * Returns the adjacent cabinet if found, null otherwise
+ */
+export function getLeftAdjacentCabinet(
+  cabinet: CabinetData,
+  allCabinets: CabinetData[],
+  options: { 
+    allowedTypes?: string[], 
+    epsilon?: number 
+  } = {}
+): CabinetData | null {
+  const { allowedTypes, epsilon = 1.0 } = options
+  const cabinetMinX = getEffectiveLeftEdge(cabinet, allCabinets)
+
+  // Find potential adjacent cabinets
+  const potentialCabinets = allCabinets.filter(
+    (c) =>
+      c.cabinetId !== cabinet.cabinetId &&
+      (!allowedTypes || allowedTypes.includes(c.cabinetType))
+  )
+
+  // Check if any cabinet's max X equals this cabinet's min X
+  for (const other of potentialCabinets) {
+    const otherMaxX = getEffectiveRightEdge(other, allCabinets)
+
+    if (Math.abs(otherMaxX - cabinetMinX) < epsilon) {
+      return other
+    }
+  }
+
+  return null
+}
+
+/**
+ * Finds a cabinet adjacent to the right of the given cabinet
+ * Returns the adjacent cabinet if found, null otherwise
+ */
+export function getRightAdjacentCabinet(
+  cabinet: CabinetData,
+  allCabinets: CabinetData[],
+  options: { 
+    allowedTypes?: string[], 
+    epsilon?: number 
+  } = {}
+): CabinetData | null {
+  const { allowedTypes, epsilon = 1.0 } = options
+  const cabinetMaxX = getEffectiveRightEdge(cabinet, allCabinets)
+
+  // Find potential adjacent cabinets
+  const potentialCabinets = allCabinets.filter(
+    (c) =>
+      c.cabinetId !== cabinet.cabinetId &&
+      (!allowedTypes || allowedTypes.includes(c.cabinetType))
+  )
+
+  // Check if any cabinet's min X equals this cabinet's max X
+  for (const other of potentialCabinets) {
+    const otherMinX = getEffectiveLeftEdge(other, allCabinets)
+
+    if (Math.abs(otherMinX - cabinetMaxX) < epsilon) {
+      return other
+    }
+  }
+
+  return null
+}
+
+/**
  * Detect all potential snap points from nearby cabinets
  */
 function detectSnapPoints(

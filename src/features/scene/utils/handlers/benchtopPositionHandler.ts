@@ -46,9 +46,9 @@ export const updateBenchtopPosition = (
 
   // Benchtop dimensions:
   // Length = effective length (cabinet + children)
-  // Thickness = 38mm (fixed)
+  // Thickness = cabinet property or 38mm (default)
   // Depth = parent cabinet depth + 20mm (fixed) + front overhang
-  const benchtopThickness = 38
+  const benchtopThickness = benchtopCabinet.benchtopThickness ?? 38
   const FIXED_DEPTH_EXTENSION = 20 // Fixed 20mm extension beyond cabinet
   const frontOverhang = benchtopCabinet.benchtopFrontOverhang ?? 20
   const leftOverhang = benchtopCabinet.benchtopLeftOverhang ?? 0

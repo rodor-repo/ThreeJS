@@ -11,6 +11,9 @@ export type { DimensionInputProps } from "./DimensionInput"
 export { DimensionsSection } from "./DimensionsSection"
 export type { DimensionsSectionProps } from "./DimensionsSection"
 
+export { BenchtopSection } from "./BenchtopSection"
+export type { BenchtopSectionProps } from "./BenchtopSection"
+
 export { MaterialCard } from "./MaterialCard"
 export type { MaterialCardProps } from "./MaterialCard"
 

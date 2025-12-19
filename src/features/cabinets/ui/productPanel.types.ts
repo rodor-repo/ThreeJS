@@ -34,6 +34,8 @@ export interface SelectedCabinetSnapshot {
   benchtopFrontOverhang?: number
   benchtopLeftOverhang?: number
   benchtopRightOverhang?: number
+  /** Benchtop thickness - only for child benchtops */
+  benchtopThickness?: number
   /** Benchtop height from floor - only for independent benchtops */
   benchtopHeightFromFloor?: number
 }
@@ -59,10 +61,19 @@ export interface ProductPanelCallbacks {
   // optional debugging helper used by Debug Balance button
   onDebugBalanceTest?: () => number[] | void
   onViewChange?: (cabinetId: string, viewId: string) => void
-  onGroupChange?: (cabinetId: string, groupCabinets: Array<{ cabinetId: string; percentage: number }>) => void
+  onGroupChange?: (
+    cabinetId: string,
+    groupCabinets: Array<{ cabinetId: string; percentage: number }>
+  ) => void
   onSyncChange?: (cabinetId: string, syncCabinets: string[]) => void
   /** Benchtop overhang change callback - only for child benchtops */
-  onBenchtopOverhangChange?: (cabinetId: string, type: 'front' | 'left' | 'right', value: number) => void
+  onBenchtopOverhangChange?: (
+    cabinetId: string,
+    type: "front" | "left" | "right",
+    value: number
+  ) => void
+  /** Benchtop thickness change callback - only for child benchtops */
+  onBenchtopThicknessChange?: (cabinetId: string, value: number) => void
   /** Benchtop height from floor change callback - only for independent benchtops */
   onBenchtopHeightFromFloorChange?: (cabinetId: string, value: number) => void
 }
@@ -74,9 +85,11 @@ export interface ProductPanelProps extends ProductPanelCallbacks {
   /** When provided, ProductPanel will render dynamic dimension controls from this schema */
   wsProduct?: WsProduct
   /** View manager for grouping cabinets */
-  viewManager?: ReturnType<typeof import('../hooks/useViewManager').useViewManager>
+  viewManager?: ReturnType<
+    typeof import("../hooks/useViewManager").useViewManager
+  >
   /** All cabinets in the scene for accurate view counts */
-  allCabinets?: import('@/features/scene/types').CabinetData[]
+  allCabinets?: import("@/features/scene/types").CabinetData[]
   /** Initial group data for the selected cabinet */
   initialGroupData?: Array<{ cabinetId: string; percentage: number }>
   /** Initial sync data for the selected cabinet */

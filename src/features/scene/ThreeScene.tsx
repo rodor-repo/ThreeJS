@@ -60,6 +60,7 @@ import {
   handleBenchtopSelect as handleBenchtopSelectHandler,
   handleBenchtopToggle as handleBenchtopToggleHandler
 } from './utils/handlers/benchtopHandler'
+import { updateBenchtopPosition } from './utils/handlers/benchtopPositionHandler'
 import { useWallTransparency } from './hooks/useWallTransparency'
 import { ModeToggle } from './ui/ModeToggle'
 import { CartSection } from './ui/CartSection'
@@ -782,389 +783,436 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
       {showProductPanel && selectedCabinet?.cabinetType !== 'appliance' && (
         <ProductPanel
           isVisible={true}
-        onClose={() => {
-          setShowProductPanel(false);
-          setSelectedCabinet(null);
-        }}
-        selectedCabinet={selectedCabinet ? {
-          group: selectedCabinet.group,
-          dimensions: selectedCabinet.carcass.dimensions,
-          material: selectedCabinet.carcass.config.material,
-          cabinetType: selectedCabinet.cabinetType,
-          subcategoryId: selectedCabinet.subcategoryId,
-          productId: selectedCabinet.productId,
-          sortNumber: selectedCabinet.sortNumber,
-          doorEnabled: selectedCabinet.carcass.config.doorEnabled,
-          doorCount: selectedCabinet.carcass.config.doorCount,
-          doorMaterial: selectedCabinet.carcass.config.doorMaterial,
-          overhangDoor: selectedCabinet.carcass.config.overhangDoor,
-          drawerEnabled: selectedCabinet.carcass.config.drawerEnabled,
-          drawerQuantity: selectedCabinet.carcass.config.drawerQuantity,
-          drawerHeights: selectedCabinet.carcass.config.drawerHeights,
-          cabinetId: selectedCabinet.cabinetId,
-          viewId: selectedCabinet.viewId,
-          carcass: selectedCabinet.carcass,
-          hideLockIcons: selectedCabinet.hideLockIcons,
-          benchtopParentCabinetId: selectedCabinet.benchtopParentCabinetId,
-          benchtopFrontOverhang: selectedCabinet.benchtopFrontOverhang,
-          benchtopLeftOverhang: selectedCabinet.benchtopLeftOverhang,
-          benchtopRightOverhang: selectedCabinet.benchtopRightOverhang,
-          benchtopHeightFromFloor: selectedCabinet.benchtopHeightFromFloor
-        } : null}
-        viewManager={viewManager}
-        allCabinets={cabinets}
-        initialGroupData={selectedCabinet ? (cabinetGroups.get(selectedCabinet.cabinetId) || []) : []}
-        initialSyncData={selectedCabinet ? (cabinetSyncs.get(selectedCabinet.cabinetId) || []) : []}
-        onSyncChange={(cabinetId, syncCabinets) => {
-          // Update cabinet syncs map with bidirectional sync
-          setCabinetSyncs(prev => {
-            const newMap = new Map(prev)
-            const oldSyncList = prev.get(cabinetId) || []
-
-            // Find added and removed cabinets
-            const addedCabinets = syncCabinets.filter(id => !oldSyncList.includes(id))
-            const removedCabinets = oldSyncList.filter(id => !syncCabinets.includes(id))
-
-            // Update the current cabinet's sync list
-            if (syncCabinets.length === 0) {
-              newMap.delete(cabinetId)
-            } else {
-              newMap.set(cabinetId, syncCabinets)
-            }
-
-            // Bidirectional: add current cabinet to newly synced cabinets' lists
-            for (const addedId of addedCabinets) {
-              const otherSyncList = newMap.get(addedId) || []
-              if (!otherSyncList.includes(cabinetId)) {
-                newMap.set(addedId, [...otherSyncList, cabinetId])
-              }
-            }
-
-            // Bidirectional: remove current cabinet from unsynced cabinets' lists
-            for (const removedId of removedCabinets) {
-              const otherSyncList = newMap.get(removedId) || []
-              const updatedList = otherSyncList.filter(id => id !== cabinetId)
-              if (updatedList.length === 0) {
-                newMap.delete(removedId)
-              } else {
-                newMap.set(removedId, updatedList)
-              }
-            }
-
-            return newMap
-          })
-        }}
-        onViewChange={(cabinetId, viewId) => {
-          // Update the cabinet's viewId in the state
-          // If viewId is "none", set to undefined
-          updateCabinetViewId(cabinetId, viewId === 'none' ? undefined : viewId)
-
-          // If cabinet is removed from view (viewId is 'none'), remove all group relations
-          if (viewId === 'none') {
-            setCabinetGroups(prev => {
+          onClose={() => {
+            setShowProductPanel(false);
+            setSelectedCabinet(null);
+          }}
+          selectedCabinet={selectedCabinet ? {
+            group: selectedCabinet.group,
+            dimensions: selectedCabinet.carcass.dimensions,
+            material: selectedCabinet.carcass.config.material,
+            cabinetType: selectedCabinet.cabinetType,
+            subcategoryId: selectedCabinet.subcategoryId,
+            productId: selectedCabinet.productId,
+            sortNumber: selectedCabinet.sortNumber,
+            doorEnabled: selectedCabinet.carcass.config.doorEnabled,
+            doorCount: selectedCabinet.carcass.config.doorCount,
+            doorMaterial: selectedCabinet.carcass.config.doorMaterial,
+            overhangDoor: selectedCabinet.carcass.config.overhangDoor,
+            drawerEnabled: selectedCabinet.carcass.config.drawerEnabled,
+            drawerQuantity: selectedCabinet.carcass.config.drawerQuantity,
+            drawerHeights: selectedCabinet.carcass.config.drawerHeights,
+            cabinetId: selectedCabinet.cabinetId,
+            viewId: selectedCabinet.viewId,
+            carcass: selectedCabinet.carcass,
+            hideLockIcons: selectedCabinet.hideLockIcons,
+            benchtopParentCabinetId: selectedCabinet.benchtopParentCabinetId,
+            benchtopFrontOverhang: selectedCabinet.benchtopFrontOverhang,
+            benchtopLeftOverhang: selectedCabinet.benchtopLeftOverhang,
+            benchtopRightOverhang: selectedCabinet.benchtopRightOverhang,
+            benchtopThickness: selectedCabinet.benchtopThickness,
+            benchtopHeightFromFloor: selectedCabinet.benchtopHeightFromFloor
+          } : null}
+          viewManager={viewManager}
+          allCabinets={cabinets}
+          initialGroupData={selectedCabinet ? (cabinetGroups.get(selectedCabinet.cabinetId) || []) : []}
+          initialSyncData={selectedCabinet ? (cabinetSyncs.get(selectedCabinet.cabinetId) || []) : []}
+          onSyncChange={(cabinetId, syncCabinets) => {
+            // Update cabinet syncs map with bidirectional sync
+            setCabinetSyncs(prev => {
               const newMap = new Map(prev)
+              const oldSyncList = prev.get(cabinetId) || []
 
-              // Remove this cabinet's own group
-              newMap.delete(cabinetId)
+              // Find added and removed cabinets
+              const addedCabinets = syncCabinets.filter(id => !oldSyncList.includes(id))
+              const removedCabinets = oldSyncList.filter(id => !syncCabinets.includes(id))
 
-              // Remove this cabinet from any other cabinets' groups
-              newMap.forEach((group, otherCabinetId) => {
-                const updatedGroup = group.filter(g => g.cabinetId !== cabinetId)
-                if (updatedGroup.length !== group.length) {
-                  // Cabinet was removed from this group
-                  if (updatedGroup.length > 0) {
-                    // Recalculate percentages if a cabinet was removed
-                    const total = updatedGroup.reduce((sum, g) => sum + g.percentage, 0)
-                    if (total !== 100) {
-                      updatedGroup.forEach(g => {
-                        g.percentage = Math.round((g.percentage / total) * 100)
-                      })
-                      const finalTotal = updatedGroup.reduce((sum, g) => sum + g.percentage, 0)
-                      if (finalTotal !== 100) {
-                        updatedGroup[0].percentage += (100 - finalTotal)
-                      }
-                    }
-                    newMap.set(otherCabinetId, updatedGroup)
-                  } else {
-                    // No more cabinets in group, remove the group
-                    newMap.delete(otherCabinetId)
-                  }
+              // Update the current cabinet's sync list
+              if (syncCabinets.length === 0) {
+                newMap.delete(cabinetId)
+              } else {
+                newMap.set(cabinetId, syncCabinets)
+              }
+
+              // Bidirectional: add current cabinet to newly synced cabinets' lists
+              for (const addedId of addedCabinets) {
+                const otherSyncList = newMap.get(addedId) || []
+                if (!otherSyncList.includes(cabinetId)) {
+                  newMap.set(addedId, [...otherSyncList, cabinetId])
                 }
-              })
+              }
+
+              // Bidirectional: remove current cabinet from unsynced cabinets' lists
+              for (const removedId of removedCabinets) {
+                const otherSyncList = newMap.get(removedId) || []
+                const updatedList = otherSyncList.filter(id => id !== cabinetId)
+                if (updatedList.length === 0) {
+                  newMap.delete(removedId)
+                } else {
+                  newMap.set(removedId, updatedList)
+                }
+              }
 
               return newMap
             })
-          }
-        }}
-        onGroupChange={(cabinetId, groupCabinets) => {
-          // Update cabinet groups map with bidirectional pairing
-          setCabinetGroups(prev => {
-            const newMap = new Map(prev)
-            const oldGroupList = prev.get(cabinetId) || []
+          }}
+          onViewChange={(cabinetId, viewId) => {
+            // Update the cabinet's viewId in the state
+            // If viewId is "none", set to undefined
+            updateCabinetViewId(cabinetId, viewId === 'none' ? undefined : viewId)
 
-            // Find added and removed cabinets
-            const oldCabinetIds = oldGroupList.map(g => g.cabinetId)
-            const newCabinetIds = groupCabinets.map(g => g.cabinetId)
-            const addedCabinets = newCabinetIds.filter(id => !oldCabinetIds.includes(id))
-            const removedCabinets = oldCabinetIds.filter(id => !newCabinetIds.includes(id))
+            // If cabinet is removed from view (viewId is 'none'), remove all group relations
+            if (viewId === 'none') {
+              setCabinetGroups(prev => {
+                const newMap = new Map(prev)
 
-            // Update the current cabinet's group list
-            if (groupCabinets.length === 0) {
-              newMap.delete(cabinetId)
-            } else {
-              newMap.set(cabinetId, groupCabinets)
-            }
+                // Remove this cabinet's own group
+                newMap.delete(cabinetId)
 
-            // Helper to recalculate percentages evenly
-            const recalculatePercentages = (group: Array<{ cabinetId: string; percentage: number }>) => {
-              if (group.length === 0) return group
-              const equalPercentage = 100 / group.length
-              const adjusted = group.map(g => ({ ...g, percentage: Math.round(equalPercentage * 100) / 100 }))
-              const total = adjusted.reduce((sum, g) => sum + g.percentage, 0)
-              if (total !== 100 && adjusted.length > 0) {
-                adjusted[0].percentage += 100 - total
-              }
-              return adjusted
-            }
+                // Remove this cabinet from any other cabinets' groups
+                newMap.forEach((group, otherCabinetId) => {
+                  const updatedGroup = group.filter(g => g.cabinetId !== cabinetId)
+                  if (updatedGroup.length !== group.length) {
+                    // Cabinet was removed from this group
+                    if (updatedGroup.length > 0) {
+                      // Recalculate percentages if a cabinet was removed
+                      const total = updatedGroup.reduce((sum, g) => sum + g.percentage, 0)
+                      if (total !== 100) {
+                        updatedGroup.forEach(g => {
+                          g.percentage = Math.round((g.percentage / total) * 100)
+                        })
+                        const finalTotal = updatedGroup.reduce((sum, g) => sum + g.percentage, 0)
+                        if (finalTotal !== 100) {
+                          updatedGroup[0].percentage += (100 - finalTotal)
+                        }
+                      }
+                      newMap.set(otherCabinetId, updatedGroup)
+                    } else {
+                      // No more cabinets in group, remove the group
+                      newMap.delete(otherCabinetId)
+                    }
+                  }
+                })
 
-            // Bidirectional: add current cabinet to newly paired cabinets' lists
-            for (const addedId of addedCabinets) {
-              const otherGroupList = newMap.get(addedId) || []
-              if (!otherGroupList.find(g => g.cabinetId === cabinetId)) {
-                const updatedGroup = recalculatePercentages([...otherGroupList, { cabinetId, percentage: 0 }])
-                newMap.set(addedId, updatedGroup)
-              }
-
-              const sourceCabinet = cabinets.find(c => c.cabinetId === cabinetId)
-              if (sourceCabinet) {
-                const sourceLeftLock = !!sourceCabinet.leftLock
-                const sourceRightLock = !!sourceCabinet.rightLock
-                updateCabinetLock(addedId, sourceLeftLock, sourceRightLock)
-              }
-            }
-
-            // Bidirectional: remove current cabinet from unpaired cabinets' lists
-            for (const removedId of removedCabinets) {
-              const otherGroupList = newMap.get(removedId) || []
-              const updatedList = otherGroupList.filter(g => g.cabinetId !== cabinetId)
-              if (updatedList.length === 0) {
-                newMap.delete(removedId)
-              } else {
-                newMap.set(removedId, recalculatePercentages(updatedList))
-              }
-            }
-
-            return newMap
-          })
-        }}
-
-        onBenchtopOverhangChange={(cabinetId, type, value) => {
-          const benchtopCabinet = cabinets.find(c => c.cabinetId === cabinetId)
-          if (!benchtopCabinet || benchtopCabinet.cabinetType !== 'benchtop') return
-
-          // Update the overhang value on the CabinetData (for persistence)
-          if (type === 'front') {
-            benchtopCabinet.benchtopFrontOverhang = value
-          } else if (type === 'left') {
-            benchtopCabinet.benchtopLeftOverhang = value
-          } else if (type === 'right') {
-            benchtopCabinet.benchtopRightOverhang = value
-          }
-
-          // If front overhang changed, recalculate and update depth
-          if (type === 'front') {
-            const parentCabinet = cabinets.find(c => c.cabinetId === benchtopCabinet.benchtopParentCabinetId)
-            const parentDepth = parentCabinet?.carcass.dimensions.depth ?? 600
-            const FIXED_DEPTH_EXTENSION = 20
-            const newDepth = parentDepth + FIXED_DEPTH_EXTENSION + value
-            benchtopCabinet.carcass.dimensions.depth = newDepth
-          }
-
-          // Use CarcassAssembly method to update the benchtop mesh
-          benchtopCabinet.carcass.updateBenchtopOverhangs(
-            benchtopCabinet.benchtopFrontOverhang,
-            benchtopCabinet.benchtopLeftOverhang,
-            benchtopCabinet.benchtopRightOverhang
-          )
-        }}
-
-        onBenchtopHeightFromFloorChange={(cabinetId, value) => {
-          const benchtopCabinet = cabinets.find(c => c.cabinetId === cabinetId)
-          if (!benchtopCabinet || benchtopCabinet.cabinetType !== 'benchtop') return
-          
-          // Only for independent benchtops (no parent)
-          if (benchtopCabinet.benchtopParentCabinetId) return
-
-          // Clamp value between 0 and 1200
-          const clampedValue = Math.max(0, Math.min(1200, value))
-
-          // Update the height from floor value on CabinetData
-          benchtopCabinet.benchtopHeightFromFloor = clampedValue
-
-          // Update the Y position of the benchtop group
-          benchtopCabinet.group.position.setY(clampedValue)
-        }}
-
-        onShelfCountChange={(newCount: number) => {
-          if (selectedCabinet) {
-            selectedCabinet.carcass.updateConfig({ shelfCount: newCount })
-            // Update part data when shelf count changes
-            partData.updateCabinet(selectedCabinet)
-          }
-        }}
-
-        onDimensionsChange={(newDimensions) => {
-          if (selectedCabinet) {
-            handleProductDimensionChange(
-              newDimensions,
-              {
-                selectedCabinet,
-                cabinets,
-                cabinetSyncs,
-                selectedCabinets,
-                cabinetGroups,
-                viewManager,
-                wallDimensions
-              }
-            )
-            // Update part data when dimensions change
-            // Update all affected cabinets (selected + synced + grouped)
-            const affectedCabinets = new Set<CabinetData>([selectedCabinet])
-            const syncCabinets = cabinetSyncs.get(selectedCabinet.cabinetId) || []
-            syncCabinets.forEach(id => {
-              const cab = cabinets.find(c => c.cabinetId === id)
-              if (cab) affectedCabinets.add(cab)
-            })
-            const groupCabinets = cabinetGroups.get(selectedCabinet.cabinetId) || []
-            groupCabinets.forEach(({ cabinetId }) => {
-              const cab = cabinets.find(c => c.cabinetId === cabinetId)
-              if (cab) affectedCabinets.add(cab)
-            })
-            affectedCabinets.forEach(cab => partData.updateCabinet(cab))
-
-            // Debounced increment to trigger wall adjustments after dimension change
-            debouncedIncrementDimensionVersion()
-          }
-        }}
-        onMaterialChange={(materialChanges) => {
-          if (selectedCabinet) {
-            // Update the material properties and rebuild the carcass
-            selectedCabinet.carcass.updateMaterialProperties(materialChanges);
-          }
-        }}
-        onKickerHeightChange={(kickerHeight) => {
-          if (selectedCabinet) {
-            // Update the kicker height and reposition the cabinet
-            selectedCabinet.carcass.updateKickerHeight(kickerHeight);
-          }
-        }}
-        onDoorToggle={(enabled) => {
-          if (selectedCabinet) {
-            // Toggle doors on/off
-            selectedCabinet.carcass.toggleDoors(enabled);
-          }
-        }}
-        onDoorMaterialChange={(materialChanges) => {
-          if (selectedCabinet) {
-            // Update door material properties
-            const doorMaterial = new DoorMaterial({
-              colour: materialChanges.colour || selectedCabinet.carcass.config.doorMaterial?.getColour() || '#ffffff',
-              thickness: materialChanges.thickness || selectedCabinet.carcass.config.doorMaterial?.getThickness() || 18,
-              opacity: 0.9,
-              transparent: true
-            });
-            selectedCabinet.carcass.updateDoorMaterial(doorMaterial);
-
-            // Update part data when door material changes
-            partData.updateCabinet(selectedCabinet)
-          }
-        }}
-        onDoorCountChange={(count) => {
-          if (selectedCabinet) {
-            // Update door count
-            selectedCabinet.carcass.updateDoorConfiguration(count);
-            // Update part data when door count changes
-            partData.updateCabinet(selectedCabinet)
-          }
-        }}
-        onOverhangDoorToggle={(overhang) => {
-          if (selectedCabinet) {
-            // Update overhang door setting
-            selectedCabinet.carcass.updateOverhangDoor(overhang);
-
-            // Update child cabinets (fillers/panels) when overhang changes
-            if (selectedCabinet.cabinetType === 'top') {
-              updateChildCabinets(selectedCabinet, cabinets, {
-                overhangChanged: true
+                return newMap
               })
             }
-          }
-        }}
-        onDrawerToggle={(enabled) => {
-          if (selectedCabinet) {
+          }}
+          onGroupChange={(cabinetId, groupCabinets) => {
+            // Update cabinet groups map with bidirectional pairing
+            setCabinetGroups(prev => {
+              const newMap = new Map(prev)
+              const oldGroupList = prev.get(cabinetId) || []
 
-            // Toggle drawers on/off directly on the carcass
-            selectedCabinet.carcass.updateDrawerEnabled(enabled);
+              // Find added and removed cabinets
+              const oldCabinetIds = oldGroupList.map(g => g.cabinetId)
+              const newCabinetIds = groupCabinets.map(g => g.cabinetId)
+              const addedCabinets = newCabinetIds.filter(id => !oldCabinetIds.includes(id))
+              const removedCabinets = oldCabinetIds.filter(id => !newCabinetIds.includes(id))
 
-            // Update part data when drawer toggle changes
-            partData.updateCabinet(selectedCabinet)
+              // Update the current cabinet's group list
+              if (groupCabinets.length === 0) {
+                newMap.delete(cabinetId)
+              } else {
+                newMap.set(cabinetId, groupCabinets)
+              }
 
-            // Trigger re-render while preserving multi-selection
+              // Helper to recalculate percentages evenly
+              const recalculatePercentages = (group: Array<{ cabinetId: string; percentage: number }>) => {
+                if (group.length === 0) return group
+                const equalPercentage = 100 / group.length
+                const adjusted = group.map(g => ({ ...g, percentage: Math.round(equalPercentage * 100) / 100 }))
+                const total = adjusted.reduce((sum, g) => sum + g.percentage, 0)
+                if (total !== 100 && adjusted.length > 0) {
+                  adjusted[0].percentage += 100 - total
+                }
+                return adjusted
+              }
+
+              // Bidirectional: add current cabinet to newly paired cabinets' lists
+              for (const addedId of addedCabinets) {
+                const otherGroupList = newMap.get(addedId) || []
+                if (!otherGroupList.find(g => g.cabinetId === cabinetId)) {
+                  const updatedGroup = recalculatePercentages([...otherGroupList, { cabinetId, percentage: 0 }])
+                  newMap.set(addedId, updatedGroup)
+                }
+
+                const sourceCabinet = cabinets.find(c => c.cabinetId === cabinetId)
+                if (sourceCabinet) {
+                  const sourceLeftLock = !!sourceCabinet.leftLock
+                  const sourceRightLock = !!sourceCabinet.rightLock
+                  updateCabinetLock(addedId, sourceLeftLock, sourceRightLock)
+                }
+              }
+
+              // Bidirectional: remove current cabinet from unpaired cabinets' lists
+              for (const removedId of removedCabinets) {
+                const otherGroupList = newMap.get(removedId) || []
+                const updatedList = otherGroupList.filter(g => g.cabinetId !== cabinetId)
+                if (updatedList.length === 0) {
+                  newMap.delete(removedId)
+                } else {
+                  newMap.set(removedId, recalculatePercentages(updatedList))
+                }
+              }
+
+              return newMap
+            })
+          }}
+
+          onBenchtopOverhangChange={(cabinetId, type, value) => {
+            const benchtopCabinet = cabinets.find(c => c.cabinetId === cabinetId)
+            if (!benchtopCabinet || benchtopCabinet.cabinetType !== 'benchtop') return
+
+            // Update the overhang value on the CabinetData (for persistence)
+            if (type === 'front') {
+              benchtopCabinet.benchtopFrontOverhang = value
+            } else if (type === 'left') {
+              benchtopCabinet.benchtopLeftOverhang = value
+            } else if (type === 'right') {
+              benchtopCabinet.benchtopRightOverhang = value
+            }
+
+            // If front overhang changed, recalculate and update depth
+            if (type === 'front') {
+              const parentCabinet = cabinets.find(c => c.cabinetId === benchtopCabinet.benchtopParentCabinetId)
+              const parentDepth = parentCabinet?.carcass.dimensions.depth ?? 600
+              const FIXED_DEPTH_EXTENSION = 20
+              const newDepth = parentDepth + FIXED_DEPTH_EXTENSION + value
+              benchtopCabinet.carcass.dimensions.depth = newDepth
+            }
+
+            // Use CarcassAssembly method to update the benchtop mesh
+            benchtopCabinet.carcass.updateBenchtopOverhangs(
+              benchtopCabinet.benchtopFrontOverhang,
+              benchtopCabinet.benchtopLeftOverhang,
+              benchtopCabinet.benchtopRightOverhang
+            )
+
+            // Update position after overhang change
+            const parentCabinet = cabinets.find(c => c.cabinetId === benchtopCabinet.benchtopParentCabinetId)
+            if (parentCabinet) {
+              updateBenchtopPosition(parentCabinet, cabinets, { dimensionsChanged: true })
+            }
+
+            // Trigger re-render to update UI snapshots
             setSelectedCabinets(prev => prev.map(cab => ({ ...cab })))
-          }
-        }}
-        onDrawerQuantityChange={(quantity) => {
-          if (selectedCabinet) {
+          }}
 
-            // Update drawer quantity directly on the carcass
-            selectedCabinet.carcass.updateDrawerQuantity(quantity);
+          onBenchtopThicknessChange={(cabinetId, value) => {
+            const benchtopCabinet = cabinets.find(c => c.cabinetId === cabinetId)
+            if (!benchtopCabinet || benchtopCabinet.cabinetType !== 'benchtop') return
 
-            // Update part data when drawer quantity changes
-            partData.updateCabinet(selectedCabinet)
+            // Only for child benchtops (have a parent)
+            if (!benchtopCabinet.benchtopParentCabinetId) return
 
-            // Trigger re-render while preserving multi-selection
+            // Clamp value between 20 and 60
+            const clampedValue = Math.max(20, Math.min(60, value))
+
+            // Store thickness on CabinetData for persistence
+            benchtopCabinet.benchtopThickness = clampedValue
+
+            // Get current dimensions
+            const currentWidth = benchtopCabinet.carcass.dimensions.width
+            const currentDepth = benchtopCabinet.carcass.dimensions.depth
+
+            // Update via CarcassAssembly.updateDimensions() - height = thickness for benchtop
+            benchtopCabinet.carcass.updateDimensions({
+              width: currentWidth,
+              height: clampedValue,
+              depth: currentDepth,
+            })
+
+            // Update position after thickness change
+            const parentCabinet = cabinets.find(c => c.cabinetId === benchtopCabinet.benchtopParentCabinetId)
+            if (parentCabinet) {
+              updateBenchtopPosition(parentCabinet, cabinets, { dimensionsChanged: true })
+            }
+
+            // Trigger re-render to update UI snapshots
             setSelectedCabinets(prev => prev.map(cab => ({ ...cab })))
-          }
-        }}
-        onDrawerHeightChange={(index, height, changedId) => {
-          if (selectedCabinet) {
+          }}
 
-            // Update individual drawer height directly on the carcass
-            selectedCabinet.carcass.updateDrawerHeight(index, height, changedId);
+          onBenchtopHeightFromFloorChange={(cabinetId, value) => {
+            const benchtopCabinet = cabinets.find(c => c.cabinetId === cabinetId)
+            if (!benchtopCabinet || benchtopCabinet.cabinetType !== 'benchtop') return
 
-            // Update part data when drawer height changes
-            partData.updateCabinet(selectedCabinet)
+            // Only for independent benchtops (no parent)
+            if (benchtopCabinet.benchtopParentCabinetId) return
 
-            // Trigger re-render while preserving multi-selection
+            // Clamp value between 0 and 1200
+            const clampedValue = Math.max(0, Math.min(1200, value))
+
+            // Update the height from floor value on CabinetData
+            benchtopCabinet.benchtopHeightFromFloor = clampedValue
+
+            // Update the Y position of the benchtop group
+            benchtopCabinet.group.position.setY(clampedValue)
+
+            // Trigger re-render to update UI snapshots
             setSelectedCabinets(prev => prev.map(cab => ({ ...cab })))
-          }
-        }}
-        onDrawerHeightsBalance={() => {
-          if (selectedCabinet) {
+          }}
 
-            // Balance drawer heights directly on the carcass
-            selectedCabinet.carcass.balanceDrawerHeights();
+          onShelfCountChange={(newCount: number) => {
+            if (selectedCabinet) {
+              selectedCabinet.carcass.updateConfig({ shelfCount: newCount })
+              // Update part data when shelf count changes
+              partData.updateCabinet(selectedCabinet)
+            }
+          }}
 
-            // Trigger re-render while preserving multi-selection
-            setSelectedCabinets(prev => prev.map(cab => ({ ...cab })))
-          }
-        }}
-        onDrawerHeightsReset={() => {
-          if (selectedCabinet) {
+          onDimensionsChange={(newDimensions) => {
+            if (selectedCabinet) {
+              handleProductDimensionChange(
+                newDimensions,
+                {
+                  selectedCabinet,
+                  cabinets,
+                  cabinetSyncs,
+                  selectedCabinets,
+                  cabinetGroups,
+                  viewManager,
+                  wallDimensions
+                }
+              )
+              // Update part data when dimensions change
+              // Update all affected cabinets (selected + synced + grouped)
+              const affectedCabinets = new Set<CabinetData>([selectedCabinet])
+              const syncCabinets = cabinetSyncs.get(selectedCabinet.cabinetId) || []
+              syncCabinets.forEach(id => {
+                const cab = cabinets.find(c => c.cabinetId === id)
+                if (cab) affectedCabinets.add(cab)
+              })
+              const groupCabinets = cabinetGroups.get(selectedCabinet.cabinetId) || []
+              groupCabinets.forEach(({ cabinetId }) => {
+                const cab = cabinets.find(c => c.cabinetId === cabinetId)
+                if (cab) affectedCabinets.add(cab)
+              })
+              affectedCabinets.forEach(cab => partData.updateCabinet(cab))
 
-            // Get drawer heights from the carcass
-            const heights = selectedCabinet.carcass.getDrawerHeights();
+              // Debounced increment to trigger wall adjustments after dimension change
+              debouncedIncrementDimensionVersion()
+            }
+          }}
+          onMaterialChange={(materialChanges) => {
+            if (selectedCabinet) {
+              // Update the material properties and rebuild the carcass
+              selectedCabinet.carcass.updateMaterialProperties(materialChanges);
+            }
+          }}
+          onKickerHeightChange={(kickerHeight) => {
+            if (selectedCabinet) {
+              // Update the kicker height and reposition the cabinet
+              selectedCabinet.carcass.updateKickerHeight(kickerHeight);
+            }
+          }}
+          onDoorToggle={(enabled) => {
+            if (selectedCabinet) {
+              // Toggle doors on/off
+              selectedCabinet.carcass.toggleDoors(enabled);
+            }
+          }}
+          onDoorMaterialChange={(materialChanges) => {
+            if (selectedCabinet) {
+              // Update door material properties
+              const doorMaterial = new DoorMaterial({
+                colour: materialChanges.colour || selectedCabinet.carcass.config.doorMaterial?.getColour() || '#ffffff',
+                thickness: materialChanges.thickness || selectedCabinet.carcass.config.doorMaterial?.getThickness() || 18,
+                opacity: 0.9,
+                transparent: true
+              });
+              selectedCabinet.carcass.updateDoorMaterial(doorMaterial);
 
-            // Reset drawer heights directly on the carcass and force update via public API
-            selectedCabinet.carcass.config.drawerHeights = [...heights]
-            const qty = selectedCabinet.carcass.config.drawerQuantity || heights.length
-            selectedCabinet.carcass.updateDrawerQuantity(qty)
+              // Update part data when door material changes
+              partData.updateCabinet(selectedCabinet)
+            }
+          }}
+          onDoorCountChange={(count) => {
+            if (selectedCabinet) {
+              // Update door count
+              selectedCabinet.carcass.updateDoorConfiguration(count);
+              // Update part data when door count changes
+              partData.updateCabinet(selectedCabinet)
+            }
+          }}
+          onOverhangDoorToggle={(overhang) => {
+            if (selectedCabinet) {
+              // Update overhang door setting
+              selectedCabinet.carcass.updateOverhangDoor(overhang);
 
-            // Trigger re-render while preserving multi-selection
-            setSelectedCabinets(prev => prev.map(cab => ({ ...cab })))
-          }
-        }}
-      />
+              // Update child cabinets (fillers/panels) when overhang changes
+              if (selectedCabinet.cabinetType === 'top') {
+                updateChildCabinets(selectedCabinet, cabinets, {
+                  overhangChanged: true
+                })
+              }
+            }
+          }}
+          onDrawerToggle={(enabled) => {
+            if (selectedCabinet) {
+
+              // Toggle drawers on/off directly on the carcass
+              selectedCabinet.carcass.updateDrawerEnabled(enabled);
+
+              // Update part data when drawer toggle changes
+              partData.updateCabinet(selectedCabinet)
+
+              // Trigger re-render while preserving multi-selection
+              setSelectedCabinets(prev => prev.map(cab => ({ ...cab })))
+            }
+          }}
+          onDrawerQuantityChange={(quantity) => {
+            if (selectedCabinet) {
+
+              // Update drawer quantity directly on the carcass
+              selectedCabinet.carcass.updateDrawerQuantity(quantity);
+
+              // Update part data when drawer quantity changes
+              partData.updateCabinet(selectedCabinet)
+
+              // Trigger re-render while preserving multi-selection
+              setSelectedCabinets(prev => prev.map(cab => ({ ...cab })))
+            }
+          }}
+          onDrawerHeightChange={(index, height, changedId) => {
+            if (selectedCabinet) {
+
+              // Update individual drawer height directly on the carcass
+              selectedCabinet.carcass.updateDrawerHeight(index, height, changedId);
+
+              // Update part data when drawer height changes
+              partData.updateCabinet(selectedCabinet)
+
+              // Trigger re-render while preserving multi-selection
+              setSelectedCabinets(prev => prev.map(cab => ({ ...cab })))
+            }
+          }}
+          onDrawerHeightsBalance={() => {
+            if (selectedCabinet) {
+
+              // Balance drawer heights directly on the carcass
+              selectedCabinet.carcass.balanceDrawerHeights();
+
+              // Trigger re-render while preserving multi-selection
+              setSelectedCabinets(prev => prev.map(cab => ({ ...cab })))
+            }
+          }}
+          onDrawerHeightsReset={() => {
+            if (selectedCabinet) {
+
+              // Get drawer heights from the carcass
+              const heights = selectedCabinet.carcass.getDrawerHeights();
+
+              // Reset drawer heights directly on the carcass and force update via public API
+              selectedCabinet.carcass.config.drawerHeights = [...heights]
+              const qty = selectedCabinet.carcass.config.drawerQuantity || heights.length
+              selectedCabinet.carcass.updateDrawerQuantity(qty)
+
+              // Trigger re-render while preserving multi-selection
+              setSelectedCabinets(prev => prev.map(cab => ({ ...cab })))
+            }
+          }}
+        />
       )}
 
       {/* Save Modal */}

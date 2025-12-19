@@ -77,6 +77,8 @@ export type CabinetData = {
   benchtopFrontOverhang?: number  // Extends depth toward +Z, default 20mm
   benchtopLeftOverhang?: number   // Extends from left edge toward -X, default 0
   benchtopRightOverhang?: number  // Extends from right edge toward +X, default 0
+  /** Benchtop thickness - only for child benchtops */
+  benchtopThickness?: number  // Default 38mm, min 20, max 60
   /** Benchtop height from floor - only for independent benchtops (Y position) */
   benchtopHeightFromFloor?: number  // Default 740mm, min 0, max 1200mm
 }

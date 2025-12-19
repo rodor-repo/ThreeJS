@@ -13,6 +13,7 @@ export type DimensionLineType =
   | "base-tall-width" // Overall width for base/tall only
   | "empty-x" // Empty space in X direction
   | "empty-y" // Empty space in Y direction
+  | "benchtop-height" // Benchtop height from floor (for independent benchtops)
 
 /**
  * Unique identifier for a dimension line

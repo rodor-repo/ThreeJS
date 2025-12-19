@@ -26,6 +26,7 @@ import { useCabinetGroups } from "./hooks/useCabinetGroups"
 import {
   PanelHeader,
   DimensionsSection,
+  BenchtopSection,
   MaterialsSection,
   ColorPickerModal,
   PairSection,
@@ -102,6 +103,7 @@ export const DynamicPanel: React.FC<DynamicPanelProps> = ({
   onSyncChange,
   initialSyncData,
   onBenchtopOverhangChange,
+  onBenchtopThicknessChange,
   onBenchtopHeightFromFloorChange,
 }) => {
   const cabinetId = selectedCabinet?.cabinetId
@@ -399,9 +401,8 @@ export const DynamicPanel: React.FC<DynamicPanelProps> = ({
       </button>
 
       <div
-        className={`h-full transition-all duration-300 ease-in-out ${
-          isExpanded ? "w-80 sm:w-96 max-w-[90vw]" : "w-0"
-        } overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100`}
+        className={`h-full transition-all duration-300 ease-in-out ${isExpanded ? "w-80 sm:w-96 max-w-[90vw]" : "w-0"
+          } overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100`}
       >
         {/* Header */}
         <PanelHeader
@@ -478,40 +479,14 @@ export const DynamicPanel: React.FC<DynamicPanelProps> = ({
                 onResetAll={handleResetAll}
                 onValidate={handleDimensionValidate}
                 noWrapper
-                benchtopOverhangs={
-                  selectedCabinet?.cabinetType === 'benchtop' && selectedCabinet?.benchtopParentCabinetId
-                    ? {
-                        front: selectedCabinet.benchtopFrontOverhang ?? 20,
-                        left: selectedCabinet.benchtopLeftOverhang ?? 0,
-                        right: selectedCabinet.benchtopRightOverhang ?? 0,
-                      }
-                    : undefined
-                }
-                onOverhangChange={
-                  selectedCabinet?.cabinetType === 'benchtop' && selectedCabinet?.benchtopParentCabinetId && onBenchtopOverhangChange
-                    ? (type, value) => onBenchtopOverhangChange(selectedCabinet.cabinetId, type, value)
-                    : undefined
-                }
-                isIndependentBenchtop={selectedCabinet?.cabinetType === 'benchtop' && !selectedCabinet?.benchtopParentCabinetId}
-                benchtopHeightFromFloor={
-                  selectedCabinet?.cabinetType === 'benchtop' && !selectedCabinet?.benchtopParentCabinetId
-                    ? selectedCabinet.benchtopHeightFromFloor ?? 740
-                    : undefined
-                }
-                onHeightFromFloorChange={
-                  selectedCabinet?.cabinetType === 'benchtop' && !selectedCabinet?.benchtopParentCabinetId && onBenchtopHeightFromFloorChange
-                    ? (value) => onBenchtopHeightFromFloorChange(selectedCabinet.cabinetId, value)
-                    : undefined
-                }
               />
             </CollapsibleSection>
 
-            {/* Off the Floor - Only for Fillers and Panels */}
-            {(selectedCabinet?.cabinetType === "filler" ||
-              selectedCabinet?.cabinetType === "panel") && (
+            {/* Benchtop Settings - Only for benchtops */}
+            {selectedCabinet?.cabinetType === 'benchtop' && (
               <CollapsibleSection
-                id="offTheFloor"
-                title="Off The Floor"
+                id="benchtopSettings"
+                title="Benchtop Settings"
                 icon={
                   <svg
                     width="20"
@@ -523,19 +498,83 @@ export const DynamicPanel: React.FC<DynamicPanelProps> = ({
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   >
-                    <line x1="12" y1="19" x2="12" y2="5" />
-                    <polyline points="5 12 12 5 19 12" />
+                    <rect x="3" y="8" width="18" height="4" rx="1" />
+                    <path d="M5 12v8" />
+                    <path d="M19 12v8" />
                   </svg>
                 }
               >
-                <OffTheFloorControl
-                  value={offTheFloorState.offTheFloor}
-                  editingValue={offTheFloorState.editingOffTheFloor}
-                  onValueChange={offTheFloorState.handleOffTheFloorChange}
-                  onEditingChange={offTheFloorState.setEditingOffTheFloor}
+                <BenchtopSection
+                  isChildBenchtop={!!selectedCabinet.benchtopParentCabinetId}
+                  benchtopOverhangs={
+                    selectedCabinet.benchtopParentCabinetId
+                      ? {
+                        front: selectedCabinet.benchtopFrontOverhang ?? 20,
+                        left: selectedCabinet.benchtopLeftOverhang ?? 0,
+                        right: selectedCabinet.benchtopRightOverhang ?? 0,
+                      }
+                      : undefined
+                  }
+                  onOverhangChange={
+                    selectedCabinet.benchtopParentCabinetId && onBenchtopOverhangChange
+                      ? (type, value) => onBenchtopOverhangChange(selectedCabinet.cabinetId, type, value)
+                      : undefined
+                  }
+                  benchtopThickness={
+                    selectedCabinet.benchtopParentCabinetId
+                      ? selectedCabinet.benchtopThickness ?? selectedCabinet.carcass?.benchtop?.thickness ?? 38
+                      : undefined
+                  }
+                  onThicknessChange={
+                    selectedCabinet.benchtopParentCabinetId && onBenchtopThicknessChange
+                      ? (value) => onBenchtopThicknessChange(selectedCabinet.cabinetId, value)
+                      : undefined
+                  }
+                  benchtopHeightFromFloor={
+                    !selectedCabinet.benchtopParentCabinetId
+                      ? selectedCabinet.benchtopHeightFromFloor ?? 740
+                      : undefined
+                  }
+                  onHeightFromFloorChange={
+                    !selectedCabinet.benchtopParentCabinetId && onBenchtopHeightFromFloorChange
+                      ? (value) => onBenchtopHeightFromFloorChange(selectedCabinet.cabinetId, value)
+                      : undefined
+                  }
+                  noWrapper
                 />
               </CollapsibleSection>
             )}
+
+            {/* Off the Floor - Only for Fillers and Panels */}
+            {(selectedCabinet?.cabinetType === "filler" ||
+              selectedCabinet?.cabinetType === "panel") && (
+                <CollapsibleSection
+                  id="offTheFloor"
+                  title="Off The Floor"
+                  icon={
+                    <svg
+                      width="20"
+                      height="20"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <line x1="12" y1="19" x2="12" y2="5" />
+                      <polyline points="5 12 12 5 19 12" />
+                    </svg>
+                  }
+                >
+                  <OffTheFloorControl
+                    value={offTheFloorState.offTheFloor}
+                    editingValue={offTheFloorState.editingOffTheFloor}
+                    onValueChange={offTheFloorState.handleOffTheFloorChange}
+                    onEditingChange={offTheFloorState.setEditingOffTheFloor}
+                  />
+                </CollapsibleSection>
+              )}
 
             {/* Materials selection */}
             {wsProduct && (

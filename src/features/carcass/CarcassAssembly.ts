@@ -13,6 +13,7 @@ import { KickerFace } from "./parts/KickerFace"
 import { UnderPanelFace } from "./parts/UnderPanelFace"
 import { BulkheadFace } from "./parts/BulkheadFace"
 import { BulkheadReturn } from "./parts/BulkheadReturn"
+import { Benchtop } from "./parts/Benchtop"
 import { CarcassMaterial, CarcassMaterialData } from "./Material"
 import { DoorMaterial } from "./DoorMaterial"
 import { MaterialLoader } from "./MaterialLoader"
@@ -54,6 +55,10 @@ export interface CarcassConfig {
   fridgeDoorCount?: 1 | 2 // Number of doors for fridge (default: 2)
   fridgeDoorSide?: "left" | "right" // Handle side/door pivot for 1-door fridge (default: left)
   applianceKickerHeight?: number // Height of appliance kicker panels (default: 100mm)
+  // Benchtop-specific options
+  benchtopFrontOverhang?: number // Extends depth toward +Z (default: 20mm for child, 0 for standalone)
+  benchtopLeftOverhang?: number // Extends from left edge toward -X (default: 0)
+  benchtopRightOverhang?: number // Extends from right edge toward +X (default: 0)
 }
 
 export { type CabinetType } from "../scene/types"
@@ -93,6 +98,9 @@ export class CarcassAssembly {
   public _bulkheadFace?: BulkheadFace // For bulkhead type cabinet
   public _bulkheadReturnLeft?: BulkheadReturn // Left return for bulkhead cabinet
   public _bulkheadReturnRight?: BulkheadReturn // Right return for bulkhead cabinet
+
+  // Benchtop specific part
+  public _benchtop?: Benchtop // For benchtop type cabinet
 
   // Appliance specific parts
   public _applianceShell?: { group: THREE.Group; dispose: () => void } // Transparent functional shell
@@ -136,6 +144,13 @@ export class CarcassAssembly {
    */
   public get bulkheadReturnRight(): BulkheadReturn | undefined {
     return this._bulkheadReturnRight
+  }
+
+  /**
+   * Get the benchtop if this is a benchtop cabinet
+   */
+  public get benchtop(): Benchtop | undefined {
+    return this._benchtop
   }
 
   constructor(
@@ -409,6 +424,32 @@ export class CarcassAssembly {
     bulkheadReturn.group.position.z = -depth / 2
   }
 
+  /**
+   * Update benchtop overhangs.
+   * Only applies to benchtop cabinet type.
+   * Note: After calling this, you may need to update dimensions.depth if frontOverhang changed.
+   */
+  public updateBenchtopOverhangs(
+    frontOverhang?: number,
+    leftOverhang?: number,
+    rightOverhang?: number
+  ): void {
+    if (this.cabinetType !== "benchtop" || !this._benchtop) return
+
+    if (frontOverhang !== undefined) this.config.benchtopFrontOverhang = frontOverhang
+    if (leftOverhang !== undefined) this.config.benchtopLeftOverhang = leftOverhang
+    if (rightOverhang !== undefined) this.config.benchtopRightOverhang = rightOverhang
+
+    this._benchtop.updateDimensions(
+      this.dimensions.width,
+      this.dimensions.height,
+      this.dimensions.depth,
+      this.config.benchtopFrontOverhang,
+      this.config.benchtopLeftOverhang,
+      this.config.benchtopRightOverhang
+    )
+  }
+
   private withPreservedPosition(callback: () => void): void {
     const { x, y, z } = this.group.position
     callback()
@@ -424,6 +465,7 @@ export class CarcassAssembly {
     if (this._bulkheadReturnRight) { this._bulkheadReturnRight.dispose(); this._bulkheadReturnRight = undefined }
     if (this._kickerFace) { this._kickerFace.dispose(); this._kickerFace = undefined }
     if (this._underPanelFace) { this._underPanelFace.dispose(); this._underPanelFace = undefined }
+    if (this._benchtop) { this._benchtop.dispose(); this._benchtop = undefined }
     if (this._applianceShell) { this._applianceShell.dispose(); this._applianceShell = undefined }
     if (this._applianceVisual) { this._applianceVisual.dispose(); this._applianceVisual = undefined }
     if (this._applianceKicker) {

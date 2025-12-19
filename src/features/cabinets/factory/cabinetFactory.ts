@@ -34,7 +34,8 @@ const defaultDimensions: Defaults = {
   bulkhead: { width: 600, height: 200, depth: 16 },
   // UnderPanel: width = cabinet width, height = thickness (16mm), depth = parent depth - 20
   underPanel: { width: 600, height: 16, depth: 280 },
-  // benchtop is handled separately by benchtopHandler.ts - not a carcass type
+  // Benchtop: width = length, height = thickness (38mm), depth = base depth + 20 + front overhang
+  benchtop: { width: 600, height: 38, depth: 560 },
   // Appliance: standard built-in appliance dimensions (fallback)
   appliance: { width: 600, height: 820, depth: 600 },
 }
@@ -146,6 +147,13 @@ const getDefaultConfig = (
     case "bulkhead":
     case "underPanel":
       return baseConfig
+    case "benchtop":
+      return {
+        ...baseConfig,
+        benchtopFrontOverhang: 20,  // Default 20mm front overhang
+        benchtopLeftOverhang: 0,
+        benchtopRightOverhang: 0,
+      }
     case "appliance": {
       const appType = opts?.applianceType || "dishwasher"
       const appDefaults = APPLIANCE_DEFAULTS[appType]

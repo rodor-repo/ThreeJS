@@ -8,6 +8,7 @@ import {
   KickerBuilder,
   UnderPanelBuilder,
   BulkheadBuilder,
+  BenchtopBuilder,
 } from "./SimplePanelBuilder"
 
 export * from "./CabinetBuilder"
@@ -36,6 +37,8 @@ export class BuilderRegistry {
         return new UnderPanelBuilder()
       case "bulkhead":
         return new BulkheadBuilder()
+      case "benchtop":
+        return new BenchtopBuilder()
       case "appliance":
         return new ApplianceBuilder()
       default:

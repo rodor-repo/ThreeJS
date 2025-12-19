@@ -4,6 +4,7 @@ import { CabinetBuilder, PartDimension } from "./CabinetBuilder"
 import { KickerFace } from "../parts/KickerFace"
 import { UnderPanelFace } from "../parts/UnderPanelFace"
 import { BulkheadFace } from "../parts/BulkheadFace"
+import { Benchtop } from "../parts/Benchtop"
 
 export class KickerBuilder implements CabinetBuilder {
   build(assembly: CarcassAssembly): void {
@@ -142,6 +143,72 @@ export class BulkheadBuilder implements CabinetBuilder {
           dimZ: returnGeometry.parameters.depth,
         })
       }
+    }
+    return parts
+  }
+}
+
+/**
+ * Builder for benchtop cabinet type.
+ * Creates a simple benchtop slab that sits on top of base cabinets.
+ * 
+ * Dimensions mapping:
+ * - width = benchtop length (X axis)
+ * - height = benchtop thickness (Y axis, typically 38mm)
+ * - depth = benchtop depth (Z axis, includes front overhang)
+ * 
+ * Overhangs are stored in config:
+ * - benchtopFrontOverhang: extends depth toward +Z
+ * - benchtopLeftOverhang: extends from left edge toward -X
+ * - benchtopRightOverhang: extends from right edge toward +X
+ */
+export class BenchtopBuilder implements CabinetBuilder {
+  build(assembly: CarcassAssembly): void {
+    // Get overhang values from config
+    const frontOverhang = assembly.config.benchtopFrontOverhang ?? 0
+    const leftOverhang = assembly.config.benchtopLeftOverhang ?? 0
+    const rightOverhang = assembly.config.benchtopRightOverhang ?? 0
+
+    // Create Benchtop using existing Benchtop class from parts/
+    // Note: dimensions.height is used for thickness (following underPanel pattern)
+    assembly._benchtop = new Benchtop(
+      assembly.dimensions.width,   // length
+      assembly.dimensions.height,  // thickness (38mm default)
+      assembly.dimensions.depth,   // depth (including front overhang)
+      frontOverhang,
+      leftOverhang,
+      rightOverhang
+    )
+
+    assembly.group.add(assembly._benchtop.mesh)
+
+    // Position at origin (global positioning handled by handler)
+    assembly.group.position.set(0, 0, 0)
+  }
+
+  updateDimensions(assembly: CarcassAssembly): void {
+    if (assembly._benchtop) {
+      assembly._benchtop.updateDimensions(
+        assembly.dimensions.width,
+        assembly.dimensions.height,
+        assembly.dimensions.depth,
+        assembly.config.benchtopFrontOverhang,
+        assembly.config.benchtopLeftOverhang,
+        assembly.config.benchtopRightOverhang
+      )
+    }
+  }
+
+  getPartDimensions(assembly: CarcassAssembly): PartDimension[] {
+    const parts: PartDimension[] = []
+    if (assembly._benchtop) {
+      const benchtopGeometry = assembly._benchtop.mesh.geometry as THREE.BoxGeometry
+      parts.push({
+        partName: "Benchtop",
+        dimX: benchtopGeometry.parameters.width,
+        dimY: benchtopGeometry.parameters.height,
+        dimZ: benchtopGeometry.parameters.depth,
+      })
     }
     return parts
   }

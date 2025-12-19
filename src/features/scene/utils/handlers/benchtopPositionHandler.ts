@@ -1,11 +1,11 @@
 import { CabinetData } from "../../types"
-import * as THREE from "three"
-import { Benchtop } from "@/features/carcass/parts/Benchtop"
 import { getEffectiveBenchtopDimensions } from "./benchtopHandler"
 
 /**
  * Updates benchtop position and dimensions when parent cabinet changes
  * Benchtops are separate selectable objects but need to follow parent cabinet
+ * 
+ * Now uses CarcassAssembly methods instead of direct mesh manipulation.
  */
 export const updateBenchtopPosition = (
   parentCabinet: CabinetData,
@@ -27,10 +27,9 @@ export const updateBenchtopPosition = (
     return
   }
 
-  // Get benchtop from group userData
-  const benchtop = benchtopCabinet.group.userData.benchtop as Benchtop | undefined
-
-  if (!benchtop) {
+  // Access benchtop via CarcassAssembly (not userData anymore)
+  const carcass = benchtopCabinet.carcass
+  if (!carcass?.benchtop) {
     return
   }
 
@@ -52,26 +51,23 @@ export const updateBenchtopPosition = (
   const benchtopThickness = 38
   const FIXED_DEPTH_EXTENSION = 20 // Fixed 20mm extension beyond cabinet
   const frontOverhang = benchtopCabinet.benchtopFrontOverhang ?? 20
-  const benchtopDepth = parentDepth + FIXED_DEPTH_EXTENSION + frontOverhang  // Parent + 20mm + overhang
+  const leftOverhang = benchtopCabinet.benchtopLeftOverhang ?? 0
+  const rightOverhang = benchtopCabinet.benchtopRightOverhang ?? 0
+  const benchtopDepth = parentDepth + FIXED_DEPTH_EXTENSION + frontOverhang
 
   // Update benchtop dimensions if needed
   if (changes.dimensionsChanged || changes.childChanged) {
-    // Pass current overhang values - depth already includes front overhang
-    benchtop.updateDimensions(
-      effectiveLength,
-      benchtopThickness,
-      benchtopDepth,  // Depth includes front overhang
-      frontOverhang,
-      benchtopCabinet.benchtopLeftOverhang,
-      benchtopCabinet.benchtopRightOverhang
-    )
+    // Update config values to ensure BenchtopBuilder has correct overhang values
+    carcass.config.benchtopFrontOverhang = frontOverhang
+    carcass.config.benchtopLeftOverhang = leftOverhang
+    carcass.config.benchtopRightOverhang = rightOverhang
 
-    // Update carcass dimensions for consistency - depth includes front overhang
-    if (benchtopCabinet.carcass) {
-      benchtopCabinet.carcass.dimensions.width = effectiveLength
-      benchtopCabinet.carcass.dimensions.height = benchtopThickness
-      benchtopCabinet.carcass.dimensions.depth = benchtopDepth
-    }
+    // Use CarcassAssembly.updateDimensions() - this calls BenchtopBuilder.updateDimensions()
+    carcass.updateDimensions({
+      width: effectiveLength,
+      height: benchtopThickness,
+      depth: benchtopDepth,
+    })
   }
 
   // Update benchtop world position

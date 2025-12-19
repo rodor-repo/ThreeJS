@@ -77,21 +77,6 @@ export const useCabinets = (
     [sceneRef, cabinetCounter, sortNumberCounter]
   )
 
-  /**
-   * Add a raw CabinetData object directly to the scene and state.
-   * Used for objects that don't go through the standard cabinetFactory (like Benchtops).
-   */
-  const addCabinetData = useCallback(
-    (cabinetData: CabinetData) => {
-      if (!sceneRef.current) return null
-      
-      sceneRef.current.add(cabinetData.group)
-      setCabinets((prev) => [...prev, cabinetData])
-      setSortNumberCounter((prev) => prev + 1)
-      return cabinetData
-    },
-    [sceneRef]
-  )
 
   const clearCabinets = useCallback(() => {
     if (!sceneRef.current) return
@@ -177,7 +162,25 @@ export const useCabinets = (
           )
           .map((cab) => cab.cabinetId)
 
-        // Update parent cabinet and all its children (fillers/panels, kickers, and underPanels)
+        // Find all benchtops that belong to this parent
+        const benchtopCabinetIds = prev
+          .filter(
+            (cab) =>
+              cab.benchtopParentCabinetId === cabinetId &&
+              cab.cabinetType === 'benchtop'
+          )
+          .map((cab) => cab.cabinetId)
+
+        // Find all bulkheads that belong to this parent
+        const bulkheadCabinetIds = prev
+          .filter(
+            (cab) =>
+              cab.bulkheadParentCabinetId === cabinetId &&
+              cab.cabinetType === 'bulkhead'
+          )
+          .map((cab) => cab.cabinetId)
+
+        // Update parent cabinet and all its children (fillers/panels, kickers, underPanels, benchtops, and bulkheads)
         return prev.map((cab) => {
           if (cab.cabinetId === cabinetId) {
             // Update parent cabinet
@@ -190,6 +193,12 @@ export const useCabinets = (
             return { ...cab, viewId }
           } else if (underPanelCabinetIds.includes(cab.cabinetId)) {
             // Update underPanels to match parent's viewId
+            return { ...cab, viewId }
+          } else if (benchtopCabinetIds.includes(cab.cabinetId)) {
+            // Update benchtops to match parent's viewId
+            return { ...cab, viewId }
+          } else if (bulkheadCabinetIds.includes(cab.cabinetId)) {
+            // Update bulkheads to match parent's viewId
             return { ...cab, viewId }
           }
           return cab
@@ -224,6 +233,24 @@ export const useCabinets = (
           )
           .map((cab) => cab.cabinetId)
 
+        // Find benchtop cabinet IDs from selected cabinets
+        const benchtopCabinetIds = prev
+          .filter(
+            (cab) =>
+              cab.benchtopParentCabinetId === cabinetId &&
+              cab.cabinetType === 'benchtop'
+          )
+          .map((cab) => cab.cabinetId)
+
+        // Find bulkhead cabinet IDs from selected cabinets
+        const bulkheadCabinetIds = prev
+          .filter(
+            (cab) =>
+              cab.bulkheadParentCabinetId === cabinetId &&
+              cab.cabinetType === 'bulkhead'
+          )
+          .map((cab) => cab.cabinetId)
+
         return prev.map((cab) => {
           if (cab.cabinetId === cabinetId) {
             return { ...cab, viewId }
@@ -232,6 +259,10 @@ export const useCabinets = (
           } else if (kickerCabinetIds.includes(cab.cabinetId)) {
             return { ...cab, viewId }
           } else if (underPanelCabinetIds.includes(cab.cabinetId)) {
+            return { ...cab, viewId }
+          } else if (benchtopCabinetIds.includes(cab.cabinetId)) {
+            return { ...cab, viewId }
+          } else if (bulkheadCabinetIds.includes(cab.cabinetId)) {
             return { ...cab, viewId }
           }
           return cab
@@ -338,7 +369,6 @@ export const useCabinets = (
     showProductPanel,
     setShowProductPanel,
     createCabinet,
-    addCabinetData, // For adding raw CabinetData (e.g., benchtops)
     clearCabinets,
     addHoverEffect,
     removeHoverEffect,

@@ -49,4 +49,27 @@ describe("cabinetFactory", () => {
     expect(cab.carcass._applianceShell).toBeDefined()
     expect(cab.carcass._applianceVisual).toBeDefined()
   })
+
+  it("getDefaultDimensions returns benchtop defaults", () => {
+    const dims = getDefaultDimensions("benchtop")
+    expect(dims.width).toBe(600)  // Default length
+    expect(dims.height).toBe(38)  // Thickness
+    expect(dims.depth).toBe(560)  // Depth
+  })
+
+  it("createCabinet creates benchtop cabinet with correct config", () => {
+    const cab = createCabinet("benchtop", "standard", { productId })
+    expect(cab.group).toBeInstanceOf(THREE.Group)
+    expect(cab.carcass).toBeInstanceOf(CarcassAssembly)
+    expect(cab.cabinetType).toBe("benchtop")
+    expect(cab.carcass.config.benchtopFrontOverhang).toBe(20)
+    expect(cab.carcass.config.benchtopLeftOverhang).toBe(0)
+    expect(cab.carcass.config.benchtopRightOverhang).toBe(0)
+  })
+
+  it("createCabinet benchtop has benchtop part", () => {
+    const cab = createCabinet("benchtop", "standard", { productId })
+    expect(cab.carcass._benchtop).toBeDefined()
+    expect(cab.carcass.benchtop).toBeDefined()
+  })
 })

@@ -4,7 +4,6 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { X } from 'lucide-react'
 import type { CabinetData } from '../types'
-import { Benchtop } from '@/features/carcass/parts/Benchtop'
 import { updateBenchtopPosition } from '../utils/handlers/benchtopPositionHandler'
 import { getEffectiveBenchtopDimensions } from '../utils/handlers/benchtopHandler'
 
@@ -92,9 +91,9 @@ export const BenchtopPanel: React.FC<BenchtopPanelProps> = ({
   allCabinets,
   onClose,
 }) => {
-  // Get benchtop from cabinet userData
+  // Get benchtop from carcass (using new CarcassAssembly pattern)
   const benchtop = useMemo(() => {
-    return selectedCabinet?.group.userData.benchtop as Benchtop | undefined
+    return selectedCabinet?.carcass?.benchtop
   }, [selectedCabinet])
 
   // Local state for dimensions
@@ -115,26 +114,26 @@ export const BenchtopPanel: React.FC<BenchtopPanelProps> = ({
 
   // Handle thickness change
   const handleThicknessChange = useCallback((value: number) => {
-    if (!benchtop || !selectedCabinet || !parentCabinet) return
+    if (!selectedCabinet?.carcass || !parentCabinet) return
     
     setThickness(value)
     
-    // Update benchtop geometry
+    // Calculate effective dimensions
     const { effectiveLength } = getEffectiveBenchtopDimensions(parentCabinet, allCabinets)
-    const benchtopDepth = parentCabinet.carcass.dimensions.depth
+    const currentDepth = selectedCabinet.carcass.dimensions.depth
     
-    benchtop.updateDimensions(effectiveLength, value, benchtopDepth)
-    
-    // Update carcass dimensions
-    if (selectedCabinet.carcass) {
-      selectedCabinet.carcass.dimensions.height = value
-    }
+    // Update via CarcassAssembly.updateDimensions() which calls BenchtopBuilder
+    selectedCabinet.carcass.updateDimensions({
+      width: effectiveLength,
+      height: value,  // height = thickness for benchtop
+      depth: currentDepth,
+    })
 
     // Update position
     updateBenchtopPosition(parentCabinet, allCabinets, {
       dimensionsChanged: true,
     })
-  }, [benchtop, selectedCabinet, parentCabinet, allCabinets])
+  }, [selectedCabinet, parentCabinet, allCabinets])
 
   if (!isVisible || !selectedCabinet) return null
 

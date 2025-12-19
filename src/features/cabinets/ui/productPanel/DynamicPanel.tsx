@@ -270,7 +270,7 @@ export const DynamicPanel: React.FC<DynamicPanelProps> = ({
   // Initialize material color when cabinet changes
   useEffect(() => {
     panelState.setMaterialColor(
-      selectedCabinet?.material?.getColour?.() || "#ffffff"
+      selectedCabinet?.material.getColour() || "#ffffff"
     )
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCabinet])

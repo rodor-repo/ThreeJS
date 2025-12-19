@@ -4,6 +4,7 @@ import { WsProducts } from "@/types/erpTypes"
 import { CabinetData, CabinetType, WallDimensions } from "../../types"
 import { handleDeleteCabinet } from "./deleteCabinetHandler"
 import { updateBenchtopPosition } from "./benchtopPositionHandler"
+import { updateUnderPanelPosition } from "./underPanelPositionHandler"
 
 type CreateCabinetFn = (
   cabinetType: CabinetType,
@@ -198,6 +199,18 @@ export const handleFillerSelect = (
       })
     }, 0)
   }
+
+  // Update underPanel if parent is a top cabinet
+  if (parentCabinet.cabinetType === "top") {
+    // Use setTimeout to ensure the new cabinet is in the array
+    setTimeout(() => {
+      const updatedCabinets = [...cabinets, newCabinet]
+      updateUnderPanelPosition(parentCabinet, updatedCabinets, {
+        dimensionsChanged: true,
+        widthChanged: true,
+      })
+    }, 0)
+  }
 }
 
 interface FillerToggleParams {
@@ -257,6 +270,18 @@ export const handleFillerToggle = (
       const updatedCabinets = cabinets.filter((c) => c.cabinetId !== childCabinet.cabinetId)
       updateBenchtopPosition(parentCabinet, updatedCabinets, {
         childChanged: true,
+      })
+    }, 0)
+  }
+
+  // Update underPanel if parent is a top cabinet
+  if (parentCabinet && parentCabinet.cabinetType === "top") {
+    // Use setTimeout to ensure the cabinet is removed from the array
+    setTimeout(() => {
+      const updatedCabinets = cabinets.filter((c) => c.cabinetId !== childCabinet.cabinetId)
+      updateUnderPanelPosition(parentCabinet, updatedCabinets, {
+        dimensionsChanged: true,
+        widthChanged: true,
       })
     }, 0)
   }

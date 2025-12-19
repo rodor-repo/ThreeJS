@@ -322,6 +322,94 @@ describe("CarcassAssembly", () => {
   })
 
   // ============================================
+  // CONSTRUCTION - Benchtop Cabinet
+  // ============================================
+  describe("Construction - Benchtop Cabinet", () => {
+    beforeEach(() => {
+      assembly = CarcassAssembly.create(
+        "benchtop",
+        createTestDimensions(600, 38, 580), // width=length, height=thickness, depth=depth
+        {
+          benchtopFrontOverhang: 20,
+          benchtopLeftOverhang: 0,
+          benchtopRightOverhang: 0,
+        },
+        productId,
+        cabinetId
+      )
+    })
+
+    it("creates benchtop with benchtop part", () => {
+      expect(assembly.cabinetType).toBe("benchtop")
+      expect(assembly.benchtop).toBeDefined()
+      expect(assembly._benchtop).toBeDefined()
+    })
+
+    it("stores benchtop config correctly", () => {
+      expect(assembly.config.benchtopFrontOverhang).toBe(20)
+      expect(assembly.config.benchtopLeftOverhang).toBe(0)
+      expect(assembly.config.benchtopRightOverhang).toBe(0)
+    })
+
+    it("stores dimensions correctly (width=length, height=thickness)", () => {
+      expect(assembly.dimensions.width).toBe(600)
+      expect(assembly.dimensions.height).toBe(38)
+      expect(assembly.dimensions.depth).toBe(580)
+    })
+
+    it("has group with benchtop mesh", () => {
+      expect(assembly.group.children.length).toBeGreaterThan(0)
+      // The benchtop mesh should be in the group
+      expect(assembly._benchtop?.mesh).toBeDefined()
+    })
+
+    it("does not create traditional carcass parts", () => {
+      expect(assembly.shelves.length).toBe(0)
+      expect(assembly.legs.length).toBe(0)
+      expect(assembly.doors.length).toBe(0)
+      expect(assembly.drawers.length).toBe(0)
+    })
+
+    it("getPartDimensions returns benchtop part", () => {
+      const parts = assembly.getPartDimensions()
+      expect(Array.isArray(parts)).toBe(true)
+      expect(parts.length).toBe(1)
+      expect(parts[0].partName).toBe("Benchtop")
+    })
+
+    it("handles dimension updates", () => {
+      const newDims = createTestDimensions(800, 38, 600)
+      assembly.updateDimensions(newDims)
+      
+      expect(assembly.dimensions.width).toBe(800)
+      expect(assembly.dimensions.height).toBe(38)
+      expect(assembly.dimensions.depth).toBe(600)
+    })
+
+    it("updates benchtop overhangs", () => {
+      assembly.updateBenchtopOverhangs(30, 10, 15)
+      
+      expect(assembly.config.benchtopFrontOverhang).toBe(30)
+      expect(assembly.config.benchtopLeftOverhang).toBe(10)
+      expect(assembly.config.benchtopRightOverhang).toBe(15)
+    })
+
+    it("updateBenchtopOverhangs only updates provided values", () => {
+      assembly.updateBenchtopOverhangs(25) // Only front
+      
+      expect(assembly.config.benchtopFrontOverhang).toBe(25)
+      expect(assembly.config.benchtopLeftOverhang).toBe(0) // Unchanged
+      expect(assembly.config.benchtopRightOverhang).toBe(0) // Unchanged
+    })
+
+    it("dispose cleans up benchtop", () => {
+      expect(assembly._benchtop).toBeDefined()
+      assembly.dispose()
+      expect(assembly._benchtop).toBeUndefined()
+    })
+  })
+
+  // ============================================
   // CONFIGURATION DEFAULTS
   // ============================================
   describe("Configuration Defaults", () => {

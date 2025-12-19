@@ -47,7 +47,8 @@ function getEffectiveUnderPanelWidth(
 }
 
 /**
- * Updates under panel position and dimensions when parent cabinet changes
+ * Updates under panel position and dimensions when parent cabinet changes.
+ * Now uses CarcassAssembly methods instead of direct part manipulation.
  */
 export const updateUnderPanelPosition = (
   parentCabinet: CabinetData,
@@ -71,10 +72,9 @@ export const updateUnderPanelPosition = (
     return
   }
 
-  // Get underPanelFace from carcass
-  const underPanelFace = underPanelCabinet.carcass?.underPanelFace
-
-  if (!underPanelFace) {
+  // Access underPanel via CarcassAssembly (not direct part manipulation)
+  const carcass = underPanelCabinet.carcass
+  if (!carcass?.underPanelFace) {
     return
   }
 
@@ -91,45 +91,30 @@ export const updateUnderPanelPosition = (
   // Target dimensions for Under Panel
   // Width: effective width
   // Depth: parentDepth - 20 (gap at front)
-  // Height: thickness (managed by carcass part, usually 16mm)
+  // Height: thickness (16mm)
+  const underPanelThickness = 16
   const targetDepth = parentDepth - 20
 
-  // Calculate under panel world position
-  // The UnderPanelFace part is positioned relative to its local origin (which is the cabinet group origin)
-  // UnderPanelFace.ts sets local position:
-  // x = width/2
-  // y = -thickness/2
-  // z = depth/2 (flush with back Z=0)
-  
-  // So the cabinet group should be positioned at:
-  // X: effectiveLeftX
-  // Y: parentY
-  // Z: parentZ
-  
-  const underPanelWorldPos = new THREE.Vector3(
-    effectiveLeftX,
-    parentY,
-    parentZ
-  )
-
-  // Update under panel dimensions if needed
+  // Update under panel dimensions via CarcassAssembly.updateDimensions()
+  // This calls UnderPanelBuilder.updateDimensions() which handles the part update
   if (changes.dimensionsChanged || changes.widthChanged || changes.depthChanged || changes.heightChanged) {
-    if (typeof underPanelFace.updateDimensions === "function") {
-      underPanelFace.updateDimensions(
-        effectiveWidth,
-        targetDepth
-      )
-    }
-    
-    // Update carcass dimensions for consistency
-    if (underPanelCabinet.carcass) {
-      underPanelCabinet.carcass.dimensions.width = effectiveWidth
-      underPanelCabinet.carcass.dimensions.height = 16 // thickness
-      underPanelCabinet.carcass.dimensions.depth = targetDepth
-    }
+    carcass.updateDimensions({
+      width: effectiveWidth,
+      height: underPanelThickness,
+      depth: targetDepth,
+    })
   }
 
   // Update under panel world position
-  // Always update if anything changed to be safe
-  underPanelCabinet.group.position.copy(underPanelWorldPos)
+  // UnderPanelFace.ts sets local position relative to group origin
+  // So group position should be at: X=effectiveLeftX, Y=parentY, Z=parentZ
+  if (
+    changes.positionChanged ||
+    changes.dimensionsChanged ||
+    changes.widthChanged ||
+    changes.depthChanged ||
+    changes.heightChanged
+  ) {
+    underPanelCabinet.group.position.set(effectiveLeftX, parentY, parentZ)
+  }
 }

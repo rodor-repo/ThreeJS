@@ -1,7 +1,6 @@
 import { CabinetData } from "../../types"
 import { ViewId } from "../../../cabinets/ViewManager"
 import { updateKickerPosition } from "./kickerPositionHandler"
-import { Benchtop } from "@/features/carcass/parts/Benchtop"
 
 interface ViewManagerResult {
   viewManager: {
@@ -32,24 +31,9 @@ const findChildCabinets = (parentCabinetId: string, allCabinets: CabinetData[]):
  * Dispose child cabinet's geometry based on its type
  */
 const disposeChildCabinet = (child: CabinetData): void => {
-  // Dispose carcass if it exists
+  // Dispose carcass if it exists - this handles all cabinet types including benchtops
   if (child.carcass && typeof child.carcass.dispose === 'function') {
     child.carcass.dispose()
-  }
-
-  // Dispose benchtop-specific geometry
-  if (child.cabinetType === 'benchtop' && child.group.userData.benchtop) {
-    const benchtop = child.group.userData.benchtop as Benchtop
-    if (typeof benchtop.dispose === 'function') {
-      benchtop.dispose()
-    }
-  }
-
-  // Dispose kicker-specific geometry
-  if (child.cabinetType === 'kicker' && child.carcass?.kickerFace) {
-    if (typeof child.carcass.kickerFace.dispose === 'function') {
-      child.carcass.kickerFace.dispose()
-    }
   }
 }
 

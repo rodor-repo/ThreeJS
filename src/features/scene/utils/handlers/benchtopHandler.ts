@@ -1,13 +1,24 @@
-import * as THREE from "three"
-import _ from "lodash"
 import { WsProducts } from "@/types/erpTypes"
-import { CabinetData } from "../../types"
-import { Benchtop } from "@/features/carcass/parts/Benchtop"
+import { CabinetData, CabinetType } from "../../types"
+
+type CreateCabinetFn = (
+  cabinetType: CabinetType,
+  subcategoryId: string,
+  options: {
+    productId: string
+    customDimensions?: {
+      width?: number
+      height?: number
+      depth?: number
+    }
+    additionalProps?: Record<string, unknown>
+  }
+) => CabinetData | null | undefined
 
 interface BenchtopHandlerParams {
   cabinets: CabinetData[]
   wsProducts: WsProducts | null | undefined
-  addCabinetData: (cabinetData: CabinetData) => CabinetData | null
+  createCabinet: CreateCabinetFn
   deleteCabinet: (id: string) => void
 }
 
@@ -79,15 +90,15 @@ function getDefaultBenchtopProductId(wsProducts: WsProducts): string | null {
 }
 
 /**
- * Creates a benchtop for a cabinet.
- * Benchtop is created independently without going through cabinetFactory.
+ * Creates a benchtop for a base cabinet.
+ * Uses the standard cabinetFactory flow via createCabinet().
  */
 export const handleBenchtopSelect = (
   cabinetId: string,
   productId: string | null,
   params: BenchtopHandlerParams
 ) => {
-  const { cabinets, wsProducts, addCabinetData } = params
+  const { cabinets, wsProducts, createCabinet } = params
   if (!wsProducts) return
 
   const parentCabinet = cabinets.find((c) => c.cabinetId === cabinetId)
@@ -121,129 +132,50 @@ export const handleBenchtopSelect = (
   const { effectiveLength, effectiveLeftX } = getEffectiveBenchtopDimensions(parentCabinet, cabinets)
   
   // Benchtop dimensions:
-  // Length = effective length (cabinet + children)
-  // Thickness = 38mm (fixed)
-  // Depth = parent cabinet depth + 20mm (fixed) + front overhang
-  const benchtopLength = effectiveLength
+  // width = effective length (cabinet + children)
+  // height = thickness (38mm fixed)
+  // depth = parent cabinet depth + 20mm (fixed) + front overhang
   const benchtopThickness = 38
-  const FIXED_DEPTH_EXTENSION = 20 // Fixed 20mm extension beyond cabinet
+  const FIXED_DEPTH_EXTENSION = 20
   
   // Default overhangs for child benchtops
-  const frontOverhang = 20 // Default 20mm front overhang
-  const leftOverhang = 0   // Default 0 left overhang
-  const rightOverhang = 0  // Default 0 right overhang
+  const frontOverhang = 20
+  const leftOverhang = 0
+  const rightOverhang = 0
 
-  // Depth = Parent Depth + 20mm (fixed) + Front Overhang
   const benchtopDepth = parentCabinet.carcass.dimensions.depth + FIXED_DEPTH_EXTENSION + frontOverhang
 
-  // Generate unique cabinet ID
-  const benchtopCabinetId = `benchtop-${_.uniqueId()}-${Math.random().toString(36).slice(2, 8)}`
+  // Use createCabinet (cabinetFactory) instead of manual creation
+  const benchtopCabinet = createCabinet("benchtop", subcategoryId, {
+    productId: finalProductId,
+    customDimensions: {
+      width: effectiveLength,
+      height: benchtopThickness,
+      depth: benchtopDepth,
+    },
+    additionalProps: {
+      viewId: parentCabinet.viewId,
+      benchtopParentCabinetId: cabinetId,
+      hideLockIcons: true,
+      benchtopFrontOverhang: frontOverhang,
+      benchtopLeftOverhang: leftOverhang,
+      benchtopRightOverhang: rightOverhang,
+    },
+  })
 
-  // Create the Benchtop geometry - simple cube with overhangs
-  const benchtop = new Benchtop(
-    benchtopLength, 
-    benchtopThickness, 
-    benchtopDepth,
-    frontOverhang,
-    leftOverhang,
-    rightOverhang
-  )
+  if (!benchtopCabinet) return
 
-  // Create group to hold the benchtop
-  const group = new THREE.Group()
-  group.name = `benchtop_${parentCabinet.cabinetId}`
-  group.add(benchtop.mesh)
-  group.userData.benchtop = benchtop
-
-  // Position benchtop:
-  // X = effectiveLeftX (lowest X value - left edge of cabinet or child filler)
-  // Y = parent cabinet top (parentY + parentHeight)
-  // Z = parentZ (same as parent - starts from back wall)
+  // Position benchtop on top of parent cabinet
   const parentY = parentCabinet.group.position.y
   const parentHeight = parentCabinet.carcass.dimensions.height
   const parentZ = parentCabinet.group.position.z
 
-  group.position.set(
+  benchtopCabinet.group.position.set(
     effectiveLeftX,
     parentY + parentHeight,
     parentZ
   )
-
-  // Create minimal CabinetData for the benchtop
-  // Note: benchtop has no real carcass, just a simple dimensions wrapper with config for DynamicPanel compatibility
-  const benchtopCabinetData: CabinetData = {
-    group,
-    carcass: {
-      group,
-      dimensions: {
-        width: benchtopLength,
-        height: benchtopThickness,
-        depth: benchtopDepth,
-      },
-      // Minimal config for DynamicPanel compatibility
-      config: {
-        // Benchtops don't have doors, drawers, or shelves
-        doorEnabled: false,
-        doorCount: 0,
-        drawerEnabled: false,
-        drawerQuantity: 0,
-        shelfCount: 0,
-      },
-      // Minimal methods - benchtops don't have carcass features
-      updateDimensions: (newDims: { width?: number; height?: number; depth?: number }) => {
-        if (newDims.width !== undefined) benchtopCabinetData.carcass.dimensions.width = newDims.width
-        if (newDims.height !== undefined) benchtopCabinetData.carcass.dimensions.height = newDims.height
-        if (newDims.depth !== undefined) benchtopCabinetData.carcass.dimensions.depth = newDims.depth
-        
-        // Update the actual benchtop mesh with current overhangs
-        const bt = group.userData.benchtop as Benchtop
-        if (bt) {
-          bt.updateDimensions(
-            benchtopCabinetData.carcass.dimensions.width,
-            benchtopCabinetData.carcass.dimensions.height,
-            benchtopCabinetData.carcass.dimensions.depth,
-            benchtopCabinetData.benchtopFrontOverhang,
-            benchtopCabinetData.benchtopLeftOverhang,
-            benchtopCabinetData.benchtopRightOverhang
-          )
-        }
-      },
-      // Stub methods for DynamicPanel/ProductPanel compatibility - benchtops don't have these features
-      updateConfig: () => {},
-      updateMaterialProperties: () => {},
-      updateKickerHeight: () => {},
-      toggleDoors: () => {},
-      updateDoorMaterial: () => {},
-      updateDoorConfiguration: () => {},
-      updateOverhangDoor: () => {},
-      updateDoorEnabled: () => {},
-      updateDoorCount: () => {},
-      updateDrawerEnabled: () => {},
-      updateDrawerQuantity: () => {},
-      updateDrawerHeight: () => {},
-      updateDrawerHeights: () => {},
-      balanceDrawerHeights: () => {},
-      getDrawerHeights: () => [],
-      updateShelfCount: () => {},
-      dispose: () => {
-        const bt = group.userData.benchtop as Benchtop
-        if (bt) bt.dispose()
-      },
-    } as CabinetData["carcass"],
-    cabinetType: "benchtop",
-    subcategoryId,
-    productId: finalProductId,
-    cabinetId: benchtopCabinetId,
-    viewId: parentCabinet.viewId,
-    benchtopParentCabinetId: cabinetId,
-    hideLockIcons: true,
-    // Overhang values for child benchtops
-    benchtopFrontOverhang: frontOverhang,
-    benchtopLeftOverhang: leftOverhang,
-    benchtopRightOverhang: rightOverhang,
-  }
-
-  addCabinetData(benchtopCabinetData)
+  benchtopCabinet.group.name = `benchtop_${parentCabinet.cabinetId}`
 }
 
 export const handleBenchtopToggle = (
@@ -264,12 +196,8 @@ export const handleBenchtopToggle = (
   )
 
   if (existingBenchtopCabinet) {
-    // Dispose benchtop geometry
-    const benchtop = existingBenchtopCabinet.group.userData.benchtop as Benchtop | undefined
-    if (benchtop && typeof benchtop.dispose === "function") {
-      benchtop.dispose()
-    }
-
+    // CarcassAssembly.dispose() handles cleanup
+    existingBenchtopCabinet.carcass?.dispose()
     deleteCabinet(existingBenchtopCabinet.cabinetId)
   }
 }

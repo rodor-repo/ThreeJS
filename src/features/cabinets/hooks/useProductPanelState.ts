@@ -230,8 +230,8 @@ export const useProductPanelState = ({
         }
         setDimensions(initialDimensions)
         previousCabinetHeightRef.current = initialDimensions.height
-        setMaterialColor(selectedCabinet.material?.getColour?.() || "#ffffff")
-        setMaterialThickness(selectedCabinet.material?.getPanelThickness?.() || 16)
+        setMaterialColor(selectedCabinet.material.getColour())
+        setMaterialThickness(selectedCabinet.material.getPanelThickness())
         if (
           selectedCabinet.cabinetType === "base" ||
           selectedCabinet.cabinetType === "tall"

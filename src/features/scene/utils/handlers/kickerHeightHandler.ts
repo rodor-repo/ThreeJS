@@ -1,7 +1,6 @@
-import { CabinetData } from "../../types"
+import { CabinetData, WallDimensions } from "../../types"
 import { ViewId } from "../../../cabinets/ViewManager"
-import { updateChildCabinets } from "./childCabinetHandler"
-import { updateKickerPosition } from "./kickerPositionHandler"
+import { updateAllDependentComponents } from "./dependentComponentsHandler"
 
 interface ViewManagerResult {
   getCabinetsInView: (viewId: ViewId) => string[]
@@ -13,9 +12,10 @@ export const handleKickerHeightChange = (
   params: {
     cabinets: CabinetData[]
     viewManager: ViewManagerResult
+    wallDimensions: WallDimensions
   }
 ) => {
-  const { cabinets, viewManager } = params
+  const { cabinets, viewManager, wallDimensions } = params
 
   // Get all cabinets in this view
   const cabinetIds = viewManager.getCabinetsInView(viewId as ViewId)
@@ -30,16 +30,10 @@ export const handleKickerHeightChange = (
   baseTallCabinets.forEach((cabinet) => {
     // Update the kicker height which will also update the Y position
     cabinet.carcass.updateKickerHeight(kickerHeight)
-    
-    // Update child cabinets (fillers/panels) when parent kicker height changes
-    updateChildCabinets(cabinet, cabinets, {
-      kickerHeightChanged: true
-    })
-    
-    // Update kicker position when parent kicker height changes
-    updateKickerPosition(cabinet, cabinets, {
-      kickerHeightChanged: true
+
+    // Update all dependent components
+    updateAllDependentComponents(cabinet, cabinets, wallDimensions, {
+      kickerHeightChanged: true,
     })
   })
 }
-

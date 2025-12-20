@@ -3,9 +3,6 @@ import { ViewId } from "../../../cabinets/ViewManager"
 import { toastThrottled } from "@/features/cabinets/ui/ProductPanel"
 import { getClient } from "@/app/QueryProvider"
 import { getProductData } from "@/server/getProductData"
-import { updateChildCabinets } from "./childCabinetHandler"
-import { updateKickerPosition } from "./kickerPositionHandler"
-import { updateUnderPanelPosition } from "./underPanelPositionHandler"
 import {
   getCabinetRelativeEffectiveBounds,
   getEffectiveLeftEdge,
@@ -20,7 +17,6 @@ import {
   repositionViewCabinets,
   checkLeftWallOverflow,
 } from "./viewRepositionHandler"
-import { areCabinetsPaired, clampPositionX } from "./sharedCabinetUtils"
 
 interface ViewManagerResult {
   getCabinetsInView: (viewId: ViewId) => string[]
@@ -177,7 +173,7 @@ export const handleProductDimensionChange = (
       if (rightLock || (!leftLock && !rightLock)) {
         // Check self
         if (oldX - pushAmount < -0.1) {
-          toastThrottled('Cannot expand: cabinet would hit the left wall')
+          toastThrottled("Cannot expand: cabinet would hit the left wall")
           dispatchDimensionRejected()
           return
         }
@@ -352,8 +348,8 @@ function handleSyncResize(
   // Update the changing cabinet dimensions
   selectedCabinet.carcass.updateDimensions(newDimensions)
 
-  // Update child cabinets for changing cabinet
-  updateChildCabinets(selectedCabinet, cabinets, {
+  // Update all dependent components for changing cabinet
+  updateAllDependentComponents(selectedCabinet, cabinets, wallDimensions, {
     heightChanged:
       Math.abs(
         newDimensions.height - selectedCabinet.carcass.dimensions.height
@@ -363,11 +359,6 @@ function handleSyncResize(
       Math.abs(newDimensions.depth - selectedCabinet.carcass.dimensions.depth) >
       0.1,
     positionChanged: false,
-  })
-
-  // Update kicker/bulkhead/underPanel for changing cabinet
-  updateAllDependentComponents(selectedCabinet, cabinets, wallDimensions, {
-    widthChanged: true,
   })
 
   // Update widths for all other synced cabinets
@@ -414,25 +405,11 @@ function handleSyncResize(
     )
     cab.group.position.set(newX, cab.group.position.y, cab.group.position.z)
 
-    // Update child cabinets if position changed
+    // Update all dependent components if position changed
     if (Math.abs(newX - oldX) > 0.1) {
-      updateChildCabinets(cab, cabinets, {
+      updateAllDependentComponents(cab, cabinets, wallDimensions, {
         positionChanged: true,
       })
-
-      // Update kicker position for base/tall cabinets
-      if (cab.cabinetType === "base" || cab.cabinetType === "tall") {
-        updateKickerPosition(cab, cabinets, {
-          positionChanged: true,
-        })
-      }
-
-      // Update underPanel position for top cabinets
-      if (cab.cabinetType === "top") {
-        updateUnderPanelPosition(cab, cabinets, {
-          positionChanged: true,
-        })
-      }
     }
 
     currentEffectiveLeft = targetEffectiveLeft + effectiveWidth

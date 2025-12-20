@@ -1,4 +1,3 @@
-import * as THREE from 'three'
 import { DoorMaterial } from '@/features/carcass'
 import { Subcategory } from '@/components/categoriesData'
 import { debounce } from 'lodash'
@@ -34,15 +33,13 @@ import { WsProducts } from '@/types/erpTypes'
 import type { ViewId } from '../cabinets/ViewManager'
 import type { SavedRoom } from '@/data/savedRooms'
 import { exportPartsToCSV } from '@/nesting/ExportPartExcel'
-import { extractPartsFromScene } from '@/nesting/nest-mapper'
 import { usePartData } from '@/nesting/usePartData'
 import { handleViewDimensionChange } from './utils/handlers/viewDimensionHandler'
 import { handleSplashbackHeightChange } from './utils/handlers/splashbackHandler'
 import { handleKickerHeightChange } from './utils/handlers/kickerHeightHandler'
 import { handleProductDimensionChange } from './utils/handlers/productDimensionHandler'
 import { handleDeleteCabinet } from './utils/handlers/deleteCabinetHandler'
-import { updateChildCabinets } from './utils/handlers/childCabinetHandler'
-import { updateUnderPanelPosition } from './utils/handlers/underPanelPositionHandler'
+import { updateAllDependentComponents } from './utils/handlers/dependentComponentsHandler'
 import { handleFillerSelect as handleFillerSelectHandler, handleFillerToggle as handleFillerToggleHandler } from './utils/handlers/fillerHandler'
 import {
   handleKickerSelect as handleKickerSelectHandler,
@@ -60,7 +57,6 @@ import {
   handleBenchtopSelect as handleBenchtopSelectHandler,
   handleBenchtopToggle as handleBenchtopToggleHandler
 } from './utils/handlers/benchtopHandler'
-import { updateBenchtopPosition } from './utils/handlers/benchtopPositionHandler'
 import { useWallTransparency } from './hooks/useWallTransparency'
 import { ModeToggle } from './ui/ModeToggle'
 import { CartSection } from './ui/CartSection'
@@ -691,7 +687,8 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
           onKickerHeightChange={(viewId, height) => {
             handleKickerHeightChange(viewId as ViewId, height, {
               cabinets,
-              viewManager
+              viewManager,
+              wallDimensions
             })
           }}
         />
@@ -993,7 +990,11 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
             // Update position after overhang change
             const parentCabinet = cabinets.find(c => c.cabinetId === benchtopCabinet.benchtopParentCabinetId)
             if (parentCabinet) {
-              updateBenchtopPosition(parentCabinet, cabinets, { dimensionsChanged: true })
+              updateAllDependentComponents(parentCabinet, cabinets, wallDimensions, {
+                widthChanged: true,
+                heightChanged: true,
+                depthChanged: true
+              })
             }
 
             // Trigger re-render to update UI snapshots
@@ -1027,7 +1028,11 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
             // Update position after thickness change
             const parentCabinet = cabinets.find(c => c.cabinetId === benchtopCabinet.benchtopParentCabinetId)
             if (parentCabinet) {
-              updateBenchtopPosition(parentCabinet, cabinets, { dimensionsChanged: true })
+              updateAllDependentComponents(parentCabinet, cabinets, wallDimensions, {
+                widthChanged: true,
+                heightChanged: true,
+                depthChanged: true
+              })
             }
 
             // Trigger re-render to update UI snapshots
@@ -1105,6 +1110,11 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
             if (selectedCabinet) {
               // Update the kicker height and reposition the cabinet
               selectedCabinet.carcass.updateKickerHeight(kickerHeight);
+
+              // Update all dependent components
+              updateAllDependentComponents(selectedCabinet, cabinets, wallDimensions, {
+                kickerHeightChanged: true
+              })
             }
           }}
           onDoorToggle={(enabled) => {
@@ -1141,12 +1151,10 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
               // Update overhang door setting
               selectedCabinet.carcass.updateOverhangDoor(overhang);
 
-              // Update child cabinets (fillers/panels) when overhang changes
-              if (selectedCabinet.cabinetType === 'top') {
-                updateChildCabinets(selectedCabinet, cabinets, {
-                  overhangChanged: true
-                })
-              }
+              // Update all dependent components when overhang changes
+              updateAllDependentComponents(selectedCabinet, cabinets, wallDimensions, {
+                overhangChanged: true
+              })
             }
           }}
           onDrawerToggle={(enabled) => {

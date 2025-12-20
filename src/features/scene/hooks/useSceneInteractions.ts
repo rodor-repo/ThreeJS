@@ -7,15 +7,11 @@ import {
   DEFAULT_SNAP_CONFIG,
   getCabinetRelativeEffectiveBounds,
 } from "../lib/snapUtils"
-import { updateKickerPosition } from "../utils/handlers/kickerPositionHandler"
 import {
-  updateBulkheadPosition,
   updateReturnBulkheads,
 } from "../utils/handlers/bulkheadPositionHandler"
-import { updateUnderPanelPosition } from "../utils/handlers/underPanelPositionHandler"
-import { updateBenchtopPosition } from "../utils/handlers/benchtopPositionHandler"
+import { updateAllDependentComponents } from "../utils/handlers/dependentComponentsHandler"
 import type { ViewManager, ViewId } from "../../cabinets/ViewManager"
-import { updateChildCabinets } from "../utils/handlers/childCabinetHandler"
 
 type CameraDragAPI = {
   startDrag: (x: number, y: number) => void
@@ -334,52 +330,10 @@ export const useSceneInteractions = (
         draggedCabinet.group.position.z
       )
       
-      // Update child cabinets (fillers/panels) when parent moves
-      updateChildCabinets(draggedCabinet, cabinets, {
+      // Update all dependent components when parent cabinet moves
+      updateAllDependentComponents(draggedCabinet, cabinets, wallDimensions, {
         positionChanged: true
       })
-      
-      // Update kicker position when parent cabinet moves
-      if (draggedCabinet.cabinetType === 'base' || draggedCabinet.cabinetType === 'tall') {
-        updateKickerPosition(draggedCabinet, cabinets, {
-          positionChanged: true
-        })
-      }
-
-      // Update benchtop position when base cabinet moves
-      if (draggedCabinet.cabinetType === 'base') {
-        updateBenchtopPosition(draggedCabinet, cabinets, {
-          positionChanged: true
-        })
-      }
-      
-      // If dragged cabinet is a child filler/panel, update parent kicker when child position changes
-      if (
-        draggedCabinet.parentCabinetId &&
-        (draggedCabinet.cabinetType === 'filler' || draggedCabinet.cabinetType === 'panel') &&
-        draggedCabinet.hideLockIcons === true
-      ) {
-        const parentCabinet = cabinets.find(c => c.cabinetId === draggedCabinet.parentCabinetId)
-        if (parentCabinet && (parentCabinet.cabinetType === 'base' || parentCabinet.cabinetType === 'tall')) {
-          updateKickerPosition(parentCabinet, cabinets, {
-            dimensionsChanged: true
-          })
-        }
-      }
-      
-      // Update bulkhead position when parent cabinet moves (only for top and tall, not base)
-      if (draggedCabinet.cabinetType === 'top' || draggedCabinet.cabinetType === 'tall') {
-        updateBulkheadPosition(draggedCabinet, cabinets, wallDimensions, {
-          positionChanged: true
-        })
-      }
-
-      // Update underPanel position when parent cabinet moves (only for top)
-      if (draggedCabinet.cabinetType === 'top') {
-        updateUnderPanelPosition(draggedCabinet, cabinets, {
-          positionChanged: true
-        })
-      }
 
       // Check all overhead and tall cabinets for return bulkhead updates when any cabinet moves
       // This ensures return bulkheads are created/removed when cabinets are snapped or reach walls
@@ -446,38 +400,10 @@ export const useSceneInteractions = (
               cabinetInView.group.position.z
             )
 
-            // Update child cabinets (fillers/panels) when cabinet in view moves
-            updateChildCabinets(cabinetInView, cabinets, {
+            // Update all dependent components when cabinet in view moves
+            updateAllDependentComponents(cabinetInView, cabinets, wallDimensions, {
               positionChanged: true
             })
-
-            // Update kicker position when cabinet in view moves
-            if (cabinetInView.cabinetType === 'base' || cabinetInView.cabinetType === 'tall') {
-              updateKickerPosition(cabinetInView, cabinets, {
-                positionChanged: true
-              })
-            }
-
-            // Update benchtop position when base cabinet in view moves
-            if (cabinetInView.cabinetType === 'base') {
-              updateBenchtopPosition(cabinetInView, cabinets, {
-                positionChanged: true
-              })
-            }
-
-            // Update bulkhead position when cabinet in view moves
-            if (cabinetInView.cabinetType === 'base' || cabinetInView.cabinetType === 'top' || cabinetInView.cabinetType === 'tall') {
-              updateBulkheadPosition(cabinetInView, cabinets, wallDimensions, {
-                positionChanged: true
-              })
-            }
-
-            // Update underPanel position when cabinet in view moves
-            if (cabinetInView.cabinetType === 'top') {
-              updateUnderPanelPosition(cabinetInView, cabinets, {
-                positionChanged: true
-              })
-            }
           }
         })
 

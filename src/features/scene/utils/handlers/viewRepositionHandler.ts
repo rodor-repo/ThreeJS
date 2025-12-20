@@ -7,12 +7,6 @@ interface ViewManagerResult {
   getCabinetsInView: (viewId: ViewId) => string[]
 }
 
-export type { ViewManagerResult }
-
-interface ViewManagerResult {
-  getCabinetsInView: (viewId: ViewId) => string[]
-}
-
 // Helper function to check if pushing left cabinets would exceed the left wall
 // Returns the overflow amount (how much it would go past x=0) or null if OK
 export const checkLeftWallOverflow = (

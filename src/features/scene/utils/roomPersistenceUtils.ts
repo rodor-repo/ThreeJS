@@ -192,6 +192,13 @@ export function serializeRoom({
       applianceKickerHeight: cabinet.carcass.config.applianceKickerHeight,
       fridgeDoorCount: cabinet.carcass.config.fridgeDoorCount,
       fridgeDoorSide: cabinet.carcass.config.fridgeDoorSide,
+      // Benchtop properties
+      benchtopParentCabinetId: cabinet.benchtopParentCabinetId,
+      benchtopFrontOverhang: cabinet.benchtopFrontOverhang,
+      benchtopLeftOverhang: cabinet.benchtopLeftOverhang,
+      benchtopRightOverhang: cabinet.benchtopRightOverhang,
+      benchtopThickness: cabinet.benchtopThickness,
+      benchtopHeightFromFloor: cabinet.benchtopHeightFromFloor,
     }
   })
 
@@ -385,6 +392,29 @@ export async function restoreRoom({
         oldIdToNewId.set(savedCabinet.cabinetId, cabinetData.cabinetId)
         createdCabinets.set(cabinetData.cabinetId, cabinetData)
 
+        // Restore benchtop properties (simple ones) before updateDimensions
+        if (savedCabinet.benchtopFrontOverhang !== undefined) {
+          cabinetData.benchtopFrontOverhang = savedCabinet.benchtopFrontOverhang
+          cabinetData.carcass.config.benchtopFrontOverhang =
+            savedCabinet.benchtopFrontOverhang
+        }
+        if (savedCabinet.benchtopLeftOverhang !== undefined) {
+          cabinetData.benchtopLeftOverhang = savedCabinet.benchtopLeftOverhang
+          cabinetData.carcass.config.benchtopLeftOverhang =
+            savedCabinet.benchtopLeftOverhang
+        }
+        if (savedCabinet.benchtopRightOverhang !== undefined) {
+          cabinetData.benchtopRightOverhang = savedCabinet.benchtopRightOverhang
+          cabinetData.carcass.config.benchtopRightOverhang =
+            savedCabinet.benchtopRightOverhang
+        }
+        if (savedCabinet.benchtopThickness !== undefined) {
+          cabinetData.benchtopThickness = savedCabinet.benchtopThickness
+        }
+        if (savedCabinet.benchtopHeightFromFloor !== undefined) {
+          cabinetData.benchtopHeightFromFloor = savedCabinet.benchtopHeightFromFloor
+        }
+
         cabinetData.carcass.updateDimensions(savedCabinet.dimensions)
 
         // Mark dimensions as applied so ProductPanel doesn't re-apply defaults
@@ -549,6 +579,16 @@ export async function restoreRoom({
           )
           if (newUnderPanelParentId) {
             cabinetData.underPanelParentCabinetId = newUnderPanelParentId
+          }
+        }
+
+        // Map benchtopParentCabinetId
+        if (savedCabinet.benchtopParentCabinetId) {
+          const newBenchtopParentId = oldIdToNewId.get(
+            savedCabinet.benchtopParentCabinetId
+          )
+          if (newBenchtopParentId) {
+            cabinetData.benchtopParentCabinetId = newBenchtopParentId
           }
         }
       })

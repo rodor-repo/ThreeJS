@@ -39,9 +39,9 @@ describe("cabinetFactory", () => {
     expect(cab.carcass).toBeInstanceOf(CarcassAssembly)
     expect(cab.cabinetType).toBe("appliance")
     expect(cab.carcass.config.applianceType).toBe("dishwasher")
-    expect(cab.carcass.config.applianceTopGap).toBe(0)
-    expect(cab.carcass.config.applianceLeftGap).toBe(0)
-    expect(cab.carcass.config.applianceRightGap).toBe(0)
+    expect(cab.carcass.config.applianceTopGap).toBe(30)
+    expect(cab.carcass.config.applianceLeftGap).toBe(12.5)
+    expect(cab.carcass.config.applianceRightGap).toBe(12.5)
   })
 
   it("createCabinet appliance has shell and visual parts", () => {

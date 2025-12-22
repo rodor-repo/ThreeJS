@@ -5,9 +5,8 @@ import {
   type Dispatch,
   type SetStateAction,
 } from "react"
-import { saveRoom, type RoomCategory, type SavedRoom } from "@/data/savedRooms"
-import type { WsProducts } from "@/types/erpTypes"
-import type { CabinetType } from "@/features/carcass"
+import type { SavedRoom } from "@/data/savedRooms"
+import type { WsProducts, WsRooms } from "@/types/erpTypes"
 import type { CabinetData, WallDimensions as WallDims } from "../types"
 import type { View, ViewId, ViewManager } from "@/features/cabinets/ViewManager"
 import {
@@ -15,6 +14,7 @@ import {
   restoreRoom,
   type CreateCabinetFn,
 } from "../utils/roomPersistenceUtils"
+import { saveRoomDesign } from "@/server/rooms/saveRoomDesign"
 
 type CabinetGroupsMap = Map<
   string,
@@ -55,6 +55,10 @@ type UseRoomPersistenceOptions = {
   onLoadRoomReady?: (loadRoom: (room: SavedRoom) => Promise<void>) => void
   cabinetSyncs?: CabinetSyncsMap
   setCabinetSyncs?: Dispatch<SetStateAction<CabinetSyncsMap>>
+  /** Current room ID from URL (via nuqs) */
+  currentRoomId?: string | null
+  /** WsRooms config for room metadata */
+  wsRooms?: WsRooms | null
 }
 
 export const useRoomPersistence = ({
@@ -75,8 +79,12 @@ export const useRoomPersistence = ({
   onLoadRoomReady,
   cabinetSyncs,
   setCabinetSyncs,
+  currentRoomId,
+  wsRooms,
 }: UseRoomPersistenceOptions) => {
   const [currentRoom, setCurrentRoom] = useState<SavedRoom | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
+
   const {
     activeViews,
     viewManager: viewManagerInstance,
@@ -85,46 +93,78 @@ export const useRoomPersistence = ({
     getCabinetView,
   } = viewManager
 
-  const handleSaveRoom = useCallback(
-    async (roomName: string, roomCategory: RoomCategory) => {
-      try {
-        const savedRoom = serializeRoom({
-          cabinets,
-          cabinetGroups,
-          wallDimensions,
-          wallColor,
-          activeViews,
-          getCabinetView,
-          wsProducts,
-          roomName,
-          roomCategory,
-          cabinetSyncs,
-        })
+  // Get current room name from wsRooms metadata
+  const currentRoomName = currentRoomId && wsRooms?.rooms?.[currentRoomId]?.room
 
-        await saveRoom(savedRoom)
-        setCurrentRoom(savedRoom)
-        console.log("Room saved:", savedRoom)
-        alert(`Room "${roomName}" saved successfully!`)
-      } catch (error) {
-        console.error("Failed to save room:", error)
-        alert(
-          `Failed to save room: ${
-            error instanceof Error ? error.message : "Unknown error"
-          }`
-        )
-      }
-    },
-    [
-      activeViews,
-      cabinets,
-      cabinetGroups,
-      getCabinetView,
-      wallColor,
-      wallDimensions,
-      wsProducts,
-      cabinetSyncs,
-    ]
-  )
+  /**
+   * Save the current room design to Firestore.
+   * Uses set() with merge:true so it works for both new and existing designs.
+   */
+  const handleSaveRoom = useCallback(async () => {
+    if (!currentRoomId) {
+      throw new Error(
+        "No room ID selected. Please select a room from the menu first."
+      )
+    }
+
+    setIsSaving(true)
+
+    try {
+      // Get room metadata from wsRooms
+      const roomMeta = wsRooms?.rooms?.[currentRoomId]
+      const categoryId = roomMeta?.categoryId
+      const categoryName = categoryId
+        ? wsRooms?.categories?.[categoryId]?.category
+        : undefined
+
+      // Serialize the current scene state
+      const serializedRoom = serializeRoom({
+        cabinets,
+        cabinetGroups,
+        wallDimensions,
+        wallColor,
+        activeViews,
+        getCabinetView,
+        wsProducts,
+        roomName: roomMeta?.room || "Untitled",
+        // Use category name from wsRooms, with fallback
+        roomCategory: (categoryName as SavedRoom["category"]) || "Kitchen",
+        cabinetSyncs,
+      })
+
+      // Save to Firestore using set() with merge:true
+      // We omit id, name, category since those come from wsRooms.rooms
+      const {
+        id: _id,
+        name: _name,
+        category: _category,
+        ...designData
+      } = serializedRoom
+
+      await saveRoomDesign(currentRoomId, designData)
+
+      // Update local state
+      setCurrentRoom(serializedRoom)
+
+      console.log("Room saved to Firestore:", currentRoomId)
+    } catch (error) {
+      console.error("Failed to save room:", error)
+      throw error // Re-throw so caller can handle
+    } finally {
+      setIsSaving(false)
+    }
+  }, [
+    currentRoomId,
+    wsRooms,
+    activeViews,
+    cabinets,
+    cabinetGroups,
+    getCabinetView,
+    wallColor,
+    wallDimensions,
+    wsProducts,
+    cabinetSyncs,
+  ])
 
   const loadRoom = useCallback(
     async (savedRoom: SavedRoom) => {
@@ -169,6 +209,8 @@ export const useRoomPersistence = ({
 
   return {
     currentRoom,
+    currentRoomName,
+    isSaving,
     saveRoom: handleSaveRoom,
     loadRoom,
   }

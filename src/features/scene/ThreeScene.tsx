@@ -29,7 +29,7 @@ import { ProductsListDrawer } from './ui/ProductsListDrawer'
 import { SaveModal } from './ui/SaveModal'
 import { DeleteConfirmationModal } from './ui/DeleteConfirmationModal'
 import { NestingModal } from './ui/NestingModal'
-import { WsProducts } from '@/types/erpTypes'
+import { WsProducts, WsRooms } from '@/types/erpTypes'
 import type { ViewId } from '../cabinets/ViewManager'
 import type { SavedRoom } from '@/data/savedRooms'
 import { exportPartsToCSV } from '@/nesting/ExportPartExcel'
@@ -80,9 +80,13 @@ interface ThreeSceneProps {
   selectedApplianceType?: 'dishwasher' | 'washingMachine' | 'sideBySideFridge' | null
   /** Callback when appliance is created */
   onApplianceCreated?: () => void
+  /** Currently selected room ID (from URL query param) */
+  currentRoomId?: string | null
+  /** WsRooms config from Firestore - contains room categories and entries */
+  wsRooms?: WsRooms | null
 }
 
-const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChange, selectedCategory, selectedSubcategory, isMenuOpen = false, selectedProductId, wsProducts, onLoadRoomReady, selectedApplianceType, onApplianceCreated }) => {
+const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChange, selectedCategory, selectedSubcategory, isMenuOpen = false, selectedProductId, wsProducts, onLoadRoomReady, selectedApplianceType, onApplianceCreated, currentRoomId, wsRooms }) => {
   const mountRef = useRef<HTMLDivElement>(null);
   const [cameraMode, setCameraMode] = useState<'constrained' | 'free'>('constrained')
   const [dimensionsVisible, setDimensionsVisible] = useState(true)
@@ -318,7 +322,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
 
   // view helpers provided by useThreeRenderer
 
-  const { currentRoom, saveRoom: handleSaveRoom, loadRoom } = useRoomPersistence({
+  const { currentRoom: _currentRoom, currentRoomName, isSaving, saveRoom: handleSaveRoom, loadRoom } = useRoomPersistence({
     cabinets,
     cabinetGroups,
     setCabinetGroups,
@@ -336,6 +340,8 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     updateCabinetViewId,
     updateCabinetLock,
     onLoadRoomReady: undefined, // We handle this manually below to reset history
+    currentRoomId,
+    wsRooms,
   })
 
   const { undo, redo, canUndo, canRedo, createCheckpoint, deleteCheckpoint, resetHistory, past, future, jumpTo } = useUndoRedo({
@@ -1228,8 +1234,17 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
       <SaveModal
         isOpen={showSaveModal}
         onClose={closeSaveModal}
-        onSave={handleSaveRoom}
-        currentRoom={currentRoom}
+        onSave={async () => {
+          try {
+            await handleSaveRoom()
+            closeSaveModal()
+          } catch (error) {
+            // Error is already shown by the hook
+            console.error('Save failed:', error)
+          }
+        }}
+        currentRoomName={currentRoomName}
+        isSaving={isSaving}
       />
 
       {/* Delete Confirmation Modal */}

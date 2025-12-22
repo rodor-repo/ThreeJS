@@ -1,12 +1,15 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
+import { useQueryState } from 'nuqs'
 import MainMenu from '@/components/MainMenu'
 import { Category, Subcategory } from '@/components/categoriesData'
 import { WsProducts } from '@/types/erpTypes'
 import type { SavedRoom } from '@/data/savedRooms'
 import type { WallDimensions } from '@/features/scene/types'
+import { getRoomDesign, type RoomDesignData } from '@/server/rooms/getRoomDesign'
+import { useWsRoomsQuery } from '@/hooks/useWsRoomsQuery'
 
 // Dynamically import the Three.js component to avoid SSR issues
 const ThreeScene = dynamic(() => import('@/features/scene/ThreeScene'), {
@@ -22,6 +25,12 @@ const ThreeScene = dynamic(() => import('@/features/scene/ThreeScene'), {
 })
 
 export default function Home() {
+  // URL query state for room selection
+  const [roomId, setRoomId] = useQueryState('roomId')
+
+  // Fetch wsRooms config via React Query
+  const { data: wsRooms, isLoading: wsRoomsLoading } = useWsRoomsQuery()
+
   const [wallDimensions, setWallDimensions] = useState<WallDimensions>({
     length: 4000, // Backward compatibility
     height: 2700,
@@ -41,6 +50,69 @@ export default function Home() {
   const loadRoomRef = useRef<((savedRoom: SavedRoom) => Promise<void>) | null>(null)
   const [selectedApplianceType, setSelectedApplianceType] = useState<'dishwasher' | 'washingMachine' | 'sideBySideFridge' | null>(null)
 
+  // Track if we've already loaded the room from URL to avoid duplicate loads
+  const initialLoadDoneRef = useRef(false)
+
+  // Load room design when roomId changes or on initial load
+  useEffect(() => {
+    if (!roomId || !loadRoomRef.current || initialLoadDoneRef.current) return
+
+    const loadRoomFromId = async () => {
+      try {
+        const design = await getRoomDesign(roomId)
+        if (design && loadRoomRef.current) {
+          // Construct a SavedRoom object from the design and wsRooms metadata
+          const roomMeta = wsRooms?.rooms?.[roomId]
+          const categoryMeta = roomMeta?.categoryId ? wsRooms?.categories?.[roomMeta.categoryId] : null
+
+          const savedRoom: SavedRoom = {
+            id: roomId,
+            name: roomMeta?.room || 'Untitled Room',
+            category: (categoryMeta?.category as SavedRoom['category']) || 'Kitchen',
+            savedAt: design.updatedAt || design.savedAt || new Date().toISOString(),
+            wallSettings: design.wallSettings,
+            cabinets: design.cabinets,
+            views: design.views,
+            cabinetSyncs: design.cabinetSyncs,
+          }
+
+          await loadRoomRef.current(savedRoom)
+          initialLoadDoneRef.current = true
+        }
+      } catch (error) {
+        console.error('Failed to load room design:', error)
+      }
+    }
+
+    // Only load if wsRooms is available (for metadata)
+    if (wsRooms) {
+      loadRoomFromId()
+    }
+  }, [roomId, wsRooms])
+
+  // Handler for when a room is selected from the menu
+  const handleRoomSelect = useCallback(async (selectedRoomId: string, design?: RoomDesignData | null) => {
+    // Update URL
+    await setRoomId(selectedRoomId)
+
+    if (loadRoomRef.current && design) {
+      const roomMeta = wsRooms?.rooms?.[selectedRoomId]
+      const categoryMeta = roomMeta?.categoryId ? wsRooms?.categories?.[roomMeta.categoryId] : null
+
+      const savedRoom: SavedRoom = {
+        id: selectedRoomId,
+        name: roomMeta?.room || 'Untitled Room',
+        category: (categoryMeta?.category as SavedRoom['category']) || 'Kitchen',
+        savedAt: design.updatedAt || design.savedAt || new Date().toISOString(),
+        wallSettings: design.wallSettings,
+        cabinets: design.cabinets,
+        views: design.views,
+        cabinetSyncs: design.cabinetSyncs,
+      }
+
+      await loadRoomRef.current(savedRoom)
+    }
+  }, [setRoomId, wsRooms])
 
   const handleCategorySelect = (category: Category) => {
     setSelectedCategory(category)
@@ -80,6 +152,10 @@ export default function Home() {
         onMenuStateChange={handleMenuStateChange}
         wsProducts={wsProducts}
         setWsProducts={setWsProducts}
+        wsRooms={wsRooms ?? null}
+        wsRoomsLoading={wsRoomsLoading}
+        currentRoomId={roomId}
+        onRoomSelect={handleRoomSelect}
         onLoadRoom={async (savedRoom) => {
           if (loadRoomRef.current) {
             await loadRoomRef.current(savedRoom)
@@ -102,6 +178,8 @@ export default function Home() {
         onLoadRoomReady={(loadRoom) => {
           loadRoomRef.current = loadRoom
         }}
+        currentRoomId={roomId}
+        wsRooms={wsRooms ?? null}
       />
     </main>
   )

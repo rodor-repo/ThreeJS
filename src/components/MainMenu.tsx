@@ -2,15 +2,16 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Menu, X, ChevronRight, Trash2 } from 'lucide-react'
+import { Menu, X, ChevronRight } from 'lucide-react'
 import type { Category, Subcategory } from './categoriesData'
-import { getWsProducts } from '@/server/getWsProducts'
-import type { WsProducts } from '@/types/erpTypes'
-import { getSavedRoomsByCategory, deleteSavedRoom, type RoomCategory, type SavedRoom } from '@/data/savedRooms'
+import type { WsProducts, WsRooms } from '@/types/erpTypes'
+import type { SavedRoom } from '@/data/savedRooms'
+import { getRoomDesign, type RoomDesignData } from '@/server/rooms/getRoomDesign'
 import _ from 'lodash'
 import { getClient } from '@/app/QueryProvider'
 import { getProductData } from '@/server/getProductData'
 import toast from 'react-hot-toast'
+import { useWsProductsQuery } from '@/hooks/useWsProductsQuery'
 
 interface MainMenuProps {
   onCategorySelect: (category: Category) => void
@@ -19,43 +20,42 @@ interface MainMenuProps {
   onMenuStateChange?: (isOpen: boolean) => void
   wsProducts: WsProducts | null
   setWsProducts: React.Dispatch<React.SetStateAction<WsProducts | null>>
-  onLoadRoom?: (savedRoom: import('@/data/savedRooms').SavedRoom) => Promise<void>
+  /** wsRooms config from Firestore - contains categories and room entries */
+  wsRooms?: WsRooms | null
+  /** Whether wsRooms is still loading */
+  wsRoomsLoading?: boolean
+  /** Currently selected room ID (from URL) */
+  currentRoomId?: string | null
+  /** Handler for when a room is selected. Receives roomId and optional design data */
+  onRoomSelect?: (roomId: string, design?: RoomDesignData | null) => Promise<void>
+  onLoadRoom?: (savedRoom: SavedRoom) => Promise<void>
   onApplianceSelect?: (applianceType: 'dishwasher' | 'washingMachine' | 'sideBySideFridge') => void
 }
 
-const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect: _onCategorySelect, onSubcategorySelect, selectedCategory: _selectedCategory, onMenuStateChange, wsProducts, setWsProducts, onLoadRoom, onApplianceSelect }) => {
+const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect: _onCategorySelect, onSubcategorySelect, selectedCategory: _selectedCategory, onMenuStateChange, wsProducts: wsProductsProp, setWsProducts, wsRooms, wsRoomsLoading, currentRoomId, onRoomSelect, onLoadRoom: _onLoadRoom, onApplianceSelect }) => {
   const [isOpen, setIsOpen] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const [selectedTopLevelMenu, setSelectedTopLevelMenu] = useState<'cabinets' | 'appliances' | 'rooms' | null>(null) // New state for top-level menu
-  const [selectedRoom, setSelectedRoom] = useState<RoomCategory | null>(null) // New state for selected room
+  const [selectedRoomCategoryId, setSelectedRoomCategoryId] = useState<string | null>(null) // Selected room category ID from wsRooms
   const [selectedCategoryForSubmenu, setSelectedCategoryForSubmenu] = useState<Category | null>(null)
   const [showSubmenu, setShowSubmenu] = useState(false)
-  const [savedRooms, setSavedRooms] = useState<SavedRoom[]>([]) // State for saved rooms
-  const [loadingRooms, setLoadingRooms] = useState(false) // Loading state for rooms
+  const [loadingRoomDesign, setLoadingRoomDesign] = useState(false) // Loading state when fetching room design
   const [selectedSubcategoryForDesigns, setSelectedSubcategoryForDesigns] = useState<Subcategory | null>(null)
   const [expandedDesigns, setExpandedDesigns] = useState<Record<string, boolean>>({})
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({})
 
-  // Fetch actual data from server
-  const loadCategories = async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const data = await getWsProducts()
-      setWsProducts(data)
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to load categories'
-      setError(msg)
-      console.error('Error loading categories:', err)
-    } finally {
-      setLoading(false)
-    }
-  }
+  // Fetch wsProducts via React Query
+  const { data: wsProductsQuery, isLoading: loading, isError, refetch } = useWsProductsQuery()
+  const error = isError ? 'Failed to load categories' : null
 
+  // Use query data, fallback to prop (for backward compatibility)
+  const wsProducts = wsProductsQuery ?? wsProductsProp
+
+  // Sync query result to parent state
   useEffect(() => {
-    loadCategories()
-  }, [])
+    if (wsProductsQuery) {
+      setWsProducts(wsProductsQuery)
+    }
+  }, [wsProductsQuery, setWsProducts])
 
   const categoryColorPalette = ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EF4444', '#6B7280']
   const defaultDims = {
@@ -153,16 +153,16 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect: _onCategorySelect
   }
 
   const toggleDesignExpand = (designId: string) => {
-    setExpandedDesigns(prev => ({ 
-      ...prev, 
-      [designId]: prev[designId] === false ? true : false 
+    setExpandedDesigns(prev => ({
+      ...prev,
+      [designId]: prev[designId] === false ? true : false
     }))
   }
 
   const toggleCategoryExpand = (categoryId: string) => {
-    setExpandedCategories(prev => ({ 
-      ...prev, 
-      [categoryId]: prev[categoryId] === false ? true : false 
+    setExpandedCategories(prev => ({
+      ...prev,
+      [categoryId]: prev[categoryId] === false ? true : false
     }))
   }
 
@@ -225,7 +225,7 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect: _onCategorySelect
     setShowSubmenu(false)
     setIsOpen(false)
     onMenuStateChange?.(false)
-    
+
     // Trigger appliance creation (no product prefetch needed)
     onApplianceSelect?.(applianceType)
   }, [onApplianceSelect, onMenuStateChange])
@@ -236,7 +236,7 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect: _onCategorySelect
     // Immediately close submenu when main menu is closed for better responsiveness
     if (!newState) {
       setSelectedTopLevelMenu(null) // Reset top-level menu selection
-      setSelectedRoom(null)
+      setSelectedRoomCategoryId(null)
       setShowSubmenu(false)
       setSelectedCategoryForSubmenu(null)
       setSelectedSubcategoryForDesigns(null)
@@ -253,81 +253,61 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect: _onCategorySelect
     } else if (menu === 'appliances') {
       // Appliances menu - placeholder for future implementation
     } else if (menu === 'rooms') {
-      // Rooms menu - will show room subcategories
-      setSelectedRoom(null)
+      // Rooms menu - will show room categories from wsRooms
+      setSelectedRoomCategoryId(null)
     }
   }
 
   const handleBackToTopLevel = () => {
     setSelectedTopLevelMenu(null)
-    setSelectedRoom(null)
+    setSelectedRoomCategoryId(null)
     setShowSubmenu(false)
     setSelectedCategoryForSubmenu(null)
     setSelectedSubcategoryForDesigns(null)
     setExpandedDesigns({})
   }
 
-  const handleRoomClick = (room: RoomCategory) => {
-    setSelectedRoom(room)
+  const handleRoomCategoryClick = (categoryId: string) => {
+    setSelectedRoomCategoryId(categoryId)
   }
 
-  // Handle room deletion
-  const handleDeleteRoom = useCallback(async (room: SavedRoom, e: React.MouseEvent) => {
-    e.stopPropagation() // Prevent triggering the load room action
+  // Handle clicking a room entry - fetch design and notify parent
+  const handleRoomEntryClick = useCallback(async (roomId: string) => {
+    if (!onRoomSelect) return
 
-    // Show confirmation alert
-    const confirmed = window.confirm(`Are you sure you want to delete "${room.name}"? This action cannot be undone.`)
-
-    if (!confirmed) {
-      return
-    }
-
+    setLoadingRoomDesign(true)
     try {
-      // Delete from local folder
-      const deleted = await deleteSavedRoom(room.id)
-
-      if (deleted) {
-        // TODO: Delete from Firebase database in future stage
-        // await deleteRoomFromFirebase(room.id)
-
-        // Refresh the saved rooms list
-        if (selectedRoom) {
-          const rooms = await getSavedRoomsByCategory(selectedRoom)
-          setSavedRooms(rooms)
-        }
-
-        alert(`Room "${room.name}" has been deleted successfully.`)
-      } else {
-        alert(`Failed to delete room "${room.name}". Please try again.`)
-      }
+      const design = await getRoomDesign(roomId)
+      await onRoomSelect(roomId, design)
+      // Close menu after selection
+      setIsOpen(false)
+      setSelectedTopLevelMenu(null)
+      setSelectedRoomCategoryId(null)
+      onMenuStateChange?.(false)
     } catch (error) {
-      console.error('Failed to delete room:', error)
-      alert(`Failed to delete room "${room.name}": ${error instanceof Error ? error.message : 'Unknown error'}`)
+      console.error('Failed to load room design:', error)
+      toast.error('Failed to load room')
+    } finally {
+      setLoadingRoomDesign(false)
     }
-  }, [selectedRoom])
+  }, [onRoomSelect, onMenuStateChange])
 
-  // Load saved rooms for the selected room category (async)
-  useEffect(() => {
-    const loadRooms = async () => {
-      if (!selectedRoom) {
-        setSavedRooms([])
-        return
-      }
+  // Get rooms for the selected category from wsRooms
+  const roomsInCategory = useMemo(() => {
+    if (!wsRooms?.rooms || !selectedRoomCategoryId) return []
+    return Object.entries(wsRooms.rooms)
+      .filter(([, room]) => room.categoryId === selectedRoomCategoryId && room.status === 'Active')
+      .sort(([, a], [, b]) => Number(a.sortNum) - Number(b.sortNum))
+      .map(([roomId, room]) => ({ id: roomId, name: room.room, ...room }))
+  }, [wsRooms?.rooms, selectedRoomCategoryId])
 
-      setLoadingRooms(true)
-      try {
-        const rooms = await getSavedRoomsByCategory(selectedRoom)
-        setSavedRooms(rooms)
-      } catch (error) {
-        console.error('Failed to load saved rooms:', error)
-        setSavedRooms([])
-      } finally {
-        setLoadingRooms(false)
-      }
-    }
-
-    loadRooms()
-  }, [selectedRoom])
+  // Get categories from wsRooms
+  const roomCategories = useMemo(() => {
+    if (!wsRooms?.categories) return []
+    return Object.entries(wsRooms.categories)
+      .sort(([, a], [, b]) => Number(a.sortNum) - Number(b.sortNum))
+      .map(([categoryId, cat]) => ({ id: categoryId, name: cat.category }))
+  }, [wsRooms?.categories])
 
   return (
     <>
@@ -377,7 +357,7 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect: _onCategorySelect
                 // Immediately close all menus for better responsiveness
                 setIsOpen(false)
                 setSelectedTopLevelMenu(null)
-                setSelectedRoom(null)
+                setSelectedRoomCategoryId(null)
                 setShowSubmenu(false)
                 onMenuStateChange?.(false)
               }}
@@ -403,10 +383,10 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect: _onCategorySelect
                     </button>
                     <div>
                       <h2 className="text-2xl font-bold text-gray-800">
-                        {selectedTopLevelMenu === 'cabinets' ? 'Cabinets' : selectedTopLevelMenu === 'appliances' ? 'Appliances' : selectedRoom || 'Rooms'}
+                        {selectedTopLevelMenu === 'cabinets' ? 'Cabinets' : selectedTopLevelMenu === 'appliances' ? 'Appliances' : (selectedRoomCategoryId && wsRooms?.categories?.[selectedRoomCategoryId]?.category) || 'Rooms'}
                       </h2>
                       <p className="text-gray-600 mt-2">
-                        {selectedTopLevelMenu === 'cabinets' ? 'Select a subcategory' : selectedTopLevelMenu === 'appliances' ? 'Select an appliance' : selectedRoom ? '' : 'Select a room type'}
+                        {selectedTopLevelMenu === 'cabinets' ? 'Select a subcategory' : selectedTopLevelMenu === 'appliances' ? 'Select an appliance' : selectedRoomCategoryId ? 'Select a room to edit' : 'Select a room type'}
                       </p>
                     </div>
                   </div>
@@ -478,7 +458,7 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect: _onCategorySelect
                     <div className="text-center py-8">
                       <p className="text-red-600 mb-4">{error}</p>
                       <button
-                        onClick={loadCategories}
+                        onClick={() => refetch()}
                         className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-150"
                       >
                         Retry
@@ -543,81 +523,77 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect: _onCategorySelect
                 </div>
               )}
 
-              {/* Rooms Subcategories (shown when Rooms is selected) */}
-              {selectedTopLevelMenu === 'rooms' && !selectedRoom && (
+              {/* Room Categories (shown when Rooms is selected) */}
+              {selectedTopLevelMenu === 'rooms' && !selectedRoomCategoryId && (
                 <div className="p-2 sm:p-4">
-                  <div className="space-y-3">
-                    {(['Kitchen', 'Pantry', 'Laundry', 'Wardrobe', 'Vanity', 'TV Room', 'Alfresco'] as RoomCategory[]).map((room) => (
-                      <motion.button
-                        key={room}
-                        onClick={() => handleRoomClick(room)}
-                        className="w-full p-4 rounded-lg border-2 border-gray-200 hover:border-blue-500 hover:shadow-md transition-all duration-150"
-                        whileHover={{ scale: 1.01 }}
-                        whileTap={{ scale: 0.99 }}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="text-left">
-                            <h3 className="font-semibold text-gray-800">{room}</h3>
-                          </div>
-                          <ChevronRight size={20} className="text-gray-400" />
-                        </div>
-                      </motion.button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Saved Rooms List (shown when a specific room category is selected) */}
-              {selectedTopLevelMenu === 'rooms' && selectedRoom && (
-                <div className="p-2 sm:p-4">
-                  {loadingRooms ? (
-                    <div className="text-center py-8">
-                      <p className="text-gray-600 text-lg font-medium">{selectedRoom}</p>
-                      <p className="text-gray-500 text-sm mt-2">Loading rooms...</p>
+                  {wsRoomsLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                     </div>
-                  ) : savedRooms.length === 0 ? (
+                  ) : roomCategories.length === 0 ? (
                     <div className="text-center py-8">
-                      <p className="text-gray-600 text-lg font-medium">{selectedRoom}</p>
-                      <p className="text-gray-500 text-sm mt-2">No saved rooms yet</p>
+                      <p className="text-gray-500 text-sm">No room categories available</p>
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      <h3 className="text-lg font-semibold text-gray-800 mb-3">Saved {selectedRoom} Rooms</h3>
-                      {savedRooms.map((room) => (
-                        <motion.div
-                          key={room.id}
+                      {roomCategories.map((cat) => (
+                        <motion.button
+                          key={cat.id}
+                          onClick={() => handleRoomCategoryClick(cat.id)}
                           className="w-full p-4 rounded-lg border-2 border-gray-200 hover:border-blue-500 hover:shadow-md transition-all duration-150"
                           whileHover={{ scale: 1.01 }}
                           whileTap={{ scale: 0.99 }}
                         >
                           <div className="flex items-center justify-between">
-                            <div
-                              onClick={async () => {
-                                if (onLoadRoom) {
-                                  await onLoadRoom(room)
-                                  // Close menu after loading
-                                  setIsOpen(false)
-                                  setSelectedTopLevelMenu(null)
-                                  setSelectedRoom(null)
-                                  onMenuStateChange?.(false)
-                                }
-                              }}
-                              className="flex-1 cursor-pointer"
-                            >
-                              <h4 className="font-semibold text-gray-800">{room.name}</h4>
-                              <p className="text-sm text-gray-500 mt-1">
-                                {room.cabinets.length} cabinet{room.cabinets.length !== 1 ? 's' : ''} • Saved {new Date(room.savedAt).toLocaleDateString()}
-                              </p>
+                            <div className="text-left">
+                              <h3 className="font-semibold text-gray-800">{cat.name}</h3>
                             </div>
-                            <button
-                              onClick={(e) => handleDeleteRoom(room, e)}
-                              className="ml-4 p-2 rounded-lg hover:bg-red-50 transition-colors duration-150 flex items-center justify-center"
-                              title="Delete room"
-                            >
-                              <Trash2 size={20} className="text-red-500 hover:text-red-600" />
-                            </button>
+                            <ChevronRight size={20} className="text-gray-400" />
                           </div>
-                        </motion.div>
+                        </motion.button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Rooms List (shown when a specific room category is selected) */}
+              {selectedTopLevelMenu === 'rooms' && selectedRoomCategoryId && (
+                <div className="p-2 sm:p-4">
+                  {loadingRoomDesign ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    </div>
+                  ) : roomsInCategory.length === 0 ? (
+                    <div className="text-center py-8">
+                      <p className="text-gray-600 text-lg font-medium">
+                        {wsRooms?.categories?.[selectedRoomCategoryId]?.category || 'Category'}
+                      </p>
+                      <p className="text-gray-500 text-sm mt-2">No rooms in this category</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {roomsInCategory.map((room) => (
+                        <motion.button
+                          key={room.id}
+                          onClick={() => handleRoomEntryClick(room.id)}
+                          className={`w-full p-4 rounded-lg border-2 transition-all duration-150 ${currentRoomId === room.id
+                            ? 'border-blue-500 bg-blue-50'
+                            : 'border-gray-200 hover:border-blue-500 hover:shadow-md'
+                            }`}
+                          whileHover={{ scale: 1.01 }}
+                          whileTap={{ scale: 0.99 }}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="text-left">
+                              <h4 className="font-semibold text-gray-800">{room.name}</h4>
+                              {room.indexPhoto && (
+                                <p className="text-sm text-gray-500 mt-1">Has preview image</p>
+                              )}
+                            </div>
+                            <ChevronRight size={20} className="text-gray-400" />
+                          </div>
+                        </motion.button>
                       ))}
                     </div>
                   )}

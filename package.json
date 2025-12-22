@@ -14,10 +14,12 @@
   "dependencies": {
     "@tanstack/react-query": "^5.86.0",
     "@types/three": "^0.158.3",
+    "firebase-admin": "^13.6.0",
     "framer-motion": "^12.23.12",
     "lodash": "^4.17.21",
     "lucide-react": "^0.539.0",
     "next": "14.0.4",
+    "nuqs": "^1.19.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-hot-toast": "^2.6.0",

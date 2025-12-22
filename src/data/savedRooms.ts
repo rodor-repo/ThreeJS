@@ -1,10 +1,27 @@
 /**
- * Saved Rooms Data Storage
+ * Saved Rooms Data Storage - Type Definitions
+ *
  * This file defines types and interfaces for saved room configurations.
- * Actual storage is handled by server actions in src/server/roomStorage.ts
+ * Storage is handled via Firestore in:
+ * - src/server/rooms/saveRoomDesign.ts
+ * - src/server/rooms/getRoomDesign.ts
  */
 
-export type RoomCategory = 'Kitchen' | 'Pantry' | 'Laundry' | 'Wardrobe' | 'Vanity' | 'TV Room' | 'Alfresco'
+import { CabinetType } from "@/features/carcass"
+
+/**
+ * Room category type.
+ * Note: In the new architecture, categories come from wsRooms.categories in Firestore.
+ * This type is kept for backward compatibility with serializeRoom/restoreRoom.
+ */
+export type RoomCategory =
+  | "Kitchen"
+  | "Pantry"
+  | "Laundry"
+  | "Wardrobe"
+  | "Vanity"
+  | "TV Room"
+  | "Alfresco"
 
 export interface SavedCabinet {
   cabinetId: string
@@ -23,7 +40,10 @@ export interface SavedCabinet {
     y: number
     z: number
   }
-  materialSelections?: Record<string, { priceRangeId: string, colorId: string, finishId?: string }>
+  materialSelections?: Record<
+    string,
+    { priceRangeId: string; colorId: string; finishId?: string }
+  >
   materialColor?: string
   dimensionValues?: Record<string, number | string>
   shelfCount?: number
@@ -42,7 +62,7 @@ export interface SavedCabinet {
   /** Parent cabinet ID - used for fillers/panels added from modal */
   parentCabinetId?: string
   /** Side relative to parent ('left' | 'right') - used for fillers/panels added from modal */
-  parentSide?: 'left' | 'right'
+  parentSide?: "left" | "right"
   /** Flag to hide lock icons - used for fillers/panels added from modal */
   hideLockIcons?: boolean
   /** For kicker type: parent cabinet ID that this kicker belongs to */
@@ -54,13 +74,20 @@ export interface SavedCabinet {
   /** Number of doors for fridge (1 or 2) */
   fridgeDoorCount?: 1 | 2
   /** Handle side for 1-door fridge */
-  fridgeDoorSide?: 'left' | 'right'
+  fridgeDoorSide?: "left" | "right"
   /** Appliance specific properties */
   applianceType?: "dishwasher" | "washingMachine" | "sideBySideFridge"
   applianceTopGap?: number
   applianceLeftGap?: number
   applianceRightGap?: number
   applianceKickerHeight?: number
+  /** Benchtop specific properties */
+  benchtopParentCabinetId?: string
+  benchtopFrontOverhang?: number
+  benchtopLeftOverhang?: number
+  benchtopRightOverhang?: number
+  benchtopThickness?: number
+  benchtopHeightFromFloor?: number
 }
 
 export interface SavedView {
@@ -92,74 +119,13 @@ export interface SavedRoom {
   }
   cabinets: SavedCabinet[]
   views: SavedView[]
-  cabinetSyncs?: Array<{ cabinetId: string, syncedWith: string[] }>
-}
-
-import { CabinetType } from '@/features/carcass'
-// Import server actions for file storage
-import {
-  saveRoomToFile,
-  getAllRoomsFromFiles,
-  getRoomsByCategoryFromFiles,
-  getRoomByIdFromFile,
-  deleteRoomFile,
-  findRoomByNameAndCategory,
-} from '@/server/roomStorage'
-
-/**
- * Save a room configuration to file storage
- * If a room with the same name and category exists, it will be updated
- */
-export async function saveRoom(room: SavedRoom): Promise<void> {
-  // Check if room with same name and category already exists
-  const existingRoom = await findRoomByNameAndCategory(room.name, room.category)
-  
-  if (existingRoom) {
-    // Update existing room by using its ID
-    const updatedRoom: SavedRoom = {
-      ...room,
-      id: existingRoom.id, // Keep the original ID
-    }
-    await saveRoomToFile(updatedRoom)
-  } else {
-    // Save new room
-    await saveRoomToFile(room)
-  }
+  cabinetSyncs?: Array<{ cabinetId: string; syncedWith: string[] }>
 }
 
 /**
- * Get all saved rooms from file storage
- */
-export async function getAllSavedRooms(): Promise<SavedRoom[]> {
-  return await getAllRoomsFromFiles()
-}
-
-/**
- * Get saved rooms by category from file storage
- */
-export async function getSavedRoomsByCategory(category: RoomCategory): Promise<SavedRoom[]> {
-  return await getRoomsByCategoryFromFiles(category)
-}
-
-/**
- * Get a saved room by ID from file storage
- */
-export async function getSavedRoomById(id: string): Promise<SavedRoom | undefined> {
-  const room = await getRoomByIdFromFile(id)
-  return room || undefined
-}
-
-/**
- * Delete a saved room by ID from file storage
- */
-export async function deleteSavedRoom(id: string): Promise<boolean> {
-  return await deleteRoomFile(id)
-}
-
-/**
- * Generate a unique ID for a room
+ * Generate a unique ID for a room.
+ * Used for local state management.
  */
 export function generateRoomId(): string {
   return `room-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
 }
-

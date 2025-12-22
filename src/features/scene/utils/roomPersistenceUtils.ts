@@ -199,6 +199,7 @@ export function serializeRoom({
       benchtopRightOverhang: cabinet.benchtopRightOverhang,
       benchtopThickness: cabinet.benchtopThickness,
       benchtopHeightFromFloor: cabinet.benchtopHeightFromFloor,
+      parentYOffset: cabinet.parentYOffset,
     }
   })
 
@@ -533,6 +534,11 @@ export async function restoreRoom({
         if (savedCabinet.parentSide !== undefined) {
           cabinetData.parentSide = savedCabinet.parentSide
         }
+
+        // Restore parentYOffset (doesn't need ID mapping)
+        if (savedCabinet.parentYOffset !== undefined) {
+          cabinetData.parentYOffset = savedCabinet.parentYOffset
+        }
       })
 
       // Pass 1.5: Restore parent relationships using ID map
@@ -549,6 +555,16 @@ export async function restoreRoom({
           const newParentId = oldIdToNewId.get(savedCabinet.parentCabinetId)
           if (newParentId) {
             cabinetData.parentCabinetId = newParentId
+
+            // Initialize parentYOffset if missing (backward compatibility)
+            if (cabinetData.parentYOffset === undefined) {
+              const parentCabinet = createdCabinets.get(newParentId)
+              if (parentCabinet) {
+                cabinetData.parentYOffset =
+                  cabinetData.group.position.y -
+                  parentCabinet.group.position.y
+              }
+            }
           }
         }
 

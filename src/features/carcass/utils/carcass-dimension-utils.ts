@@ -60,7 +60,7 @@ export function calculatePanelCenterZ(
 /**
  * Calculates the Y position for a cabinet based on its type
  * - Top cabinets: positioned at wall height (2400mm)
- * - Base/Tall cabinets: positioned above floor by leg height
+ * - Base/Tall/Wardrobe cabinets: positioned above floor by leg height
  */
 export function calculateCabinetYPosition(
   cabinetType: CabinetType,
@@ -71,6 +71,7 @@ export function calculateCabinetYPosition(
       return 2400
     case "base":
     case "tall":
+    case "wardrobe":
       return legHeight
     default:
       return 0

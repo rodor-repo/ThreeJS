@@ -7,6 +7,8 @@ export { CarcassTop } from "./parts/CarcassTop"
 export { CarcassLeg } from "./parts/CarcassLeg"
 export { CarcassDoor } from "./parts/CarcassDoor"
 export { CarcassDrawer } from "./parts/CarcassDrawer"
+export { CarcassPanel } from "./parts/CarcassPanel"
+export { CarcassFront } from "./parts/CarcassFront"
 export { CarcassMaterial } from "./Material"
 export { DoorMaterial } from "./DoorMaterial"
 export { MaterialLoader } from "./MaterialLoader"
@@ -31,3 +33,5 @@ export type {
   DrawerFrontProps,
   DrawerConfiguration,
 } from "./parts/CarcassDrawer"
+export type { CarcassPanelProps } from "./parts/CarcassPanel"
+export type { CarcassFrontProps } from "./parts/CarcassFront"

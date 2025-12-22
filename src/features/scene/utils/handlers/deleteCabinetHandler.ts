@@ -1,0 +1,148 @@
+import { CabinetData, WallDimensions } from "../../types"
+import { ViewId } from "../../../cabinets/ViewManager"
+import { updateAllDependentComponents } from "./dependentComponentsHandler"
+
+interface ViewManagerResult {
+  viewManager: {
+    assignCabinetToView: (cabinetId: string, viewId: ViewId) => void
+  }
+}
+
+/**
+ * Find all child products for a given parent cabinet
+ * Child products include: fillers, panels, kickers, bulkheads, underPanels, benchtops
+ */
+const findChildCabinets = (parentCabinetId: string, allCabinets: CabinetData[]): CabinetData[] => {
+  return allCabinets.filter(c =>
+    // Fillers and panels attached via modal
+    (c.parentCabinetId === parentCabinetId && c.hideLockIcons === true) ||
+    // Kickers
+    c.kickerParentCabinetId === parentCabinetId ||
+    // Bulkheads
+    c.bulkheadParentCabinetId === parentCabinetId ||
+    // UnderPanels
+    c.underPanelParentCabinetId === parentCabinetId ||
+    // Benchtops
+    c.benchtopParentCabinetId === parentCabinetId
+  )
+}
+
+/**
+ * Dispose child cabinet's geometry based on its type
+ */
+const disposeChildCabinet = (child: CabinetData): void => {
+  // Dispose carcass if it exists - this handles all cabinet types including benchtops
+  if (child.carcass && typeof child.carcass.dispose === 'function') {
+    child.carcass.dispose()
+  }
+}
+
+export const handleDeleteCabinet = (
+  cabinetToDelete: CabinetData,
+  params: {
+    viewManager: ViewManagerResult
+    setCabinetGroups: (
+      update: (
+        prev: Map<string, Array<{ cabinetId: string; percentage: number }>>
+      ) => Map<string, Array<{ cabinetId: string; percentage: number }>>
+    ) => void
+    deleteCabinet: (id: string) => void
+    setCabinetToDelete: (cabinet: CabinetData | null) => void
+    allCabinets: CabinetData[]
+    wallDimensions: WallDimensions
+  }
+) => {
+  const { viewManager, setCabinetGroups, deleteCabinet, setCabinetToDelete, allCabinets, wallDimensions } =
+    params
+
+  // If deleting a child filler/panel, update parent's dependent components
+  if (
+    cabinetToDelete.parentCabinetId &&
+    (cabinetToDelete.cabinetType === 'filler' || cabinetToDelete.cabinetType === 'panel') &&
+    cabinetToDelete.hideLockIcons === true
+  ) {
+    const parentCabinet = allCabinets.find(c => c.cabinetId === cabinetToDelete.parentCabinetId)
+    if (parentCabinet) {
+      // Update parent's dependent components (kicker, benchtop, etc.)
+      // We pass a filtered list of cabinets that doesn't include the one being deleted
+      const updatedCabinets = allCabinets.filter(c => c.cabinetId !== cabinetToDelete.cabinetId)
+      updateAllDependentComponents(parentCabinet, updatedCabinets, wallDimensions, {
+        childChanged: true
+      })
+    }
+  }
+
+  // If deleting a parent cabinet, delete all its children first
+  const childCabinets = findChildCabinets(cabinetToDelete.cabinetId, allCabinets)
+  
+  childCabinets.forEach(child => {
+    // Dispose child geometry
+    disposeChildCabinet(child)
+
+    // Remove from ViewManager if assigned to a view
+    if (child.viewId && child.viewId !== "none") {
+      viewManager.viewManager.assignCabinetToView(child.cabinetId, "none")
+    }
+
+    // Remove group data for this child
+    setCabinetGroups((prev) => {
+      const newMap = new Map(prev)
+      newMap.delete(child.cabinetId)
+      return newMap
+    })
+
+    // Delete the child cabinet
+    deleteCabinet(child.cabinetId)
+  })
+
+  // Remove from ViewManager if assigned to a view
+  if (cabinetToDelete.viewId && cabinetToDelete.viewId !== "none") {
+    viewManager.viewManager.assignCabinetToView(
+      cabinetToDelete.cabinetId,
+      "none"
+    )
+  }
+
+  // Remove group data for this cabinet
+  setCabinetGroups((prev) => {
+    const newMap = new Map(prev)
+    newMap.delete(cabinetToDelete.cabinetId)
+
+    // Also remove this cabinet from any other cabinet's groups
+    newMap.forEach((group, cabinetId) => {
+      const updatedGroup = group.filter(
+        (g) => g.cabinetId !== cabinetToDelete.cabinetId
+      )
+
+      if (updatedGroup.length !== group.length) {
+        // Recalculate percentages if a cabinet was removed
+        if (updatedGroup.length > 0) {
+          const total = updatedGroup.reduce((sum, g) => sum + g.percentage, 0)
+          if (total !== 100) {
+            updatedGroup.forEach((g) => {
+              g.percentage = Math.round((g.percentage / total) * 100)
+            })
+
+            // Ensure total is exactly 100 due to rounding
+            const finalTotal = updatedGroup.reduce(
+              (sum, g) => sum + g.percentage,
+              0
+            )
+            if (finalTotal !== 100) {
+              updatedGroup[0].percentage += 100 - finalTotal
+            }
+          }
+          newMap.set(cabinetId, updatedGroup)
+        } else {
+          // If group is empty after removal, delete the group entry
+          newMap.delete(cabinetId)
+        }
+      }
+    })
+    return newMap
+  })
+
+  // Delete the parent cabinet
+  deleteCabinet(cabinetToDelete.cabinetId)
+  setCabinetToDelete(null)
+}

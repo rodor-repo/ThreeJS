@@ -214,7 +214,7 @@ export type WsProducts = {
       indexPhotoAlt?: string
 
       // 3D related
-      type3D?: "base" | "tall" | "overhead"
+      type3D?: "base" | "tall" | "overhead" | "panel" | "filler" | "wardrobe" | "kicker" | "bulkhead" | "benchtop" | "underPanel" | "appliance"
       features3D?: ("fingerPull90" | "fingerPullBevel" | "drawer")[]
     }
   }
@@ -376,6 +376,80 @@ export type WsProduct = {
 
       SQMFormulaId: string
       LMFormulaId: string
+    }
+  }
+}
+
+export type WsRooms = {
+  categories: {
+    [categoryId: string]: {
+      category: string
+      acceptableTagIds: string[]
+      description?: string
+      indexPhoto?: string
+      indexPhotoAlt?: string
+      sortNum: string
+      SEO: {
+        title?: string
+        description?: string
+        canonicalUrl?: string
+        ogTitle?: string
+        ogDescription?: string
+        ogImageAlt?: string[]
+      }
+    }
+  }
+  tags: {
+    [tagId: string]: {
+      tag: string
+      acceptablePropertyIds: string[]
+      // url: string
+      description?: string
+      indexPhoto?: string
+      indexPhotoAlt?: string
+      sortNum: string
+    }
+  }
+  properties: {
+    [propertyId: string]: {
+      property: string
+      tagId: string
+      // url: string
+      description?: string
+      indexPhoto?: string
+      indexPhotoAlt?: string
+      sortNum: string
+    }
+  }
+  rooms: {
+    [roomId: string]: {
+      room: string
+      categoryId: string
+      properties: string[] // array of property ids
+      // projectId?: string
+      indexPhoto?: string
+      indexPhotoAlt?: string
+      status: "Active" | "Hidden"
+      sortNum: string
+
+      shapes: {
+        [shapeId: string]: {
+          imageUrl?: string
+          imageUrlAlt?: string
+          isIndex: boolean
+          sortNum: string
+        }
+      }
+
+      SEO: {
+        pageTitle?: string
+        metaDescription?: string
+        tags?: string[]
+        canonicalUrl?: string
+        ogTitle?: string
+        ogDescription?: string
+        indexPhotoAlt?: string[]
+      }
     }
   }
 }

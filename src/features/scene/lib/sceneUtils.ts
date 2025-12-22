@@ -96,3 +96,126 @@ export const lookAtWallCenter = (
   const c = getWallCenter(dims)
   camera.lookAt(c.x, c.y, c.z)
 }
+
+/**
+ * Build a left wall (perpendicular to back wall, on the left side)
+ * Left wall starts from negative X and finishes at origin point (X=0)
+ * The length parameter is how far the wall extends in positive Z direction from the back wall
+ * @param height Wall height
+ * @param length Wall length (extends in positive Z direction from back wall)
+ * @param color Wall color
+ * @returns THREE.Group containing the wall mesh and wireframe
+ */
+export const buildLeftWall = (height: number, length: number, color: string = "#dcbfa0") => {
+  const group = new THREE.Group()
+  
+  // Left wall extends in Z direction, positioned so it ends at X=0
+  // The wall starts at Z=-WALL_THICKNESS (aligned with back of back wall) and extends forward by 'length' in positive Z
+  const geometry = new THREE.BoxGeometry(
+    WALL_THICKNESS,
+    height,
+    length + WALL_THICKNESS
+  )
+  const material = new THREE.MeshLambertMaterial({
+    color: _.defaultTo(color, "#dcbfa0"),
+    transparent: true,
+    opacity: 0.9,
+  })
+  
+  const wall = new THREE.Mesh(geometry, material)
+  // Position: X center at -WALL_THICKNESS/2 (so right edge is at X=0), Y at center, Z center at (length - WALL_THICKNESS)/2
+  wall.position.set(-WALL_THICKNESS / 2, height / 2, (length - WALL_THICKNESS) / 2)
+  wall.castShadow = true
+  wall.receiveShadow = true
+  group.add(wall)
+  
+  const edges = new THREE.EdgesGeometry(geometry)
+  const lineMaterial = new THREE.LineBasicMaterial({ color: 0x666666 })
+  const wireframe = new THREE.LineSegments(edges, lineMaterial)
+  wireframe.position.set(-WALL_THICKNESS / 2, height / 2, (length - WALL_THICKNESS) / 2)
+  group.add(wireframe)
+  
+  return group
+}
+
+/**
+ * Build a right wall (perpendicular to back wall, on the right side)
+ * Right wall starts at the point where back wall finishes and extends by wall thickness
+ * The length parameter is how far the wall extends in positive Z direction from the back wall
+ * @param height Wall height
+ * @param length Wall length (extends in positive Z direction from back wall)
+ * @param backWallLength Length of the back wall (to position right wall starting at this point)
+ * @param color Wall color
+ * @returns THREE.Group containing the wall mesh and wireframe
+ */
+export const buildRightWall = (height: number, length: number, backWallLength: number, color: string = "#dcbfa0") => {
+  const group = new THREE.Group()
+  
+  // Right wall extends in Z direction, positioned so it starts at X=backWallLength
+  // The wall starts at Z=-WALL_THICKNESS (aligned with back of back wall) and extends forward by 'length' in positive Z
+  const geometry = new THREE.BoxGeometry(
+    WALL_THICKNESS,
+    height,
+    length + WALL_THICKNESS
+  )
+  const material = new THREE.MeshLambertMaterial({
+    color: _.defaultTo(color, "#dcbfa0"),
+    transparent: true,
+    opacity: 0.9,
+  })
+  
+  const wall = new THREE.Mesh(geometry, material)
+  // Position: X center at backWallLength + WALL_THICKNESS/2 (so left edge is at X=backWallLength), Y at center, Z center at (length - WALL_THICKNESS)/2
+  wall.position.set(backWallLength + WALL_THICKNESS / 2, height / 2, (length - WALL_THICKNESS) / 2)
+  wall.castShadow = true
+  wall.receiveShadow = true
+  group.add(wall)
+  
+  const edges = new THREE.EdgesGeometry(geometry)
+  const lineMaterial = new THREE.LineBasicMaterial({ color: 0x666666 })
+  const wireframe = new THREE.LineSegments(edges, lineMaterial)
+  wireframe.position.set(backWallLength + WALL_THICKNESS / 2, height / 2, (length - WALL_THICKNESS) / 2)
+  group.add(wireframe)
+  
+  return group
+}
+
+/**
+ * Build an additional wall (perpendicular to back wall, positioned at a distance from left)
+ * @param height Wall height
+ * @param length Wall length (extends in Z direction)
+ * @param distanceFromLeft Distance from origin (X=0) in X direction
+ * @param color Wall color
+ * @param thickness Wall thickness (defaults to WALL_THICKNESS)
+ * @returns THREE.Group containing the wall mesh and wireframe
+ */
+export const buildAdditionalWall = (height: number, length: number, distanceFromLeft: number, color: string = "#dcbfa0", thickness: number = WALL_THICKNESS) => {
+  const group = new THREE.Group()
+  
+  // Additional wall extends in Z direction, positioned at distanceFromLeft from origin
+  const geometry = new THREE.BoxGeometry(
+    thickness,
+    height,
+    length + WALL_THICKNESS
+  )
+  const material = new THREE.MeshLambertMaterial({
+    color: _.defaultTo(color, "#dcbfa0"),
+    transparent: true,
+    opacity: 0.9,
+  })
+  
+  const wall = new THREE.Mesh(geometry, material)
+  // Position: X at distanceFromLeft + thickness/2, Y at center, Z extends forward
+  wall.position.set(distanceFromLeft + thickness / 2, height / 2, (length - WALL_THICKNESS) / 2)
+  wall.castShadow = true
+  wall.receiveShadow = true
+  group.add(wall)
+  
+  const edges = new THREE.EdgesGeometry(geometry)
+  const lineMaterial = new THREE.LineBasicMaterial({ color: 0x666666 })
+  const wireframe = new THREE.LineSegments(edges, lineMaterial)
+  wireframe.position.set(distanceFromLeft + thickness / 2, height / 2, (length - WALL_THICKNESS) / 2)
+  group.add(wireframe)
+  
+  return group
+}

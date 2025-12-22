@@ -1,5 +1,6 @@
 import type { Group } from "three"
 import type {
+  CarcassAssembly,
   CarcassDimensions,
   CarcassMaterial,
   CarcassMaterialData,
@@ -15,6 +16,7 @@ export interface SelectedCabinetSnapshot {
   cabinetType: string
   subcategoryId?: string
   productId?: string
+  sortNumber?: number
   doorEnabled?: boolean
   doorCount?: number
   doorMaterial?: DoorMaterial
@@ -22,8 +24,20 @@ export interface SelectedCabinetSnapshot {
   drawerEnabled?: boolean
   drawerQuantity?: number
   drawerHeights?: number[]
-  carcass?: any
+  carcass?: CarcassAssembly
   cabinetId: string
+  viewId?: string
+  hideLockIcons?: boolean
+  /** For benchtop type: parent cabinet ID that this benchtop belongs to */
+  benchtopParentCabinetId?: string
+  /** Benchtop overhangs - only for child benchtops */
+  benchtopFrontOverhang?: number
+  benchtopLeftOverhang?: number
+  benchtopRightOverhang?: number
+  /** Benchtop thickness - only for child benchtops */
+  benchtopThickness?: number
+  /** Benchtop height from floor - only for independent benchtops */
+  benchtopHeightFromFloor?: number
 }
 
 export interface ProductPanelCallbacks {
@@ -37,11 +51,31 @@ export interface ProductPanelCallbacks {
   onOverhangDoorToggle?: (overhang: boolean) => void
   onDrawerToggle?: (enabled: boolean) => void
   onDrawerQuantityChange?: (quantity: number) => void
-  onDrawerHeightChange?: (index: number, height: number) => void
+  onDrawerHeightChange?: (
+    index: number,
+    height: number,
+    changedId?: string
+  ) => void
   onDrawerHeightsBalance?: () => void
   onDrawerHeightsReset?: () => void
   // optional debugging helper used by Debug Balance button
   onDebugBalanceTest?: () => number[] | void
+  onViewChange?: (cabinetId: string, viewId: string) => void
+  onGroupChange?: (
+    cabinetId: string,
+    groupCabinets: Array<{ cabinetId: string; percentage: number }>
+  ) => void
+  onSyncChange?: (cabinetId: string, syncCabinets: string[]) => void
+  /** Benchtop overhang change callback - only for child benchtops */
+  onBenchtopOverhangChange?: (
+    cabinetId: string,
+    type: "front" | "left" | "right",
+    value: number
+  ) => void
+  /** Benchtop thickness change callback - only for child benchtops */
+  onBenchtopThicknessChange?: (cabinetId: string, value: number) => void
+  /** Benchtop height from floor change callback - only for independent benchtops */
+  onBenchtopHeightFromFloorChange?: (cabinetId: string, value: number) => void
 }
 
 export interface ProductPanelProps extends ProductPanelCallbacks {
@@ -50,6 +84,16 @@ export interface ProductPanelProps extends ProductPanelCallbacks {
   selectedCabinet?: SelectedCabinetSnapshot | null
   /** When provided, ProductPanel will render dynamic dimension controls from this schema */
   wsProduct?: WsProduct
+  /** View manager for grouping cabinets */
+  viewManager?: ReturnType<
+    typeof import("../hooks/useViewManager").useViewManager
+  >
+  /** All cabinets in the scene for accurate view counts */
+  allCabinets?: import("@/features/scene/types").CabinetData[]
+  /** Initial group data for the selected cabinet */
+  initialGroupData?: Array<{ cabinetId: string; percentage: number }>
+  /** Initial sync data for the selected cabinet */
+  initialSyncData?: string[]
 }
 
 export interface DimensionRange {

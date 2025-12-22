@@ -4,9 +4,14 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Menu, X, ChevronRight } from 'lucide-react'
 import type { Category, Subcategory } from './categoriesData'
-import { getWsProducts } from '@/server/getWsProducts'
-import type { WsProducts } from '@/types/erpTypes'
+import type { WsProducts, WsRooms } from '@/types/erpTypes'
+import type { SavedRoom } from '@/data/savedRooms'
+import { getRoomDesign, type RoomDesignData } from '@/server/rooms/getRoomDesign'
 import _ from 'lodash'
+import { getClient } from '@/app/QueryProvider'
+import { getProductData } from '@/server/getProductData'
+import toast from 'react-hot-toast'
+import { useWsProductsQuery } from '@/hooks/useWsProductsQuery'
 
 interface MainMenuProps {
   onCategorySelect: (category: Category) => void
@@ -15,37 +20,42 @@ interface MainMenuProps {
   onMenuStateChange?: (isOpen: boolean) => void
   wsProducts: WsProducts | null
   setWsProducts: React.Dispatch<React.SetStateAction<WsProducts | null>>
+  /** wsRooms config from Firestore - contains categories and room entries */
+  wsRooms?: WsRooms | null
+  /** Whether wsRooms is still loading */
+  wsRoomsLoading?: boolean
+  /** Currently selected room ID (from URL) */
+  currentRoomId?: string | null
+  /** Handler for when a room is selected. Receives roomId and optional design data */
+  onRoomSelect?: (roomId: string, design?: RoomDesignData | null) => Promise<void>
+  onLoadRoom?: (savedRoom: SavedRoom) => Promise<void>
+  onApplianceSelect?: (applianceType: 'dishwasher' | 'washingMachine' | 'sideBySideFridge') => void
 }
 
-const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySelect, selectedCategory, onMenuStateChange, wsProducts, setWsProducts }) => {
+const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect: _onCategorySelect, onSubcategorySelect, selectedCategory: _selectedCategory, onMenuStateChange, wsProducts: wsProductsProp, setWsProducts, wsRooms, wsRoomsLoading, currentRoomId, onRoomSelect, onLoadRoom: _onLoadRoom, onApplianceSelect }) => {
   const [isOpen, setIsOpen] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [selectedTopLevelMenu, setSelectedTopLevelMenu] = useState<'cabinets' | 'appliances' | 'rooms' | null>(null) // New state for top-level menu
+  const [selectedRoomCategoryId, setSelectedRoomCategoryId] = useState<string | null>(null) // Selected room category ID from wsRooms
   const [selectedCategoryForSubmenu, setSelectedCategoryForSubmenu] = useState<Category | null>(null)
   const [showSubmenu, setShowSubmenu] = useState(false)
-  const [expandedSubcategories, setExpandedSubcategories] = useState<Record<string, boolean>>({})
+  const [loadingRoomDesign, setLoadingRoomDesign] = useState(false) // Loading state when fetching room design
   const [selectedSubcategoryForDesigns, setSelectedSubcategoryForDesigns] = useState<Subcategory | null>(null)
   const [expandedDesigns, setExpandedDesigns] = useState<Record<string, boolean>>({})
+  const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({})
 
-  // Fetch actual data from server
-  const loadCategories = async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const data = await getWsProducts()
-      setWsProducts(data)
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to load categories'
-      setError(msg)
-      console.error('Error loading categories:', err)
-    } finally {
-      setLoading(false)
-    }
-  }
+  // Fetch wsProducts via React Query
+  const { data: wsProductsQuery, isLoading: loading, isError, refetch } = useWsProductsQuery()
+  const error = isError ? 'Failed to load categories' : null
 
+  // Use query data, fallback to prop (for backward compatibility)
+  const wsProducts = wsProductsQuery ?? wsProductsProp
+
+  // Sync query result to parent state
   useEffect(() => {
-    loadCategories()
-  }, [])
+    if (wsProductsQuery) {
+      setWsProducts(wsProductsQuery)
+    }
+  }, [wsProductsQuery, setWsProducts])
 
   const categoryColorPalette = ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EF4444', '#6B7280']
   const defaultDims = {
@@ -135,39 +145,54 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySele
     return set
   }, [mappedCategories, subcategoriesWithProducts])
 
-  const handleCategorySelect = (category: Category) => {
-    onCategorySelect(category)
+  const openDesignsForSubcategory = (category: Category, subcategory: Subcategory) => {
     setSelectedCategoryForSubmenu(category)
-    setShowSubmenu(true)
-    setSelectedSubcategoryForDesigns(null)
-    setExpandedDesigns({})
-    onMenuStateChange?.(true)
-  }
-
-  const closeSubmenu = () => {
-    setShowSubmenu(false)
-    setSelectedCategoryForSubmenu(null)
-    setSelectedSubcategoryForDesigns(null)
-    setExpandedDesigns({})
-  }
-
-  const toggleSubcategoryExpand = (subcategoryId: string) => {
-    setExpandedSubcategories(prev => ({ ...prev, [subcategoryId]: !prev[subcategoryId] }))
-  }
-
-  const openDesignsForSubcategory = (subcategory: Subcategory) => {
     setSelectedSubcategoryForDesigns(subcategory)
+    setShowSubmenu(true)
     setExpandedDesigns({})
   }
 
   const toggleDesignExpand = (designId: string) => {
-    setExpandedDesigns(prev => ({ ...prev, [designId]: !prev[designId] }))
+    setExpandedDesigns(prev => ({
+      ...prev,
+      [designId]: prev[designId] === false ? true : false
+    }))
+  }
+
+  const toggleCategoryExpand = (categoryId: string) => {
+    setExpandedCategories(prev => ({
+      ...prev,
+      [categoryId]: prev[categoryId] === false ? true : false
+    }))
   }
 
   // When a product is clicked, we want to add a DEMO 3D object.
   // We leverage existing ThreeScene flows by invoking onSubcategorySelect with a demo base config.
-  const handleProductClick = useCallback((category: Category, subcategory: Subcategory, productId: string) => {
+  const handleProductClick = useCallback(async (category: Category, subcategory: Subcategory, productId: string) => {
     console.log('Product clicked:', { productId, subcategory: subcategory.id, category: category.id })
+
+    // Close menus immediately for better responsiveness
+    setShowSubmenu(false)
+    setIsOpen(false)
+    onMenuStateChange?.(false)
+
+    // Prefetch product data before adding cabinet
+    const queryClient = getClient()
+    const cached = queryClient.getQueryData(["productData", productId])
+
+    if (!cached) {
+      const toastId = toast.loading("Loading product...")
+      try {
+        const data = await getProductData(productId)
+        queryClient.setQueryData(["productData", productId], data)
+        toast.success("Product loaded", { id: toastId })
+      } catch (error) {
+        console.error("Failed to prefetch product:", error)
+        toast.error("Failed to load product", { id: toastId })
+        return // Don't add cabinet if prefetch failed
+      }
+    }
+
     // Force DEMO: always add a base cabinet with a standard subcategory
     const demoCategory: Category = {
       id: 'base',
@@ -192,17 +217,26 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySele
     }
 
     onSubcategorySelect?.(demoCategory, demoSub, productId)
-    // Close menus for responsiveness, like the previous behavior
+  }, [onSubcategorySelect])
+
+  // Handle appliance selection - bypasses product prefetch
+  const handleApplianceClick = useCallback((applianceType: 'dishwasher' | 'washingMachine' | 'sideBySideFridge') => {
+    // Close menus immediately
     setShowSubmenu(false)
     setIsOpen(false)
     onMenuStateChange?.(false)
-  }, [onSubcategorySelect])
+
+    // Trigger appliance creation (no product prefetch needed)
+    onApplianceSelect?.(applianceType)
+  }, [onApplianceSelect, onMenuStateChange])
 
   const toggleMenu = () => {
     const newState = !isOpen
     setIsOpen(newState)
     // Immediately close submenu when main menu is closed for better responsiveness
     if (!newState) {
+      setSelectedTopLevelMenu(null) // Reset top-level menu selection
+      setSelectedRoomCategoryId(null)
       setShowSubmenu(false)
       setSelectedCategoryForSubmenu(null)
       setSelectedSubcategoryForDesigns(null)
@@ -210,6 +244,70 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySele
     }
     onMenuStateChange?.(newState)
   }
+
+  const handleTopLevelMenuClick = (menu: 'cabinets' | 'appliances' | 'rooms') => {
+    setSelectedTopLevelMenu(menu)
+    if (menu === 'cabinets') {
+      // Show categories menu (existing behavior)
+      // The categories will be shown in the main panel
+    } else if (menu === 'appliances') {
+      // Appliances menu - placeholder for future implementation
+    } else if (menu === 'rooms') {
+      // Rooms menu - will show room categories from wsRooms
+      setSelectedRoomCategoryId(null)
+    }
+  }
+
+  const handleBackToTopLevel = () => {
+    setSelectedTopLevelMenu(null)
+    setSelectedRoomCategoryId(null)
+    setShowSubmenu(false)
+    setSelectedCategoryForSubmenu(null)
+    setSelectedSubcategoryForDesigns(null)
+    setExpandedDesigns({})
+  }
+
+  const handleRoomCategoryClick = (categoryId: string) => {
+    setSelectedRoomCategoryId(categoryId)
+  }
+
+  // Handle clicking a room entry - fetch design and notify parent
+  const handleRoomEntryClick = useCallback(async (roomId: string) => {
+    if (!onRoomSelect) return
+
+    setLoadingRoomDesign(true)
+    try {
+      const design = await getRoomDesign(roomId)
+      await onRoomSelect(roomId, design)
+      // Close menu after selection
+      setIsOpen(false)
+      setSelectedTopLevelMenu(null)
+      setSelectedRoomCategoryId(null)
+      onMenuStateChange?.(false)
+    } catch (error) {
+      console.error('Failed to load room design:', error)
+      toast.error('Failed to load room')
+    } finally {
+      setLoadingRoomDesign(false)
+    }
+  }, [onRoomSelect, onMenuStateChange])
+
+  // Get rooms for the selected category from wsRooms
+  const roomsInCategory = useMemo(() => {
+    if (!wsRooms?.rooms || !selectedRoomCategoryId) return []
+    return Object.entries(wsRooms.rooms)
+      .filter(([, room]) => room.categoryId === selectedRoomCategoryId && room.status === 'Active')
+      .sort(([, a], [, b]) => Number(a.sortNum) - Number(b.sortNum))
+      .map(([roomId, room]) => ({ id: roomId, name: room.room, ...room }))
+  }, [wsRooms?.rooms, selectedRoomCategoryId])
+
+  // Get categories from wsRooms
+  const roomCategories = useMemo(() => {
+    if (!wsRooms?.categories) return []
+    return Object.entries(wsRooms.categories)
+      .sort(([, a], [, b]) => Number(a.sortNum) - Number(b.sortNum))
+      .map(([categoryId, cat]) => ({ id: categoryId, name: cat.category }))
+  }, [wsRooms?.categories])
 
   return (
     <>
@@ -256,8 +354,10 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySele
               transition={{ duration: 0.15 }}
               className="fixed inset-0 bg-black bg-opacity-50 z-40"
               onClick={() => {
-                // Immediately close both menus for better responsiveness
+                // Immediately close all menus for better responsiveness
                 setIsOpen(false)
+                setSelectedTopLevelMenu(null)
+                setSelectedRoomCategoryId(null)
                 setShowSubmenu(false)
                 onMenuStateChange?.(false)
               }}
@@ -273,142 +373,293 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySele
             >
               {/* Header */}
               <div className="p-3 sm:p-6 border-b border-gray-200">
-                <h2 className="text-2xl font-bold text-gray-800">3D Scene Menu</h2>
-                <p className="text-gray-600 mt-2">Select a category to get started</p>
-              </div>
-
-              {/* Removed demo FetchCategoriesComponent */}
-
-              {/* Categories */}
-              <div className="p-2 sm:p-4">
-                {loading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                  </div>
-                ) : error ? (
-                  <div className="text-center py-8">
-                    <p className="text-red-600 mb-4">{error}</p>
+                {selectedTopLevelMenu ? (
+                  <div className="flex items-center space-x-3">
                     <button
-                      onClick={loadCategories}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-150"
+                      onClick={handleBackToTopLevel}
+                      className="p-2 hover:bg-gray-200 rounded-full transition-colors duration-150"
                     >
-                      Retry
+                      <ChevronRight size={20} className="text-gray-600 rotate-180" />
                     </button>
+                    <div>
+                      <h2 className="text-2xl font-bold text-gray-800">
+                        {selectedTopLevelMenu === 'cabinets' ? 'Cabinets' : selectedTopLevelMenu === 'appliances' ? 'Appliances' : (selectedRoomCategoryId && wsRooms?.categories?.[selectedRoomCategoryId]?.category) || 'Rooms'}
+                      </h2>
+                      <p className="text-gray-600 mt-2">
+                        {selectedTopLevelMenu === 'cabinets' ? 'Select a subcategory' : selectedTopLevelMenu === 'appliances' ? 'Select an appliance' : selectedRoomCategoryId ? 'Select a room to edit' : 'Select a room type'}
+                      </p>
+                    </div>
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    {mappedCategories.map((category) => {
-                      const isEnabled = categoriesWithProducts.has(category.id)
-                      return (
-                        <motion.button
-                          key={category.id}
-                          onClick={() => isEnabled && handleCategorySelect(category)}
-                          disabled={!isEnabled}
-                          className={`w-full p-4 rounded-lg border-2 transition-all duration-150 ${isEnabled
-                              ? `hover:shadow-md ${selectedCategory?.id === category.id
-                                ? 'border-blue-500 bg-blue-50 shadow-md'
-                                : 'border-gray-200 hover:border-gray-300'
-                              }`
-                              : 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
-                            }`}
-                          whileHover={isEnabled ? { scale: 1.01 } : {}}
-                          whileTap={isEnabled ? { scale: 0.99 } : {}}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-3">
-                              <div
-                                className="text-2xl"
-                                style={{ color: isEnabled ? category.color : '#9CA3AF' }}
-                              >
-                                {category.icon}
-                              </div>
-                              <div className="text-left">
-                                <h3 className={`font-semibold ${isEnabled ? 'text-gray-800' : 'text-gray-400'}`}>
-                                  {category.name}
-                                </h3>
-                                {/* Category description removed per UI note */}
-                              </div>
-                            </div>
-                            <ChevronRight size={20} className={isEnabled ? 'text-gray-400' : 'text-gray-300'} />
-                          </div>
-                        </motion.button>
-                      )
-                    })}
-                  </div>
+                  <>
+                    <h2 className="text-2xl font-bold text-gray-800">3D Scene Menu</h2>
+                    <p className="text-gray-600 mt-2">Select an option to get started</p>
+                  </>
                 )}
               </div>
 
-              {/* Footer */}
-              <div className="p-2 sm:p-4 border-t border-gray-200 mt-auto">
-                <div className="text-center text-sm text-gray-500">
-                  <p>3D Scene Builder</p>
-                  <p className="mt-1">Select a category to begin</p>
+              {/* Top-Level Menu Items (Cabinets / Rooms) */}
+              {!selectedTopLevelMenu && (
+                <div className="p-2 sm:p-4">
+                  <div className="space-y-3">
+                    <motion.button
+                      onClick={() => handleTopLevelMenuClick('cabinets')}
+                      className="w-full p-4 rounded-lg border-2 border-gray-200 hover:border-blue-500 hover:shadow-md transition-all duration-150"
+                      whileHover={{ scale: 1.01 }}
+                      whileTap={{ scale: 0.99 }}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="text-left">
+                          <h3 className="font-semibold text-gray-800">Cabinets</h3>
+                        </div>
+                        <ChevronRight size={20} className="text-gray-400" />
+                      </div>
+                    </motion.button>
+
+                    <motion.button
+                      onClick={() => handleTopLevelMenuClick('appliances')}
+                      className="w-full p-4 rounded-lg border-2 border-gray-200 hover:border-blue-500 hover:shadow-md transition-all duration-150"
+                      whileHover={{ scale: 1.01 }}
+                      whileTap={{ scale: 0.99 }}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="text-left">
+                          <h3 className="font-semibold text-gray-800">Appliances</h3>
+                        </div>
+                        <ChevronRight size={20} className="text-gray-400" />
+                      </div>
+                    </motion.button>
+
+                    <motion.button
+                      onClick={() => handleTopLevelMenuClick('rooms')}
+                      className="w-full p-4 rounded-lg border-2 border-gray-200 hover:border-blue-500 hover:shadow-md transition-all duration-150"
+                      whileHover={{ scale: 1.01 }}
+                      whileTap={{ scale: 0.99 }}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="text-left">
+                          <h3 className="font-semibold text-gray-800">Rooms</h3>
+                        </div>
+                        <ChevronRight size={20} className="text-gray-400" />
+                      </div>
+                    </motion.button>
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {/* Subcategories grouped by Category (shown when Cabinets is selected) */}
+              {selectedTopLevelMenu === 'cabinets' && (
+                <div className="p-2 sm:p-4">
+                  {loading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    </div>
+                  ) : error ? (
+                    <div className="text-center py-8">
+                      <p className="text-red-600 mb-4">{error}</p>
+                      <button
+                        onClick={() => refetch()}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-150"
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {mappedCategories
+                        .filter((category) => categoriesWithProducts.has(category.id))
+                        .map((category) => {
+                          const filteredSubs = category.subcategories.filter((sub) => subcategoriesWithProducts.has(sub.id))
+                          if (filteredSubs.length === 0) return null
+                          const isCategoryExpanded = expandedCategories[category.id] !== false
+                          return (
+                            <div key={category.id} className="border-2 rounded-lg overflow-hidden border-gray-200">
+                              {/* Category header - clickable to expand/collapse */}
+                              <button
+                                onClick={() => toggleCategoryExpand(category.id)}
+                                className="w-full p-3 flex items-center justify-between transition-colors duration-150 hover:bg-gray-50 cursor-pointer"
+                              >
+                                <span className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
+                                  {category.name}
+                                </span>
+                                <ChevronRight size={18} className={`transition-transform ${isCategoryExpanded ? 'rotate-90' : ''} text-gray-500`} />
+                              </button>
+                              {/* Subcategories - only shown when expanded */}
+                              <AnimatePresence initial={false}>
+                                {isCategoryExpanded && (
+                                  <motion.div
+                                    initial={{ height: 0, opacity: 0 }}
+                                    animate={{ height: 'auto', opacity: 1 }}
+                                    exit={{ height: 0, opacity: 0 }}
+                                    transition={{ duration: 0.2 }}
+                                    className="px-2 pb-2"
+                                  >
+                                    <div className="space-y-2">
+                                      {filteredSubs.map((subcategory) => (
+                                        <motion.button
+                                          key={subcategory.id}
+                                          onClick={() => openDesignsForSubcategory(category, subcategory)}
+                                          className="w-full p-3 rounded-lg border-2 transition-all duration-150 border-gray-200 hover:border-gray-300 hover:shadow-md hover:bg-gray-50"
+                                          whileHover={{ scale: 1.01 }}
+                                          whileTap={{ scale: 0.99 }}
+                                        >
+                                          <div className="flex items-center justify-between">
+                                            <h3 className="font-semibold text-gray-800 text-left">
+                                              {subcategory.name}
+                                            </h3>
+                                            <ChevronRight size={18} className="text-gray-400" />
+                                          </div>
+                                        </motion.button>
+                                      ))}
+                                    </div>
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
+                            </div>
+                          )
+                        })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Room Categories (shown when Rooms is selected) */}
+              {selectedTopLevelMenu === 'rooms' && !selectedRoomCategoryId && (
+                <div className="p-2 sm:p-4">
+                  {wsRoomsLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    </div>
+                  ) : roomCategories.length === 0 ? (
+                    <div className="text-center py-8">
+                      <p className="text-gray-500 text-sm">No room categories available</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {roomCategories.map((cat) => (
+                        <motion.button
+                          key={cat.id}
+                          onClick={() => handleRoomCategoryClick(cat.id)}
+                          className="w-full p-4 rounded-lg border-2 border-gray-200 hover:border-blue-500 hover:shadow-md transition-all duration-150"
+                          whileHover={{ scale: 1.01 }}
+                          whileTap={{ scale: 0.99 }}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="text-left">
+                              <h3 className="font-semibold text-gray-800">{cat.name}</h3>
+                            </div>
+                            <ChevronRight size={20} className="text-gray-400" />
+                          </div>
+                        </motion.button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Rooms List (shown when a specific room category is selected) */}
+              {selectedTopLevelMenu === 'rooms' && selectedRoomCategoryId && (
+                <div className="p-2 sm:p-4">
+                  {loadingRoomDesign ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    </div>
+                  ) : roomsInCategory.length === 0 ? (
+                    <div className="text-center py-8">
+                      <p className="text-gray-600 text-lg font-medium">
+                        {wsRooms?.categories?.[selectedRoomCategoryId]?.category || 'Category'}
+                      </p>
+                      <p className="text-gray-500 text-sm mt-2">No rooms in this category</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {roomsInCategory.map((room) => (
+                        <motion.button
+                          key={room.id}
+                          onClick={() => handleRoomEntryClick(room.id)}
+                          className={`w-full p-4 rounded-lg border-2 transition-all duration-150 ${currentRoomId === room.id
+                            ? 'border-blue-500 bg-blue-50'
+                            : 'border-gray-200 hover:border-blue-500 hover:shadow-md'
+                            }`}
+                          whileHover={{ scale: 1.01 }}
+                          whileTap={{ scale: 0.99 }}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="text-left">
+                              <h4 className="font-semibold text-gray-800">{room.name}</h4>
+                              {room.indexPhoto && (
+                                <p className="text-sm text-gray-500 mt-1">Has preview image</p>
+                              )}
+                            </div>
+                            <ChevronRight size={20} className="text-gray-400" />
+                          </div>
+                        </motion.button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Appliances Menu */}
+              {selectedTopLevelMenu === 'appliances' && (
+                <div className="p-2 sm:p-4">
+                  <div className="space-y-3">
+                    <motion.button
+                      onClick={() => handleApplianceClick('dishwasher')}
+                      className="w-full p-4 rounded-lg border-2 border-gray-200 hover:border-blue-500 hover:shadow-md transition-all duration-150"
+                      whileHover={{ scale: 1.01 }}
+                      whileTap={{ scale: 0.99 }}
+                    >
+                      <div className="text-left">
+                        <h3 className="font-semibold text-gray-800">Dishwasher</h3>
+                        <p className="text-sm text-gray-500">Standard dishwasher unit</p>
+                      </div>
+                    </motion.button>
+
+                    <motion.button
+                      onClick={() => handleApplianceClick('washingMachine')}
+                      className="w-full p-4 rounded-lg border-2 border-gray-200 hover:border-blue-500 hover:shadow-md transition-all duration-150"
+                      whileHover={{ scale: 1.01 }}
+                      whileTap={{ scale: 0.99 }}
+                    >
+                      <div className="text-left">
+                        <h3 className="font-semibold text-gray-800">Washing Machine</h3>
+                        <p className="text-sm text-gray-500">Front-loading washer</p>
+                      </div>
+                    </motion.button>
+
+                    <motion.button
+                      onClick={() => handleApplianceClick('sideBySideFridge')}
+                      className="w-full p-4 rounded-lg border-2 border-gray-200 hover:border-blue-500 hover:shadow-md transition-all duration-150"
+                      whileHover={{ scale: 1.01 }}
+                      whileTap={{ scale: 0.99 }}
+                    >
+                      <div className="text-left">
+                        <h3 className="font-semibold text-gray-800">Side-by-Side Fridge</h3>
+                        <p className="text-sm text-gray-500">Large refrigerator unit</p>
+                      </div>
+                    </motion.button>
+                  </div>
+                </div>
+              )}
+
+              {/* Footer */}
+              {!selectedTopLevelMenu && (
+                <div className="p-2 sm:p-4 border-t border-gray-200 mt-auto">
+                  <div className="text-center text-sm text-gray-500">
+                    <p>3D Scene Builder</p>
+                    <p className="mt-1">Select an option to begin</p>
+                  </div>
+                </div>
+              )}
             </motion.div>
 
-            {/* Submenu Panel */}
+            {/* Designs Panel */}
             <AnimatePresence>
-              {showSubmenu && selectedCategoryForSubmenu && (
+              {showSubmenu && selectedSubcategoryForDesigns && selectedCategoryForSubmenu && (
                 <motion.div
                   initial={{ x: '-100%' }}
                   animate={{ x: '320px' }}
-                  exit={{ x: '-100%' }}
-                  transition={{ duration: 0 }}
-                  className="fixed left-0 top-0 h-full w-80 max-w-[90vw] bg-white shadow-2xl z-50 overflow-y-auto overflow-x-hidden border-l border-gray-200 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100"
-                >
-                  {/* Submenu Header */}
-                  <div className="p-3 sm:p-6 border-b border-gray-200 bg-gray-50">
-                    <div className="flex items-center space-x-3">
-                      <button
-                        onClick={closeSubmenu}
-                        className="p-2 hover:bg-gray-200 rounded-full transition-colors duration-150"
-                      >
-                        <ChevronRight size={20} className="text-gray-600 rotate-180" />
-                      </button>
-                      <div>
-                        <h2 className="text-xl font-bold text-gray-800">{selectedCategoryForSubmenu.name}</h2>
-                        {/* Category description removed per UI note */}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Subcategories */}
-                  <div className="p-2 sm:p-4">
-                    <div className="space-y-3">
-                      {selectedCategoryForSubmenu.subcategories.map((subcategory) => {
-                        const isEnabled = subcategoriesWithProducts.has(subcategory.id)
-                        return (
-                          <motion.button
-                            key={subcategory.id}
-                            onClick={() => isEnabled && openDesignsForSubcategory(subcategory)}
-                            disabled={!isEnabled}
-                            className={`w-full p-4 rounded-lg border-2 transition-all duration-150 ${isEnabled
-                                ? 'border-gray-200 hover:border-gray-300 hover:shadow-md hover:bg-gray-50'
-                                : 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
-                              }`}
-                            whileHover={isEnabled ? { scale: 1.01 } : {}}
-                            whileTap={isEnabled ? { scale: 0.99 } : {}}
-                          >
-                            <div className="text-left">
-                              <h3 className={`font-semibold ${isEnabled ? 'text-gray-800' : 'text-gray-400'}`}>
-                                {subcategory.name}
-                              </h3>
-                            </div>
-                          </motion.button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-            {/* Designs Panel */}
-            <AnimatePresence>
-              {showSubmenu && selectedCategoryForSubmenu && selectedSubcategoryForDesigns && (
-                <motion.div
-                  initial={{ x: '-100%' }}
-                  animate={{ x: '640px' }}
                   exit={{ x: '-100%' }}
                   transition={{ duration: 0 }}
                   className="fixed left-0 top-0 h-full w-80 max-w-[90vw] bg-white shadow-2xl z-50 overflow-y-auto overflow-x-hidden border-l border-gray-200 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100"
@@ -432,64 +683,64 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect, onSubcategorySele
                   {/* Designs and products */}
                   <div className="p-2 sm:p-4">
                     <div className="space-y-3">
-                      {(designsBySubId[selectedSubcategoryForDesigns.id] || []).map((design) => {
-                        const isExpanded = !!expandedDesigns[design.id]
-                        const products = productsByDesignId[design.id] || []
-                        const isEnabled = designsWithProducts.has(design.id)
-                        return (
-                          <div key={design.id} className={`border-2 rounded-lg overflow-hidden ${isEnabled ? 'border-gray-200' : 'border-gray-200 bg-gray-50 opacity-50'}`}>
-                            <button
-                              onClick={() => isEnabled && toggleDesignExpand(design.id)}
-                              disabled={!isEnabled}
-                              className={`w-full p-4 flex items-center justify-between transition-colors duration-150 ${isEnabled ? 'hover:bg-gray-50 cursor-pointer' : 'cursor-not-allowed'}`}
-                            >
-                              <span className={`font-semibold ${isEnabled ? 'text-gray-800' : 'text-gray-400'}`}>{design.name}</span>
-                              <ChevronRight size={18} className={`transition-transform ${isExpanded ? 'rotate-90' : ''} ${isEnabled ? 'text-gray-500' : 'text-gray-300'}`} />
-                            </button>
+                      {(designsBySubId[selectedSubcategoryForDesigns.id] || [])
+                        .filter((design) => designsWithProducts.has(design.id))
+                        .map((design) => {
+                          const isExpanded = expandedDesigns[design.id] !== false
+                          const products = productsByDesignId[design.id] || []
+                          return (
+                            <div key={design.id} className="border-2 rounded-lg overflow-hidden border-gray-200">
+                              <button
+                                onClick={() => toggleDesignExpand(design.id)}
+                                className="w-full p-4 flex items-center justify-between transition-colors duration-150 hover:bg-gray-50 cursor-pointer"
+                              >
+                                <span className="font-semibold text-gray-800">{design.name}</span>
+                                <ChevronRight size={18} className={`transition-transform ${isExpanded ? 'rotate-90' : ''} text-gray-500`} />
+                              </button>
 
-                            <AnimatePresence initial={false}>
-                              {isExpanded && (
-                                <motion.div
-                                  initial={{ height: 0, opacity: 0 }}
-                                  animate={{ height: 220, opacity: 1 }}
-                                  exit={{ height: 0, opacity: 0 }}
-                                  transition={{ duration: 0.2 }}
-                                  className="px-2 pb-2"
-                                >
-                                  <div className="max-h-52 overflow-y-auto rounded-md border border-gray-200 bg-white">
-                                    {products.length === 0 ? (
-                                      <div className="p-3 text-sm text-gray-500">No products found</div>
-                                    ) : (
-                                      <ul className="divide-y divide-gray-100">
-                                        {products.map(p => (
-                                          <li key={p.id}>
-                                            <button
-                                              onClick={() => handleProductClick(selectedCategoryForSubmenu, selectedSubcategoryForDesigns, p.id)}
-                                              className="w-full flex items-center gap-3 p-2 hover:bg-gray-50 transition-colors text-left"
-                                            >
-                                              <div className="w-12 h-12 flex-shrink-0 bg-gray-100 rounded overflow-hidden">
-                                                {p.img ? (
-                                                  // eslint-disable-next-line @next/next/no-img-element
-                                                  <img src={p.img} alt={p.name} className="w-full h-full object-cover" />
-                                                ) : (
-                                                  <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">No Image</div>
-                                                )}
-                                              </div>
-                                              <div className="flex-1 min-w-0">
-                                                <p className="text-sm font-medium text-gray-800 whitespace-normal break-words leading-snug">{p.name}</p>
-                                              </div>
-                                            </button>
-                                          </li>
-                                        ))}
-                                      </ul>
-                                    )}
-                                  </div>
-                                </motion.div>
-                              )}
-                            </AnimatePresence>
-                          </div>
-                        )
-                      })}
+                              <AnimatePresence initial={false}>
+                                {isExpanded && (
+                                  <motion.div
+                                    initial={{ height: 0, opacity: 0 }}
+                                    animate={{ height: 220, opacity: 1 }}
+                                    exit={{ height: 0, opacity: 0 }}
+                                    transition={{ duration: 0.2 }}
+                                    className="px-2 pb-2"
+                                  >
+                                    <div className="max-h-52 overflow-y-auto rounded-md border border-gray-200 bg-white">
+                                      {products.length === 0 ? (
+                                        <div className="p-3 text-sm text-gray-500">No products found</div>
+                                      ) : (
+                                        <ul className="divide-y divide-gray-100">
+                                          {products.map(p => (
+                                            <li key={p.id}>
+                                              <button
+                                                onClick={() => handleProductClick(selectedCategoryForSubmenu, selectedSubcategoryForDesigns, p.id)}
+                                                className="w-full flex items-center gap-3 p-2 hover:bg-gray-50 transition-colors text-left"
+                                              >
+                                                <div className="w-12 h-12 flex-shrink-0 bg-gray-100 rounded overflow-hidden">
+                                                  {p.img ? (
+                                                    // eslint-disable-next-line @next/next/no-img-element
+                                                    <img src={p.img} alt={p.name} className="w-full h-full object-cover" />
+                                                  ) : (
+                                                    <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">No Image</div>
+                                                  )}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                  <p className="text-sm font-medium text-gray-800 whitespace-normal break-words leading-snug">{p.name}</p>
+                                                </div>
+                                              </button>
+                                            </li>
+                                          ))}
+                                        </ul>
+                                      )}
+                                    </div>
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
+                            </div>
+                          )
+                        })}
                     </div>
                   </div>
                 </motion.div>

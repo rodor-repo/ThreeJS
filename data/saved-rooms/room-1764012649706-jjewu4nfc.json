@@ -1,0 +1,255 @@
+{
+  "id": "room-1764012649706-jjewu4nfc",
+  "name": "Test Dev M 2",
+  "category": "Kitchen",
+  "savedAt": "2025-11-24T19:30:49.706Z",
+  "wallSettings": {
+    "height": 2700,
+    "length": 4000,
+    "color": "#dcbfa0",
+    "backWallLength": 4000,
+    "leftWallLength": 600,
+    "rightWallLength": 600,
+    "leftWallVisible": true,
+    "rightWallVisible": true,
+    "additionalWalls": [
+      {
+        "id": "wall-1764012492737-3px0c1bbv",
+        "length": 600,
+        "distanceFromLeft": 2447.4640294775345,
+        "thickness": 90
+      }
+    ]
+  },
+  "cabinets": [
+    {
+      "cabinetId": "cabinet-base-standard-8253380203552-Product-fe355647-55c4-4cce-b77b-20bf68a9f0db-0",
+      "productId": "8253380203552-Product-fe355647-55c4-4cce-b77b-20bf68a9f0db",
+      "productName": "Base Pull out Door Cabinet",
+      "cabinetType": "base",
+      "subcategoryId": "standard",
+      "dimensions": {
+        "width": 600,
+        "height": 450,
+        "depth": 700
+      },
+      "viewId": "A",
+      "position": {
+        "x": 643.9877291641824,
+        "y": 100,
+        "z": 0
+      },
+      "materialSelections": {
+        "8261315543186-ebc50a1c-c56e-417f-91f7-07c1c482c084": {
+          "priceRangeId": "8267397881822-e37c1cb7-7204-4c15-86c8-31c559626784",
+          "colorId": "8267768680717-color-bf7856ce-77f4-4413-96aa-02ef4df44793",
+          "finishId": "8267769252261-finish-29d69792-7601-4912-b1f2-f6fe7cee4104"
+        },
+        "8258413213288-886694e9-db95-427a-ac62-a20422aca3cf": {
+          "priceRangeId": "8267602758367-50d4a8bc-e4fc-430e-95d7-d59022992fc6",
+          "colorId": "8252116682325-color-fb3e0766-5137-4b8a-860f-a585e0934bdf",
+          "finishId": "8253753365439-finish-b25f9fc2-672e-4831-aa88-3cfade50dfa7"
+        }
+      },
+      "materialColor": "#ffffff",
+      "dimensionValues": {
+        "1": 1,
+        "2": 2,
+        "8258155301514-dim-d340a151-df72-4ea7-81ba-21564d7805ae": 1,
+        "8261314903663-dim-5e312aa4-a998-4369-92d6-1288fc9f77dc": 600,
+        "8261315085495-dim-40d0af67-6436-4be6-a8eb-499733c38e6e": 450,
+        "8260381186817-dim-847ff9ec-3631-48f4-a0f7-f016272146ec": 700
+      },
+      "shelfCount": 0,
+      "doorEnabled": true,
+      "doorCount": 2,
+      "overhangDoor": false,
+      "drawerEnabled": false,
+      "drawerQuantity": 3,
+      "drawerHeights": [
+        150,
+        150,
+        150
+      ],
+      "kickerHeight": 100,
+      "leftLock": true,
+      "rightLock": false,
+      "sortNumber": 1
+    },
+    {
+      "cabinetId": "cabinet-base-drawer-8253380192363-Product-391971d3-4150-4235-b047-54a18a4fa32c-0",
+      "productId": "8253380192363-Product-391971d3-4150-4235-b047-54a18a4fa32c",
+      "productName": "Custom 2 Drawers Cabinet",
+      "cabinetType": "base",
+      "subcategoryId": "drawer",
+      "dimensions": {
+        "width": 600,
+        "height": 450,
+        "depth": 700
+      },
+      "viewId": "A",
+      "position": {
+        "x": 1238.9877291641824,
+        "y": 100,
+        "z": 0
+      },
+      "materialSelections": {
+        "8261315543186-ebc50a1c-c56e-417f-91f7-07c1c482c084": {
+          "priceRangeId": "8267397881822-e37c1cb7-7204-4c15-86c8-31c559626784",
+          "colorId": "8267768680717-color-bf7856ce-77f4-4413-96aa-02ef4df44793",
+          "finishId": "8267769252261-finish-29d69792-7601-4912-b1f2-f6fe7cee4104"
+        },
+        "8258413213288-886694e9-db95-427a-ac62-a20422aca3cf": {
+          "priceRangeId": "8267602758367-50d4a8bc-e4fc-430e-95d7-d59022992fc6",
+          "colorId": "8252116682325-color-fb3e0766-5137-4b8a-860f-a585e0934bdf",
+          "finishId": "8253753365439-finish-b25f9fc2-672e-4831-aa88-3cfade50dfa7"
+        }
+      },
+      "materialColor": "#ffffff",
+      "dimensionValues": {
+        "8261314903663-dim-5e312aa4-a998-4369-92d6-1288fc9f77dc": 600
+      },
+      "shelfCount": 0,
+      "doorEnabled": false,
+      "doorCount": 2,
+      "overhangDoor": false,
+      "drawerEnabled": true,
+      "drawerQuantity": 3,
+      "drawerHeights": [
+        150,
+        150,
+        150
+      ],
+      "kickerHeight": 100,
+      "leftLock": false,
+      "rightLock": true,
+      "group": [
+        {
+          "cabinetId": "cabinet-top-standard-8253466694538-Product-9de4f16b-eeb9-4efb-ab90-227e56e7264c-0",
+          "percentage": 100
+        }
+      ],
+      "sortNumber": 2
+    },
+    {
+      "cabinetId": "cabinet-tall-standard-8253471187813-Product-4ff499f1-b64a-4d81-9d53-53e328ef0736-0",
+      "productId": "8253471187813-Product-4ff499f1-b64a-4d81-9d53-53e328ef0736",
+      "productName": "Tall Double Door Custom Cabinet",
+      "cabinetType": "tall",
+      "subcategoryId": "standard",
+      "dimensions": {
+        "width": 600,
+        "height": 2000,
+        "depth": 700
+      },
+      "viewId": "A",
+      "position": {
+        "x": 1847.4640294775345,
+        "y": 100,
+        "z": 0
+      },
+      "materialSelections": {
+        "8261315543186-ebc50a1c-c56e-417f-91f7-07c1c482c084": {
+          "priceRangeId": "8267397881822-e37c1cb7-7204-4c15-86c8-31c559626784",
+          "colorId": "8267768680717-color-bf7856ce-77f4-4413-96aa-02ef4df44793",
+          "finishId": "8267769252261-finish-29d69792-7601-4912-b1f2-f6fe7cee4104"
+        },
+        "8258413213288-886694e9-db95-427a-ac62-a20422aca3cf": {
+          "priceRangeId": "8267602758367-50d4a8bc-e4fc-430e-95d7-d59022992fc6",
+          "colorId": "8252116682325-color-fb3e0766-5137-4b8a-860f-a585e0934bdf",
+          "finishId": "8253753365439-finish-b25f9fc2-672e-4831-aa88-3cfade50dfa7"
+        }
+      },
+      "materialColor": "#ffffff",
+      "dimensionValues": {
+        "1": 1,
+        "2": 2,
+        "8258155301514-dim-d340a151-df72-4ea7-81ba-21564d7805ae": 2,
+        "8259832525570-dim-665fcc5e-ba1e-46dd-9956-d65942ec8ab0": 4,
+        "8260381186817-dim-847ff9ec-3631-48f4-a0f7-f016272146ec": 700,
+        "8261314903663-dim-5e312aa4-a998-4369-92d6-1288fc9f77dc": 600,
+        "8261315085495-dim-40d0af67-6436-4be6-a8eb-499733c38e6e": 2000
+      },
+      "shelfCount": 4,
+      "doorEnabled": true,
+      "doorCount": 2,
+      "overhangDoor": false,
+      "drawerEnabled": false,
+      "drawerQuantity": 3,
+      "drawerHeights": [
+        666.7,
+        666.7,
+        666.6
+      ],
+      "kickerHeight": 100,
+      "sortNumber": 3
+    },
+    {
+      "cabinetId": "cabinet-top-standard-8253466694538-Product-9de4f16b-eeb9-4efb-ab90-227e56e7264c-0",
+      "productId": "8253466694538-Product-9de4f16b-eeb9-4efb-ab90-227e56e7264c",
+      "productName": "Top Double door Custom Cabinet",
+      "cabinetType": "top",
+      "subcategoryId": "standard",
+      "dimensions": {
+        "width": 831,
+        "height": 550,
+        "depth": 700
+      },
+      "viewId": "A",
+      "position": {
+        "x": 1016.4640294775345,
+        "y": 1550,
+        "z": 0
+      },
+      "materialSelections": {
+        "8261315543186-ebc50a1c-c56e-417f-91f7-07c1c482c084": {
+          "priceRangeId": "8267397881822-e37c1cb7-7204-4c15-86c8-31c559626784",
+          "colorId": "8267768680717-color-bf7856ce-77f4-4413-96aa-02ef4df44793",
+          "finishId": "8267769252261-finish-29d69792-7601-4912-b1f2-f6fe7cee4104"
+        },
+        "8258413213288-886694e9-db95-427a-ac62-a20422aca3cf": {
+          "priceRangeId": "8267602758367-50d4a8bc-e4fc-430e-95d7-d59022992fc6",
+          "colorId": "8252116682325-color-fb3e0766-5137-4b8a-860f-a585e0934bdf",
+          "finishId": "8253753365439-finish-b25f9fc2-672e-4831-aa88-3cfade50dfa7"
+        }
+      },
+      "materialColor": "#ffffff",
+      "dimensionValues": {
+        "1": 1,
+        "2": 2,
+        "8261315085495-dim-40d0af67-6436-4be6-a8eb-499733c38e6e": 550,
+        "8260381186817-dim-847ff9ec-3631-48f4-a0f7-f016272146ec": 700,
+        "8259832525570-dim-665fcc5e-ba1e-46dd-9956-d65942ec8ab0": 2,
+        "8261314903663-dim-5e312aa4-a998-4369-92d6-1288fc9f77dc": 831,
+        "8258155301514-dim-d340a151-df72-4ea7-81ba-21564d7805ae": 2,
+        "8251321365125-dim-14bac23a-23f2-4cd9-a3b5-9e5148fc4397": "YES"
+      },
+      "shelfCount": 2,
+      "doorEnabled": true,
+      "doorCount": 2,
+      "overhangDoor": true,
+      "drawerEnabled": false,
+      "drawerQuantity": 3,
+      "drawerHeights": [
+        183.4,
+        183.3,
+        183.3
+      ],
+      "leftLock": false,
+      "rightLock": true,
+      "sortNumber": 4
+    }
+  ],
+  "views": [
+    {
+      "id": "A",
+      "name": "View A",
+      "cabinetIds": [
+        "cabinet-base-standard-8253380203552-Product-fe355647-55c4-4cce-b77b-20bf68a9f0db-0",
+        "cabinet-base-drawer-8253380192363-Product-391971d3-4150-4235-b047-54a18a4fa32c-0",
+        "cabinet-top-standard-8253466694538-Product-9de4f16b-eeb9-4efb-ab90-227e56e7264c-0",
+        "cabinet-tall-standard-8253471187813-Product-4ff499f1-b64a-4d81-9d53-53e328ef0736-0"
+      ]
+    }
+  ]
+}

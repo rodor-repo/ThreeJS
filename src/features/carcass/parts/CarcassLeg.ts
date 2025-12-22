@@ -84,19 +84,9 @@ export class CarcassLeg {
     // - Top of leg (Y + height/2) aligns with bottom of cabinet (Y = 0)
     // - Bottom of leg (Y - height/2) extends down to floor
     // Therefore: Y = -height/2
-    const y = -this.height / 2;
+    const y = -this.height / 2
     
-    console.log(`Leg ${this.position} positioning:`, {
-      width: this.width,
-      depth: this.depth,
-      thickness: this.thickness,
-      diameter: this.diameter,
-      calculatedX: x,
-      calculatedZ: z,
-      calculatedY: y
-    });
-    
-    this.group.position.set(x, y, z);
+    this.group.position.set(x, y, z)
   }
 
   public updateDimensions(height: number, width: number, depth: number, thickness: number): void {

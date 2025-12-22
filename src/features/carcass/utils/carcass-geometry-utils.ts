@@ -1,4 +1,54 @@
-import * as THREE from 'three'
+import * as THREE from "three"
+import type { PartDimension } from "../builders/CabinetBuilder"
+
+/**
+ * Extracts dimensions from a BoxGeometry mesh safely
+ * Returns null if geometry is not a BoxGeometry
+ */
+export function extractBoxDimensions(
+  mesh: THREE.Mesh
+): { width: number; height: number; depth: number } | null {
+  const geometry = mesh.geometry
+  if (!(geometry instanceof THREE.BoxGeometry)) {
+    console.warn("extractBoxDimensions: geometry is not a BoxGeometry")
+    return null
+  }
+  return {
+    width: geometry.parameters.width,
+    height: geometry.parameters.height,
+    depth: geometry.parameters.depth,
+  }
+}
+
+/**
+ * Creates a PartDimension from a mesh with BoxGeometry
+ * Returns null if extraction fails
+ */
+export function createPartDimension(
+  partName: string,
+  mesh: THREE.Mesh
+): PartDimension | null {
+  const dims = extractBoxDimensions(mesh)
+  if (!dims) return null
+  return {
+    partName,
+    dimX: dims.width,
+    dimY: dims.height,
+    dimZ: dims.depth,
+  }
+}
+
+// /**
+//  * Creates multiple PartDimensions from an array of parts
+//  * Filters out any that fail to extract
+//  */
+// export function createPartDimensions(
+//   parts: Array<{ name: string, mesh: THREE.Mesh }>
+// ): PartDimension[] {
+//   return parts
+//     .map(({ name, mesh }) => createPartDimension(name, mesh))
+//     .filter((dim): dim is PartDimension => dim !== null)
+// }
 
 /**
  * Default wood material configuration
@@ -29,7 +79,9 @@ export function createMesh(
 /**
  * Creates a wireframe for a given geometry
  */
-export function createWireframe(geometry: THREE.BufferGeometry): THREE.LineSegments {
+export function createWireframe(
+  geometry: THREE.BufferGeometry
+): THREE.LineSegments {
   const edges = new THREE.EdgesGeometry(geometry)
   const lineMaterial = new THREE.LineBasicMaterial({ color: 0x333333 })
   return new THREE.LineSegments(edges, lineMaterial)

@@ -23,7 +23,7 @@ interface ViewManagerResult {
 }
 
 // Helper to get width constraints from React Query cache
-const getWidthConstraints = (
+export const getWidthConstraints = (
   productId: string | undefined
 ): { min: number; max: number } | null => {
   if (!productId) return null

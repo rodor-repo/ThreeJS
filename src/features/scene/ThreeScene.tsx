@@ -37,7 +37,7 @@ import { usePartData } from '@/nesting/usePartData'
 import { handleViewDimensionChange } from './utils/handlers/viewDimensionHandler'
 import { handleSplashbackHeightChange } from './utils/handlers/splashbackHandler'
 import { handleKickerHeightChange } from './utils/handlers/kickerHeightHandler'
-import { handleProductDimensionChange } from './utils/handlers/productDimensionHandler'
+import { handleProductDimensionChange, getWidthConstraints } from './utils/handlers/productDimensionHandler'
 import { handleDeleteCabinet } from './utils/handlers/deleteCabinetHandler'
 import { updateAllDependentComponents } from './utils/handlers/dependentComponentsHandler'
 import { handleFillerSelect as handleFillerSelectHandler, handleFillerToggle as handleFillerToggleHandler } from './utils/handlers/fillerHandler'
@@ -64,6 +64,8 @@ import { BottomRightActions } from './ui/BottomRightActions'
 import { HistoryControls } from './ui/HistoryControls'
 import { SaveButton } from './ui/SaveButton'
 import { DimensionLineControls } from './ui/DimensionLineControls'
+import { AppMode, ModeContext } from './context/ModeContext'
+import { UserWidthSlider } from './ui/UserWidthSlider'
 
 interface ThreeSceneProps {
   wallDimensions: WallDims
@@ -84,14 +86,21 @@ interface ThreeSceneProps {
   currentRoomId?: string | null
   /** WsRooms config from Firestore - contains room categories and entries */
   wsRooms?: WsRooms | null
+  /** Current app mode - admin or user */
+  selectedMode: AppMode
+  /** Callback when mode changes */
+  setSelectedMode: React.Dispatch<React.SetStateAction<AppMode>>
 }
 
-const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChange, selectedCategory, selectedSubcategory, isMenuOpen = false, selectedProductId, wsProducts, onLoadRoomReady, selectedApplianceType, onApplianceCreated, currentRoomId, wsRooms }) => {
+const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChange, selectedCategory, selectedSubcategory, isMenuOpen = false, selectedProductId, wsProducts, onLoadRoomReady, selectedApplianceType, onApplianceCreated, currentRoomId, wsRooms, selectedMode, setSelectedMode }) => {
   const mountRef = useRef<HTMLDivElement>(null);
   const [cameraMode, setCameraMode] = useState<'constrained' | 'free'>('constrained')
   const [dimensionsVisible, setDimensionsVisible] = useState(true)
   const [numbersVisible, setNumbersVisible] = useState(false)
-  const [selectedMode, setSelectedMode] = useState<'admin' | 'user'>('user') // Radio button selection
+  // Use prop if provided, otherwise use internal state (for backward compatibility)
+  // const [internalMode, setInternalMode] = useState<AppMode>('admin')
+  // const selectedMode = selectedModeProp ?? internalMode
+  // const setSelectedMode = onModeChange ?? setInternalMode
   const [isOrthoView, setIsOrthoView] = useState(false) // Track ortho view state for UI
   const [cameraViewMode, setCameraViewMode] = useState<'x' | 'y' | 'z' | null>(null) // Track which ortho view is active
   const [showProductsDrawer, setShowProductsDrawer] = useState(false) // Control products list drawer
@@ -241,7 +250,8 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     leftWallRef,
     rightWallRef,
     handleWallClick,
-    { isOrthoActiveRef, orthoCameraRef } // orthoRefs
+    { isOrthoActiveRef, orthoCameraRef }, // orthoRefs
+    selectedMode
   )
 
   useWallTransparency({
@@ -571,8 +581,42 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     setShowNestingModal(true)
   }, [])
 
+  // Handle width change from UserWidthSlider in User mode
+  // Uses actual selectedCabinets to support sync relationships when multiple cabinets are selected
+  const handleUserWidthChange = useCallback((cabinetId: string, newWidth: number) => {
+    const cabinet = cabinets.find(c => c.cabinetId === cabinetId)
+    if (!cabinet) return
+
+    handleProductDimensionChange(
+      {
+        width: newWidth,
+        height: cabinet.carcass.dimensions.height,
+        depth: cabinet.carcass.dimensions.depth
+      },
+      {
+        selectedCabinet: cabinet,
+        cabinets,
+        cabinetSyncs,
+        selectedCabinets,
+        cabinetGroups,
+        viewManager,
+        wallDimensions
+      }
+    )
+
+    // Update part data for all affected cabinets
+    partData.updateCabinet(cabinet)
+    // Also update synced cabinets if they exist
+    const syncedCabinetIds = cabinetSyncs.get(cabinet.cabinetId) || []
+    syncedCabinetIds.forEach(syncId => {
+      const syncedCab = cabinets.find(c => c.cabinetId === syncId)
+      if (syncedCab) partData.updateCabinet(syncedCab)
+    })
+    debouncedIncrementDimensionVersion()
+  }, [cabinets, cabinetSyncs, cabinetGroups, viewManager, wallDimensions, partData, debouncedIncrementDimensionVersion, selectedCabinets])
 
   return (
+    <ModeContext.Provider value={selectedMode}>
     <div className="relative w-full h-screen overflow-hidden">
       {/* 3D Scene Container */}
       <div ref={mountRef} className="w-full h-full" />
@@ -585,12 +629,14 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         onShowProducts={handleShowProducts}
       />
 
-      <BottomRightActions
-        cabinetsCount={cabinets.length}
-        onExport={handleExport}
-        onNesting={handleNesting}
-        onSettings={handleSettingsClick}
-      />
+      {selectedMode === 'admin' && (
+        <BottomRightActions
+          cabinetsCount={cabinets.length}
+          onExport={handleExport}
+          onNesting={handleNesting}
+          onSettings={handleSettingsClick}
+        />
+      )}
 
       {/* Settings Sidebar */}
       <SettingsSidebar
@@ -722,13 +768,14 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         isMenuOpen={isMenuOpen}
         isOrthoView={isOrthoView}
         onResetTo3D={() => { resetToPerspective(zoomLevel); setIsOrthoView(false); setCameraViewMode(null); }}
+        mode={selectedMode}
       />
 
       {/* Camera Movement Instructions moved to CameraControls component - appears on hover */}
 
-      {/* Cabinet Lock Icons - appear on double-click */}
+      {/* Cabinet Lock Icons - appear on double-click (Admin mode only) */}
       {/* Don't show icons for fillers/panels added from modal (marked with hideLockIcons) */}
-      {cabinetWithLockIcons &&
+      {selectedMode === 'admin' && cabinetWithLockIcons &&
         !cabinetWithLockIcons.hideLockIcons && (
           <CabinetLockIcons
             cabinet={cabinetWithLockIcons}
@@ -758,6 +805,20 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
           />
         )}
 
+      {/* User Width Slider - appears on right-click (User mode only) */}
+      {selectedMode === 'user' && cabinetWithLockIcons && (() => {
+        const constraints = getWidthConstraints(cabinetWithLockIcons.productId)
+        return (
+          <UserWidthSlider
+            cabinet={cabinetWithLockIcons}
+            onClose={() => setCabinetWithLockIcons(null)}
+            onWidthChange={handleUserWidthChange}
+            minWidth={constraints?.min}
+            maxWidth={constraints?.max}
+          />
+        )
+      })()}
+
       {/* CabinetsInfoPanel hidden per user request */}
       {/* <CabinetsInfoPanel cabinets={cabinets} /> */}
 
@@ -783,8 +844,8 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         />
       )}
 
-      {/* Product Panel - shown when NON-appliance cabinet is selected (includes benchtops) */}
-      {showProductPanel && selectedCabinet?.cabinetType !== 'appliance' && (
+      {/* Product Panel - shown when NON-appliance cabinet is selected (Admin mode only) */}
+      {selectedMode === 'admin' && showProductPanel && selectedCabinet?.cabinetType !== 'appliance' && (
         <ProductPanel
           isVisible={true}
           onClose={() => {
@@ -1297,7 +1358,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         jumpTo={jumpTo}
       />
 
-      <SaveButton onSave={openSaveModal} />
+      {selectedMode === 'admin' && <SaveButton onSave={openSaveModal} />}
 
       <DimensionLineControls
         hasSelection={!!selectedDimLineId}
@@ -1307,7 +1368,8 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         isOrthoView={isOrthoView}
       />
     </div>
-  );
-};
+    </ModeContext.Provider>
+  )
+}
 
-export default WallScene;
+export default WallScene

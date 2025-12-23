@@ -10,6 +10,7 @@ import type { SavedRoom } from '@/data/savedRooms'
 import type { WallDimensions } from '@/features/scene/types'
 import { getRoomDesign, type RoomDesignData } from '@/server/rooms/getRoomDesign'
 import { useWsRoomsQuery } from '@/hooks/useWsRoomsQuery'
+import type { AppMode } from '@/features/scene/context/ModeContext'
 
 // Dynamically import the Three.js component to avoid SSR issues
 const ThreeScene = dynamic(() => import('@/features/scene/ThreeScene'), {
@@ -49,6 +50,7 @@ export default function Home() {
   const [wsProducts, setWsProducts] = useState<WsProducts | null>(null)
   const loadRoomRef = useRef<((savedRoom: SavedRoom) => Promise<void>) | null>(null)
   const [selectedApplianceType, setSelectedApplianceType] = useState<'dishwasher' | 'washingMachine' | 'sideBySideFridge' | null>(null)
+  const [selectedMode, setSelectedMode] = useState<AppMode>('admin')
 
   // Track if we've already loaded the room from URL to avoid duplicate loads
   const initialLoadDoneRef = useRef(false)
@@ -144,8 +146,8 @@ export default function Home() {
 
   return (
     <main className="h-screen w-full relative">
-      {/* Main Menu */}
-      <MainMenu
+      {/* Main Menu - Hidden in User mode */}
+      {selectedMode === 'admin' && <MainMenu
         onCategorySelect={handleCategorySelect}
         onSubcategorySelect={handleSubcategorySelect}
         selectedCategory={selectedCategory}
@@ -162,7 +164,7 @@ export default function Home() {
           }
         }}
         onApplianceSelect={handleApplianceSelect}
-      />
+      />}
 
       {/* Three.js Scene */}
       <ThreeScene
@@ -180,6 +182,8 @@ export default function Home() {
         }}
         currentRoomId={roomId}
         wsRooms={wsRooms ?? null}
+        selectedMode={selectedMode}
+        setSelectedMode={setSelectedMode}
       />
     </main>
   )

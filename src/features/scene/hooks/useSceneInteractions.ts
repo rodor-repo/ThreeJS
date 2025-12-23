@@ -12,6 +12,7 @@ import {
 } from "../utils/handlers/bulkheadPositionHandler"
 import { updateAllDependentComponents } from "../utils/handlers/dependentComponentsHandler"
 import type { ViewManager, ViewId } from "../../cabinets/ViewManager"
+import type { AppMode } from "../context/ModeContext"
 
 type CameraDragAPI = {
   startDrag: (x: number, y: number) => void
@@ -48,7 +49,8 @@ export const useSceneInteractions = (
   leftWallRef?: React.MutableRefObject<THREE.Group | null>,
   rightWallRef?: React.MutableRefObject<THREE.Group | null>,
   onOpenWallDrawer?: () => void,
-  orthoRefs?: OrthoRefs
+  orthoRefs?: OrthoRefs,
+  mode: AppMode = "admin"
 ) => {
   const isDraggingCabinetRef = useRef(false)
   const dragStartRef = useRef({ x: 0, y: 0 })
@@ -80,6 +82,7 @@ export const useSceneInteractions = (
         el.closest("[data-views-drawer]") ||
         el.closest("[data-view-drawer]") ||
         el.closest("[data-camera-controls]") ||
+        el.closest("[data-user-width-slider]") ||
         el.closest("button")
       ) // Also ignore all button clicks
     )
@@ -449,8 +452,8 @@ export const useSceneInteractions = (
             Math.pow(event.clientX - clickStartPositionRef.current.x, 2) +
               Math.pow(event.clientY - clickStartPositionRef.current.y, 2)
           )
-          // If mouse moved more than 5 pixels, start dragging
-          if (moveDistance > 5) {
+          // If mouse moved more than 5 pixels, start dragging (Admin mode only)
+          if (moveDistance > 5 && mode === "admin") {
             isDraggingCabinetRef.current = true
             dragStartRef.current = {
               x: clickStartPositionRef.current.x,
@@ -484,7 +487,9 @@ export const useSceneInteractions = (
         }
 
         // Constrained mode OR free mode with modifier: handle cabinet interaction
+        // Dragging is disabled in User mode
         if (
+          mode === "admin" &&
           selectedCabinet &&
           isMouseOverSelectedCabinet(event.clientX, event.clientY)
         ) {
@@ -661,9 +666,27 @@ export const useSceneInteractions = (
             }
           }
           if (clickedCabinet) {
-            // Right-click: always open panel with single selection
-            setSelectedCabinets([clickedCabinet])
-            setShowProductPanel(true)
+            if (mode === "admin") {
+              // Admin mode: Right-click selects single cabinet and opens ProductPanel
+              setSelectedCabinets([clickedCabinet])
+              setShowProductPanel(true)
+            } else {
+              // User mode: Right-click behavior depends on whether cabinet is already selected
+              const isAlreadySelected = selectedCabinets.some(
+                (c) => c.cabinetId === clickedCabinet!.cabinetId
+              )
+              
+              if (!isAlreadySelected) {
+                // If cabinet is NOT selected, replace selection with just this cabinet
+                setSelectedCabinets([clickedCabinet])
+              }
+              // If cabinet IS already selected, keep current selection (supports multi-select sync)
+              
+              // Show the width slider for this cabinet
+              if (clickedCabinet.hideLockIcons !== true && clickedCabinet.cabinetType !== "kicker") {
+                setCabinetWithLockIcons(clickedCabinet)
+              }
+            }
           }
         } else {
           // Right-click outside: close panel but keep selection if Shift is held
@@ -756,22 +779,29 @@ export const useSceneInteractions = (
 
         if (clickedCabinet) {
           // Cabinet was double-clicked - handle cabinet interaction
-          // Double-click selects single cabinet and shows lock icons
-          setSelectedCabinets([clickedCabinet])
+          // Admin mode: Double-click selects single cabinet and shows lock icons
+          // User mode: Double-click just selects (right-click shows slider)
+          if (mode === "admin") {
+            setSelectedCabinets([clickedCabinet])
 
-          // Don't show lock icons for fillers/panels/kickers added from modal (marked with hideLockIcons)
-          // Also don't show lock icons for kickers (they are separate selectable parts)
-          if (clickedCabinet.hideLockIcons === true || clickedCabinet.cabinetType === 'kicker') {
-            setCabinetWithLockIcons(null)
-            setShowProductPanel(false) // Don't open ProductPanel for kickers
-            return // Stop here - don't show icons for fillers/panels/kickers
-          }
+            // Don't show lock icons for fillers/panels/kickers added from modal (marked with hideLockIcons)
+            // Also don't show lock icons for kickers (they are separate selectable parts)
+            if (clickedCabinet.hideLockIcons === true || clickedCabinet.cabinetType === 'kicker') {
+              setCabinetWithLockIcons(null)
+              setShowProductPanel(false) // Don't open ProductPanel for kickers
+              return // Stop here - don't show icons for fillers/panels/kickers
+            }
 
-          // Toggle lock icons - if same cabinet, hide; if different, show on new one
-          if (cabinetWithLockIcons === clickedCabinet) {
-            setCabinetWithLockIcons(null)
+            // Toggle lock icons - if same cabinet, hide; if different, show on new one
+            if (cabinetWithLockIcons === clickedCabinet) {
+              setCabinetWithLockIcons(null)
+            } else {
+              setCabinetWithLockIcons(clickedCabinet)
+            }
           } else {
-            setCabinetWithLockIcons(clickedCabinet)
+            // User mode: Double-click just selects without changing other selection
+            // Use single-select behavior for consistency
+            setSelectedCabinets([clickedCabinet])
           }
           return // Stop here - cabinet interaction takes priority
         }
@@ -849,6 +879,7 @@ export const useSceneInteractions = (
     rightWallRef,
     wallRef,
     onOpenWallDrawer,
+    mode,
   ])
 
   return {

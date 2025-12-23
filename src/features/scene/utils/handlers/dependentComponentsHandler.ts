@@ -58,14 +58,18 @@ export const updateChildCabinets = (
     // All cabinets (including overhead): Keep bottom Y position aligned with parent, extend upward (positive Y) like parent cabinets
     // For overhead cabinets with overhang: add overhang amount to height, and position 20mm lower to align with door overhang
     if (changes.heightChanged) {
-      let newHeight = parentHeight
-      let newY = parentY // Align bottom Y with parent bottom Y (extends upward in positive Y direction)
-
-      if (isOverheadWithOverhang) {
-        // Add overhang extension to height, and position 20mm lower to align with door overhang
-        newHeight = parentHeight + overhangAmount
-        newY = parentY - overhangAmount // Position 20mm lower (negative Y) to align with door overhang
+      let newY = parentY
+      if (childCabinet.parentYOffset !== undefined) {
+        newY = parentY + childCabinet.parentYOffset
+      } else if (isOverheadWithOverhang) {
+        newY = parentY - overhangAmount
       }
+
+      // Calculate new height to keep top aligned with parent top
+      // parentTop = parentY + parentHeight
+      // childHeight = parentTop - childY
+      const parentTop = parentY + parentHeight
+      const newHeight = parentTop - newY
 
       childCabinet.carcass.updateDimensions({
         width: childCabinet.carcass.dimensions.width,
@@ -73,8 +77,7 @@ export const updateChildCabinets = (
         depth: childCabinet.carcass.dimensions.depth,
       })
 
-      // Update Y position to align bottom with parent bottom (extends upward in positive Y direction)
-      // For overhead with overhang: position 20mm lower to align with door overhang
+      // Update Y position
       childCabinet.group.position.set(
         childCabinet.group.position.x,
         newY,
@@ -84,10 +87,10 @@ export const updateChildCabinets = (
 
     // 2. Kicker height change: Update child Y position (Off the Floor)
     if (changes.kickerHeightChanged) {
-      let newY = parentY // Match parent Y position (kicker height)
-
-      if (isOverheadWithOverhang) {
-        // For overhead with overhang: position 20mm lower to align with door overhang
+      let newY = parentY
+      if (childCabinet.parentYOffset !== undefined) {
+        newY = parentY + childCabinet.parentYOffset
+      } else if (isOverheadWithOverhang) {
         newY = parentY - overhangAmount
       }
 
@@ -144,10 +147,11 @@ export const updateChildCabinets = (
 
     // 5. Position change: Update child X and Y position to maintain snap position and follow parent Y
     if (changes.positionChanged) {
-      // Calculate new Y position based on parent Y
-      // For overhead cabinets with overhang: position 20mm lower to align with door overhang
+      // Calculate new Y position based on parent Y or stored offset
       let newY = parentY
-      if (isOverheadWithOverhang) {
+      if (childCabinet.parentYOffset !== undefined) {
+        newY = parentY + childCabinet.parentYOffset
+      } else if (isOverheadWithOverhang) {
         newY = parentY - overhangAmount // Position 20mm lower (negative Y) to align with door overhang
       }
 
@@ -179,6 +183,9 @@ export const updateChildCabinets = (
       const newHeight = parentHeight + overhangAmount
       const newY = parentY - overhangAmount // Position 20mm lower (negative Y) to align with door overhang
 
+      // Update offset to match new position
+      childCabinet.parentYOffset = newY - parentY
+
       childCabinet.carcass.updateDimensions({
         width: childCabinet.carcass.dimensions.width,
         height: newHeight,
@@ -195,6 +202,9 @@ export const updateChildCabinets = (
       // Overhang was disabled, remove the extension (restore to parent height and position)
       const newHeight = parentHeight
       const newY = parentY // Align bottom with parent bottom
+
+      // Reset offset
+      childCabinet.parentYOffset = 0
 
       childCabinet.carcass.updateDimensions({
         width: childCabinet.carcass.dimensions.width,

@@ -67,11 +67,22 @@ export function useOffTheFloor(
           const topPosition = currentY + currentHeight
           const newHeight = topPosition - value
 
+          // Update absolute Y position
           actualCabinet.group.position.set(
             actualCabinet.group.position.x,
             value,
             actualCabinet.group.position.z
           )
+
+          // Store relative offset from parent for persistence and dependent component updates
+          if (actualCabinet.parentCabinetId && allCabinets) {
+            const parentCabinet = allCabinets.find(
+              (c) => c.cabinetId === actualCabinet.parentCabinetId
+            )
+            if (parentCabinet) {
+              actualCabinet.parentYOffset = value - parentCabinet.group.position.y
+            }
+          }
 
           if (onDimensionsChange) {
             onDimensionsChange({

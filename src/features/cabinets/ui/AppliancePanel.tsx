@@ -4,12 +4,13 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { X, Maximize, Move, Eye, Settings } from 'lucide-react'
 import type { CabinetData, WallDimensions } from '@/features/scene/types'
-import { ViewId } from '@/features/cabinets/ViewManager'
+import { View, ViewId } from '@/features/cabinets/ViewManager'
 import { repositionViewCabinets, checkLeftWallOverflow } from '@/features/scene/utils/handlers/viewRepositionHandler'
 import { applyWidthChangeWithLock } from '@/features/scene/utils/handlers/lockBehaviorHandler'
 import { toastThrottled } from './ProductPanel'
 import { CollapsibleSection } from './productPanel/components/CollapsibleSection'
 import { useCollapsibleSections } from './productPanel/hooks/useCollapsibleSections'
+import { ViewSelector } from './ViewSelector'
 
 // Appliance type labels and icons
 const APPLIANCE_INFO: Record<string, { label: string; icon: string }> = {
@@ -27,8 +28,10 @@ interface AppliancePanelProps {
   selectedCabinet: CabinetData | null
   onClose: () => void
   viewManager: {
-    activeViews: Array<{ id: string; name: string }>
+    activeViews: View[]
     getCabinetsInView: (viewId: ViewId) => string[]
+    assignCabinetToView: (cabinetId: string, viewId: ViewId | 'none') => void
+    createView: () => View
   }
   onViewChange: (cabinetId: string, viewId: string) => void
   // New props for view integration
@@ -79,7 +82,7 @@ const SliderInput: React.FC<SliderInputProps> = ({
         <label className="text-sm font-medium text-gray-700">{label}</label>
         <div className="flex items-center gap-1">
           <input
-            type="text"
+            type="number"
             value={editingValue}
             onChange={(e) => setEditingValue(e.target.value)}
             onBlur={handleBlur}
@@ -485,6 +488,30 @@ export const AppliancePanel: React.FC<AppliancePanelProps> = ({
 
         {/* Content with collapsible sections */}
         <div className="p-4 space-y-4">
+          {/* View Assignment Section */}
+          <CollapsibleSection
+            id="applianceView"
+            title="View Assignment"
+            icon={<ViewIcon />}
+          >
+            <ViewSelector
+              selectedViewId={selectedCabinet.viewId as ViewId | undefined}
+              activeViews={viewManager.activeViews}
+              onViewChange={(viewId) => {
+                viewManager.assignCabinetToView(selectedCabinet.cabinetId, viewId)
+                onViewChange(selectedCabinet.cabinetId, viewId)
+              }}
+              onCreateView={() => {
+                const newView = viewManager.createView()
+                viewManager.assignCabinetToView(selectedCabinet.cabinetId, newView.id)
+                onViewChange(selectedCabinet.cabinetId, newView.id)
+              }}
+              cabinetId={selectedCabinet.cabinetId}
+              allCabinets={cabinets}
+              noWrapper
+            />
+          </CollapsibleSection>
+
           {/* Appliance Size Section */}
           <CollapsibleSection
             id="applianceSize"
@@ -573,8 +600,8 @@ export const AppliancePanel: React.FC<AppliancePanelProps> = ({
               <SliderInput
                 label="Kicker Height"
                 value={kickerHeight}
-                min={20}
-                max={100}
+                min={16}
+                max={170}
                 step={1}
                 onChange={handleKickerChange}
               />
@@ -641,31 +668,6 @@ export const AppliancePanel: React.FC<AppliancePanelProps> = ({
               </div>
             </CollapsibleSection>
           )}
-
-          {/* View Assignment Section */}
-          <CollapsibleSection
-            id="applianceView"
-            title="View Assignment"
-            icon={<ViewIcon />}
-          >
-            <div className="space-y-2">
-              <select
-                value={selectedCabinet.viewId || 'none'}
-                onChange={(e) => onViewChange(selectedCabinet.cabinetId, e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="none">No View</option>
-                {viewManager.activeViews.map((view) => (
-                  <option key={view.id} value={view.id}>
-                    {view.name}
-                  </option>
-                ))}
-              </select>
-              <p className="text-xs text-gray-500">
-                Assign this appliance to a view for grouped movement.
-              </p>
-            </div>
-          </CollapsibleSection>
         </div>
 
         {/* Footer */}

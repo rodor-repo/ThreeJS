@@ -156,6 +156,9 @@ export const handleFillerSelect = (
     fillerY = parentY - overhangAmount
   }
 
+  // Initialize parentYOffset property (relative to parent Y)
+  newCabinet.parentYOffset = fillerY - parentY
+
   if (side === "left") {
     newCabinet.group.position.set(parentX - newCabinet.carcass.dimensions.width, fillerY, fillerZ)
   } else {

@@ -88,6 +88,8 @@ export interface SavedCabinet {
   benchtopRightOverhang?: number
   benchtopThickness?: number
   benchtopHeightFromFloor?: number
+  /** Vertical offset from parent cabinet Y position - used for fillers/panels */
+  parentYOffset?: number
 }
 
 export interface SavedView {

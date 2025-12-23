@@ -24,7 +24,8 @@ This guide provides a high-level overview of the `ProductPanel` component system
   - Fetches product data via `getProductData` based on `productId`
   - Syncs `materialOptions` and `defaultMaterialSelections` to `PartDataManager` for nesting
   - Initializes drawer/door quantities from product defaults
-  - Passes all fetched data as props to `DynamicPanel`
+- Handles benchtop-specific callbacks (`onBenchtopOverhangChange`, etc.)
+- Passes all fetched data as props to `DynamicPanel`
 
 ### 2. `DynamicPanel`
 
@@ -33,8 +34,9 @@ This guide provides a high-level overview of the `ProductPanel` component system
 - **Responsibilities**:
   - Manages UI state (expand/collapse, open color picker modal)
   - Composes all custom hooks for state management
-  - Renders all UI sections (header, dimensions, materials, views, etc.)
+  - Renders all UI sections using `CollapsibleSection` wrappers
   - Handles callbacks for dimension, material, group, and sync changes
+  - Includes specialized logic for benchtops and modal fillers/panels
 
 ---
 
@@ -134,15 +136,16 @@ These hooks form the backbone of the ProductPanel state management.
   - Builds initial material selections from defaults
   - Applies initial dimensions to 3D scene
   - Syncs material selections to `PartDataManager`
+  - **Contains `useMaterialSync` hook** for ongoing material synchronization
 
-### 10. `useMaterialSync`
+### 10. `useCollapsibleSections`
 
-- **Location**: `src/features/cabinets/ui/productPanel/hooks/useMaterialSync.ts`
-- **Purpose**: Syncs **material selections** to part data manager.
+- **Location**: `src/features/cabinets/ui/productPanel/hooks/useCollapsibleSections.ts`
+- **Purpose**: Manages **expanded/collapsed state** of panel sections.
 - **Responsibilities**:
-  - Monitors material selection changes
-  - Updates `PartDataManager` with current selections
-  - Ensures nesting/export has correct material info
+  - Persists section states across cabinet selection changes
+  - Provides `isExpanded` and `toggleSection` helpers
+  - All sections are collapsed by default
 
 ---
 
@@ -156,18 +159,45 @@ These components render the panel sections.
 - **Purpose**: Header with title, price, and close button.
 - **Props**: `wsProduct`, `sortNumber`, `loading`, `error`, `priceData`, `isPriceFetching`, `onClose`
 
-### 2. `DimensionsSection`
+### 2. `CollapsibleSection`
+
+- **Location**: `src/features/cabinets/ui/productPanel/components/CollapsibleSection.tsx`
+- **Purpose**: **Wrapper for all panel sections** providing a consistent expand/collapse UI.
+- **Responsibilities**:
+  - Uses `useCollapsibleSections` for state persistence
+  - Renders a clickable header with icon and title
+  - Animates content visibility
+
+### 3. `GroupingSection`
+
+- **Location**: `src/features/cabinets/ui/productPanel/components/GroupingSection.tsx`
+- **Purpose**: **Consolidated grouping controls**.
+- **Responsibilities**:
+  - Combines `ViewSelector`, `PairSection`, and `SyncSection` into one card
+  - Only shows Pair/Sync sub-sections when a view is assigned
+
+### 4. `DimensionsSection`
 
 - **Location**: `src/features/cabinets/ui/productPanel/components/DimensionsSection.tsx`
 - **Purpose**: Renders all dimension controls.
-- **Props**: `dimsList`, `values`, `editingValues`, `gdMapping`, `drawerQty`, `isModalFillerOrPanel`
+- **Props**: `dimsList`, `values`, `editingValues`, `gdMapping`, `drawerQty`, `isModalFillerOrPanel`, `isChildBenchtop`
 - **Features**:
   - Shows badges for dimension types (Width, Height, Depth, Drawer H1, etc.)
   - Highlights dependent drawers (last drawer auto-calculates)
   - Disables height/depth for modal fillers/panels
+  - Disables width/depth for child benchtops (only thickness editable)
   - Reset individual or all dimensions
 
-### 3. `DimensionInput`
+### 5. `BenchtopSection`
+
+- **Location**: `src/features/cabinets/ui/productPanel/components/BenchtopSection.tsx`
+- **Purpose**: **Benchtop-specific settings**.
+- **Responsibilities**:
+  - Manages overhangs (front, left, right) for child benchtops
+  - Manages thickness for child benchtops
+  - Manages height from floor for independent benchtops
+
+### 6. `DimensionInput`
 
 - **Location**: `src/features/cabinets/ui/productPanel/components/DimensionInput.tsx`
 - **Purpose**: Single dimension input with slider/text modes.
@@ -177,43 +207,31 @@ These components render the panel sections.
   - Validation with error feedback
   - Editing buffer for intermediate values
 
-### 4. `MaterialsSection`
+### 7. `MaterialsSection`
 
 - **Location**: `src/features/cabinets/ui/productPanel/components/MaterialsSection.tsx`
 - **Purpose**: Lists all materials with selection controls.
 - **Props**: `wsProduct`, `materialOptions`, `materialSelections`, `onSelectionChange`, `onOpenColorPicker`
 
-### 5. `MaterialCard`
+### 8. `MaterialCard`
 
 - **Location**: `src/features/cabinets/ui/productPanel/components/MaterialCard.tsx`
 - **Purpose**: Single material selection card.
 - **Features**: Shows current selection, opens color picker modal
 
-### 6. `ColorPickerModal`
+### 9. `ColorPickerModal`
 
 - **Location**: `src/features/cabinets/ui/productPanel/components/ColorPickerModal.tsx`
 - **Purpose**: Full-screen material color/finish picker.
 - **Props**: `materialId`, `material`, `materialOptions`, `currentSelection`, `onSelectionChange`, `onClose`
 
-### 7. `SimpleColorPicker`
+### 10. `SimpleColorPicker`
 
 - **Location**: `src/features/cabinets/ui/productPanel/components/SimpleColorPicker.tsx`
 - **Purpose**: Basic color picker for cabinet material color.
 - **Props**: `color`, `onChange`
 
-### 8. `PairSection`
-
-- **Location**: `src/features/cabinets/ui/productPanel/components/PairSection.tsx`
-- **Purpose**: UI for pairing cabinets with percentage distribution.
-- **Props**: `selectedCabinet`, `cabinetsInView`, `allCabinets`, `groupCabinets`, `onGroupChange`
-
-### 9. `SyncSection`
-
-- **Location**: `src/features/cabinets/ui/productPanel/components/SyncSection.tsx`
-- **Purpose**: UI for syncing cabinet dimensions.
-- **Props**: `selectedCabinet`, `cabinetsInView`, `allCabinets`, `syncCabinets`, `onSyncChange`
-
-### 10. `OffTheFloorControl`
+### 11. `OffTheFloorControl`
 
 - **Location**: `src/features/cabinets/ui/productPanel/components/OffTheFloorControl.tsx`
 - **Purpose**: Slider for filler/panel Y position.
@@ -232,7 +250,7 @@ These components render the panel sections.
   - `clampValue(value, min, max)`: Clamp to bounds
   - `getDefaultDimValue(dimObj)`: Get default value
   - `validateDrawerHeightChange(...)`: Validate drawer height changes against dependent drawer
-  - `extractPrimaryDimensions(...)`: Extract width/height/depth from values
+  - `extractPrimaryDimensions(...)`: Extract width/height/depth from values (includes name-based fallback for benchtops)
   - `applyPrimaryDimsTo3D(...)`: Apply dimensions to 3D scene via callbacks
   - `syncCabinetDimensionsToValues(...)`: Sync 3D dimensions back to values
 
@@ -257,9 +275,9 @@ These components render the panel sections.
 
 1. **`productPanel.types.ts`**: Core types for the panel
 
-   - `SelectedCabinetSnapshot`: Snapshot of selected cabinet state
+   - `SelectedCabinetSnapshot`: Snapshot of selected cabinet state (includes benchtop fields)
    - `ProductPanelProps`: Main component props
-   - `ProductPanelCallbacks`: All callback prop types
+   - `ProductPanelCallbacks`: All callback prop types (includes benchtop callbacks)
    - `DimensionRange`, `DimensionConstraints`: Dimension bounds
 
 2. **`types/index.ts`**: Consolidated type re-exports
@@ -283,6 +301,7 @@ These components render the panel sections.
 │                     DynamicPanelWithQuery                           │
 │  - Fetches product data (React Query)                               │
 │  - Syncs to PartDataManager                                         │
+│  - Handles benchtop callbacks                                       │
 │  - Passes data to DynamicPanel                                      │
 └─────────────────────────────────────────────────────────────────────┘
                                   │
@@ -300,16 +319,16 @@ These components render the panel sections.
 │  │  - useDimensionEvents (external change events)               │   │
 │  │  - useDimensionSync (width sync from 3D)                     │   │
 │  │  - useInitialization (setup on cabinet select)               │   │
-│  │  - useMaterialSync (sync to PartDataManager)                 │   │
+│  │  - useMaterialSync (in useInitialization.ts)                 │   │
+│  │  - useCollapsibleSections (section persistence)              │   │
 │  └─────────────────────────────────────────────────────────────┘   │
 │                                                                     │
 │  ┌─────────────────────────────────────────────────────────────┐   │
-│  │ UI Components:                                               │   │
+│  │ UI Components (wrapped in CollapsibleSection):               │   │
 │  │  - PanelHeader (title, price, close)                         │   │
-│  │  - ViewSelector (assign to view)                             │   │
-│  │  - PairSection (pair cabinets)                               │   │
-│  │  - SyncSection (sync dimensions)                             │   │
+│  │  - GroupingSection (View + Pair + Sync)                      │   │
 │  │  - DimensionsSection (all dimension inputs)                  │   │
+│  │  - BenchtopSection (overhangs, thickness, height)            │   │
 │  │  - OffTheFloorControl (Y position for fillers)               │   │
 │  │  - MaterialsSection (material cards)                         │   │
 │  │  - SimpleColorPicker (cabinet color)                         │   │
@@ -351,15 +370,15 @@ src/features/cabinets/ui/
 │   │   ├── useCabinetGroups.ts   (~85 lines)
 │   │   ├── useDimensionEvents.ts
 │   │   ├── useDimensionSync.ts
-│   │   ├── useInitialization.ts
-│   │   └── useMaterialSync.ts
+│   │   ├── useInitialization.ts  (includes useMaterialSync)
+│   │   └── useCollapsibleSections.ts
 │   ├── components/
 │   │   ├── index.ts              (barrel exports)
 │   │   ├── PanelHeader.tsx
+│   │   ├── CollapsibleSection.tsx
+│   │   ├── GroupingSection.tsx
 │   │   ├── DimensionsSection.tsx
-│   │   ├── DimensionInput.tsx
-│   │   ├── MaterialsSection.tsx
-│   │   ├── MaterialCard.tsx
+│   │   ├── BenchtopSection.tsx
 │   │   ├── ColorPickerModal.tsx
 │   │   ├── SimpleColorPicker.tsx
 │   │   ├── PairSection.tsx

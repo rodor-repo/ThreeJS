@@ -42,19 +42,20 @@ export const ViewDetailDrawer: React.FC<Props> = ({
         productIdSet.add(cabinet.productId)
       }
     })
-    return Array.from(productIdSet)
+    return Array.from(productIdSet).sort()
   }, [cabinets])
 
+  // Memoize queries to keep useQueries stable
+  const queries = useMemo(() => uniqueProductIds.map((productId) => ({
+    queryKey: ['productData', productId],
+    queryFn: () => getProductData(productId),
+    enabled: isOpen && !!productId,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+  })), [uniqueProductIds, isOpen])
+
   // Fetch product data for all unique productIds using useQueries
-  const productQueries = useQueries({
-    queries: uniqueProductIds.map((productId) => ({
-      queryKey: ['productData', productId],
-      queryFn: () => getProductData(productId),
-      enabled: isOpen && !!productId,
-      staleTime: 5 * 60 * 1000,
-      gcTime: 5 * 60 * 1000,
-    })),
-  })
+  const productQueries = useQueries({ queries })
 
   // Collect all unique GDIds from cabinets' product dimensions
   const allGDIds = useMemo(() => {
@@ -299,9 +300,27 @@ export const ViewDetailDrawer: React.FC<Props> = ({
     return calculateSplashbackLimits(viewId)
   }, [viewId, calculateSplashbackLimits])
 
+  // Ref to track initialization to prevent infinite loops
+  const lastInitializedRef = useRef<{ isOpen: boolean; viewId: string | null }>({
+    isOpen: false,
+    viewId: null
+  })
+
+  // Reset initialization when drawer closes
+  React.useEffect(() => {
+    if (!isOpen) {
+      lastInitializedRef.current = { isOpen: false, viewId: null }
+    }
+  }, [isOpen])
+
   // Update kicker height when drawer opens or viewId changes
   React.useEffect(() => {
-    if (isOpen && viewId) {
+    const shouldInitialize = isOpen && viewId && (
+      lastInitializedRef.current.isOpen !== isOpen || 
+      lastInitializedRef.current.viewId !== viewId
+    )
+
+    if (shouldInitialize) {
       const currentKickerHeight = calculateCurrentKickerHeight(viewId)
       // Clamp to valid range (16-170mm)
       const clampedKickerHeight = Math.max(16, Math.min(170, currentKickerHeight))
@@ -311,7 +330,12 @@ export const ViewDetailDrawer: React.FC<Props> = ({
 
   // Update splashback height when drawer opens or viewId changes
   React.useEffect(() => {
-    if (isOpen && viewId) {
+    const shouldInitialize = isOpen && viewId && (
+      lastInitializedRef.current.isOpen !== isOpen || 
+      lastInitializedRef.current.viewId !== viewId
+    )
+
+    if (shouldInitialize) {
       const currentGap = calculateCurrentGap(viewId)
       // Clamp current gap to valid range
       const clampedGap = Math.max(
@@ -339,14 +363,22 @@ export const ViewDetailDrawer: React.FC<Props> = ({
   
   // Initialize slider values from current values
   React.useEffect(() => {
-    if (isOpen && gdListWithSliders.length > 0) {
+    const shouldInitialize = isOpen && viewId && (
+      lastInitializedRef.current.isOpen !== isOpen || 
+      lastInitializedRef.current.viewId !== viewId
+    )
+
+    if (shouldInitialize && gdListWithSliders.length > 0) {
       const initialValues: Record<string, number> = {}
       gdListWithSliders.forEach((gd) => {
         initialValues[gd.gdId] = gd.currentValue
       })
       setSliderValues(initialValues)
+      
+      // Mark as initialized after all initializations are done
+      lastInitializedRef.current = { isOpen, viewId }
     }
-  }, [isOpen, gdListWithSliders])
+  }, [isOpen, viewId, gdListWithSliders])
   
   // Format category name for display
   const formatCategoryName = (category: string): string => {

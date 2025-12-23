@@ -65,7 +65,7 @@ Benchtops must dynamically update whenever their parent or "sibling" children (f
 - **`fillerHandler.ts`**: When fillers/panels are added or removed from the parent.
 - **`deleteCabinetHandler.ts`**: When a cabinet (parent or child) is deleted.
 - **`productDimensionHandler.ts`**: When cabinet dimensions are changed via the UI.
-- **`BenchtopPanel.tsx`**: When benchtop-specific properties (like thickness) are edited.
+- **`ThreeScene.tsx`**: When benchtop-specific properties (like thickness or overhangs) are edited via the `ProductPanel`.
 - **`ThreeScene.tsx`**: During batch dimension changes (e.g., view-wide updates).
 
 ---
@@ -78,6 +78,7 @@ Benchtops have a complex relationship with other cabinets:
 2.  **Siblings (Fillers & Panels)**: If a base cabinet has fillers or panels attached (also as children), the benchtop automatically expands to cover them.
 3.  **Upward Updates**: When a child filler or panel is resized, it triggers an update on the parent cabinet's benchtop. This ensures the benchtop always matches the combined width of the cabinet and its fillers.
 4.  **View Integration**: Benchtops are assigned to the same `viewId` as their parent, ensuring they are grouped correctly in the `ViewManager`.
+5.  **Independent Benchtops**: Benchtops can also exist independently (without a parent). In this case, they have a `benchtopHeightFromFloor` property to control their vertical position.
 
 ---
 
@@ -98,39 +99,40 @@ Benchtops have a complex relationship with other cabinets:
 
 ### `CarcassAssembly`
 
-- The `CarcassAssembly` for a benchtop cabinet holds the `_benchtop` instance and provides methods like `updateBenchtopOverhangs`.
+- The `CarcassAssembly` for a benchtop cabinet holds the `_benchtop` instance and provides methods like `updateBenchtopOverhangs` and `updateDimensions`.
 
 ---
 
 ## 6. UI Components
 
-### `BenchtopPanel`
+### `ProductPanel` & `BenchtopSection`
 
-- **Location**: `src/features/scene/ui/BenchtopPanel.tsx`
-- **Purpose**: A specialized side panel (similar to `ProductPanel`) for editing benchtop properties.
+- **Location**: `src/features/cabinets/ui/productPanel/components/BenchtopSection.tsx`
+- **Purpose**: Integrated into the main `ProductPanel`, this section provides controls for editing benchtop-specific properties.
 - **Features**:
-  - Displays current Length and Depth.
-  - Allows editing **Thickness**.
-  - Shows position and parent association.
+  - **Thickness**: Allows editing the benchtop thickness (typically 20mm to 60mm).
+  - **Overhangs**: Sliders for Front, Left, and Right overhangs (for child benchtops).
+  - **Height from Floor**: Slider for vertical positioning (for independent benchtops).
+  - **Reset**: Buttons to restore default values.
 
 ### `CabinetLockIcons`
 
 - **Location**: `src/features/scene/ui/CabinetLockIcons.tsx`
-- **Purpose**: Provides the "Add Benchtop" toggle when a base cabinet is double-clicked.
+- **Purpose**: Provides the "T" (Benchtop) toggle when a base cabinet is double-clicked.
 
 ---
 
 ## Key Files Reference
 
-| File                                                              | Role                                                |
-| :---------------------------------------------------------------- | :-------------------------------------------------- |
-| `src/features/scene/utils/handlers/benchtopHandler.ts`            | Creation and toggling logic.                        |
-| `src/features/scene/utils/handlers/benchtopPositionHandler.ts`    | Dynamic syncing of position and size.               |
-| `src/features/scene/utils/handlers/dependentComponentsHandler.ts` | Centralized orchestrator for all component updates. |
-| `src/features/scene/utils/benchtopUtils.ts`                       | Shared calculations (effective length, depth).      |
-| `src/features/carcass/builders/builder-constants.ts`              | Centralized constants (thickness, overhangs).       |
-| `src/features/carcass/parts/Benchtop.ts`                          | 3D Geometry and mesh logic.                         |
-| `src/features/carcass/builders/SimplePanelBuilder.ts`             | Carcass assembly integration (`BenchtopBuilder`).   |
-| `src/features/scene/ui/BenchtopPanel.tsx`                         | UI for editing benchtop properties.                 |
-| `src/features/scene/ThreeScene.tsx`                               | Wiring of handlers and UI overlays.                 |
-| `src/features/scene/types.ts`                                     | Type definitions (`CabinetData` properties).        |
+| File                                                                   | Role                                                |
+| :--------------------------------------------------------------------- | :-------------------------------------------------- |
+| `src/features/scene/utils/handlers/benchtopHandler.ts`                 | Creation and toggling logic.                        |
+| `src/features/scene/utils/handlers/benchtopPositionHandler.ts`         | Dynamic syncing of position and size.               |
+| `src/features/scene/utils/handlers/dependentComponentsHandler.ts`      | Centralized orchestrator for all component updates. |
+| `src/features/scene/utils/benchtopUtils.ts`                            | Shared calculations (effective length, depth).      |
+| `src/features/carcass/builders/builder-constants.ts`                   | Centralized constants (thickness, overhangs).       |
+| `src/features/carcass/parts/Benchtop.ts`                               | 3D Geometry and mesh logic.                         |
+| `src/features/carcass/builders/SimplePanelBuilder.ts`                  | Carcass assembly integration (`BenchtopBuilder`).   |
+| `src/features/cabinets/ui/productPanel/components/BenchtopSection.tsx` | UI for editing benchtop properties.                 |
+| `src/features/scene/ThreeScene.tsx`                                    | Wiring of handlers and UI events.                   |
+| `src/features/scene/types.ts`                                          | Type definitions (`CabinetData` properties).        |

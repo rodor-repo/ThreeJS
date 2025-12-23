@@ -24,20 +24,22 @@ This document lists all files that need to be reviewed and potentially modified 
 - [ ] `src/features/cabinets/factory/cabinetFactory.ts` - Add default dimensions & config
 - [ ] `src/features/carcass/CarcassAssembly.ts` - Add builder selection logic
 - [ ] `src/features/carcass/builders/` - Create or modify builder
-- [ ] `src/components/categoriesData.ts` - Add menu entry
+- [ ] `src/features/scene/hooks/useProductDrivenCreation.ts` - Add mapping in `legacyCategoryMap`
+- [ ] `src/components/categoriesData.ts` - Add menu entry (if using local categories)
 
 **Likely need modification:**
 
 - [ ] `src/features/carcass/builders/builder-constants.ts` - Add type-specific constants
 - [ ] `src/features/scene/utils/handlers/productDimensionHandler.ts` - Dimension change logic
-- [ ] `src/features/cabinets/hooks/useCabinets.ts` - Cabinet state management
+- [ ] `src/features/cabinets/hooks/useCabinets.ts` - Cabinet state management (view assignment)
 - [ ] `src/nesting/PartDataManager.ts` - Part extraction for nesting
 
-**For child cabinet types (fillers, panels, kickers, bulkheads, under-panels):**
+**For child cabinet types (fillers, panels, kickers, bulkheads, under-panels, benchtops):**
 
 - [ ] Relevant handler file in `src/features/scene/utils/handlers/`
-- [ ] UI modal in `src/features/scene/ui/`
+- [ ] UI modal in `src/features/scene/ui/` (if applicable)
 - [ ] `CabinetData` interface (add parent relationship fields)
+- [ ] `roomPersistenceUtils.ts` (serialization/restoration)
 
 ---
 
@@ -63,6 +65,7 @@ export type CabinetType =
   | "bulkhead"
   | "benchtop"
   | "underPanel"
+  | "appliance"
   | "yourNewType" // <-- Add new type here
 ```
 
@@ -113,7 +116,7 @@ const getDefaultConfig = (
 }
 ```
 
-3. **Handle special dimension logic in `createCabinet` if needed**
+3. **Handle special dimension logic in `createCabinet` if needed** (e.g., appliance shell calculations)
 
 ---
 
@@ -158,8 +161,13 @@ The carcass building system is responsible for constructing the 3D geometry of c
 public panel?: CarcassPanel
 public frontPanel?: CarcassFront
 public fillerReturn?: CarcassPanel
-// Add your new type's unique parts here
-public yourNewPartType?: YourNewPart
+// Kicker, bulkhead, underPanel, benchtop, and appliance specific parts
+public _kickerFace?: KickerFace
+public _underPanelFace?: UnderPanelFace
+public _bulkheadFace?: BulkheadFace
+public _benchtop?: Benchtop
+public _applianceShell?: { group: THREE.Group; dispose: () => void }
+public _applianceVisual?: { group: THREE.Group; dispose: () => void }
 ```
 
 2. **Add getter for new parts:**
@@ -179,7 +187,7 @@ public dispose(): void {
 }
 ```
 
-4. **Add type-specific methods if needed** (like `addBulkheadReturn` for bulkheads)
+4. **Add type-specific methods if needed** (like `addBulkheadReturn` for bulkheads or `updateBenchtopOverhangs` for benchtops)
 
 ---
 
@@ -239,6 +247,8 @@ export interface CabinetBuilder {
 | `kicker`                          | `KickerBuilder`             | Horizontal panel at cabinet base                                         |
 | `bulkhead`                        | `BulkheadBuilder`           | Panel above cabinet to ceiling                                           |
 | `underPanel`                      | `UnderPanelBuilder`         | Panel under top cabinets                                                 |
+| `benchtop`                        | `BenchtopBuilder`           | Horizontal panel on top of base cabinets                                 |
+| `appliance`                       | `ApplianceBuilder`          | Visual representation of appliances (dishwasher, fridge, etc.)           |
 
 ---
 
@@ -258,7 +268,7 @@ export interface CabinetBuilder {
 
 ### [src/features/carcass/builders/SimplePanelBuilder.ts](../src/features/carcass/builders/SimplePanelBuilder.ts)
 
-**Role:** Contains builders for simple panel-based cabinets (Kicker, UnderPanel, Bulkhead).
+**Role:** Contains builders for simple panel-based cabinets (Kicker, UnderPanel, Bulkhead, Benchtop).
 
 **Use as reference when:** Creating a new "accessory" type that's essentially a single panel attached to another cabinet.
 
@@ -303,6 +313,7 @@ export const PART_NAMES = {
 | `BulkheadFace.ts`   | Bulkhead panel                 |
 | `BulkheadReturn.ts` | Bulkhead side returns          |
 | `UnderPanelFace.ts` | Under-panel below top cabinets |
+| `Benchtop.ts`       | Benchtop panel                 |
 
 **When adding a new cabinet type with unique geometry:** Create a new part class following the existing patterns.
 
@@ -377,7 +388,7 @@ const childCabinets = cabinets.filter(
 
 ### [dependentComponentsHandler.ts](../src/features/scene/utils/handlers/dependentComponentsHandler.ts)
 
-**Role:** Centralized function to update all dependent components (children, kicker, bulkhead, underPanel).
+**Role:** Centralized function to update all dependent components (children, kicker, bulkhead, underPanel, benchtop).
 
 **Key function:** `updateAllDependentComponents()`
 
@@ -398,23 +409,24 @@ if (cabinet.cabinetType === "yourNewType") {
 
 ### [deleteCabinetHandler.ts](../src/features/scene/utils/handlers/deleteCabinetHandler.ts)
 
-**Role:** Handles cabinet deletion, including cleanup of view assignments and group relationships.
+**Role:** Handles cabinet deletion, including cleanup of view assignments, group relationships, and child components.
 
 **Key function:** `handleDeleteCabinet()`
 
 **What to modify when adding a new cabinet type:**
 
-- If the new type has parent relationships that need cleanup, add logic similar to:
+- Ensure `findChildCabinets` includes any new parent relationship fields:
 
 ```typescript
-if (
-  cabinetToDelete.cabinetType === "yourNewType" &&
-  cabinetToDelete.parentCabinetId
-) {
-  const parentCabinet = allCabinets.find(
-    (c) => c.cabinetId === cabinetToDelete.parentCabinetId
+const findChildCabinets = (
+  parentCabinetId: string,
+  allCabinets: CabinetData[]
+): CabinetData[] => {
+  return allCabinets.filter(
+    (c) =>
+      // ... existing checks
+      c.yourNewTypeParentCabinetId === parentCabinetId
   )
-  // Handle parent cleanup
 }
 ```
 
@@ -436,10 +448,11 @@ if (
 1. Find parent cabinet
 2. Create new cabinet with `createCabinet()`
 3. Set dimensions based on parent
-4. Position relative to parent
+4. Position relative to parent (considering door thickness and overhangs)
 5. Set parent-child relationship fields
 6. Add to same view as parent
 7. Set appropriate lock states
+8. Update parent's dependent components (benchtop, kicker, etc.)
 
 ---
 
@@ -453,6 +466,8 @@ if (
 | `kickerPositionHandler.ts`     | Kicker positioning                | Adding floor-level components           |
 | `underPanelHandler.ts`         | Under-panel creation/removal      | Adding under-cabinet components         |
 | `underPanelPositionHandler.ts` | Under-panel positioning           | Adding components below cabinets        |
+| `benchtopHandler.ts`           | Benchtop creation/removal         | Adding horizontal surfaces              |
+| `benchtopPositionHandler.ts`   | Benchtop positioning              | Adding positioned surfaces              |
 | `viewDimensionHandler.ts`      | Batch dimension updates for views | Supporting view-wide operations         |
 | `viewRepositionHandler.ts`     | Repositioning cabinets in views   | Supporting cabinet push/shift           |
 | `lockBehaviorHandler.ts`       | Lock state resize logic           | Supporting locked edge behavior         |
@@ -470,7 +485,7 @@ if (
 **Key functions:**
 
 - `createCabinet()` - Creates a new cabinet and adds to scene
-- `deleteCabinet()` - Removes cabinet from scene with cleanup
+- `deleteCabinet()` - Removes cabinet from scene with cleanup and renumbering
 - `clearCabinets()` - Removes all cabinets
 - `updateCabinetViewId()` - Updates view assignment (includes child components)
 - `updateCabinetLock()` - Updates lock states
@@ -490,7 +505,7 @@ const yourNewTypeCabinetIds = prev
   .map((cab) => cab.cabinetId)
 ```
 
-2. **Handle cleanup in `deleteCabinet` if needed**
+2. **Handle cleanup in `deleteCabinet` if needed** (renumbering is handled automatically)
 
 ---
 
@@ -512,6 +527,7 @@ const legacyCategoryMap: Record<type3D, CabinetType> = {
   kicker: "kicker",
   benchtop: "benchtop",
   underPanel: "underPanel",
+  appliance: "appliance",
   // yourNewType: "yourNewType",  // <-- Add mapping here
 }
 ```
@@ -519,6 +535,7 @@ const legacyCategoryMap: Record<type3D, CabinetType> = {
 **What to modify when adding a new cabinet type:**
 
 - Add the mapping from the ERP's `type3D` value to your new `CabinetType`
+- Handle any special `additionalProps` for the new type (like `benchtopHeightFromFloor`)
 
 ---
 
@@ -541,16 +558,17 @@ const legacyCategoryMap: Record<type3D, CabinetType> = {
 
 **What to modify when adding a new cabinet type:**
 
-1. **In `serializeRoom`, save any new parent relationship fields:**
+1. **In `serializeRoom`, save any new parent relationship fields and type-specific properties:**
 
 ```typescript
 return {
   // ... existing fields
   yourNewTypeParentCabinetId: cabinet.yourNewTypeParentCabinetId,
+  yourNewTypeProperty: cabinet.yourNewTypeProperty,
 }
 ```
 
-2. **In `restoreRoom`, restore the new relationships:**
+2. **In `restoreRoom`, restore the new relationships and properties:**
 
 ```typescript
 // Map yourNewTypeParentCabinetId
@@ -559,6 +577,11 @@ if (savedCabinet.yourNewTypeParentCabinetId) {
   if (newParentId) {
     cabinetData.yourNewTypeParentCabinetId = newParentId
   }
+}
+
+// Restore properties
+if (savedCabinet.yourNewTypeProperty !== undefined) {
+  cabinetData.yourNewTypeProperty = savedCabinet.yourNewTypeProperty
 }
 ```
 
@@ -618,8 +641,9 @@ export interface Category {
 **Key features:**
 
 - Uses hooks for state management (useGDMapping, usePanelState, etc.)
-- Renders DimensionsSection, MaterialsSection, ViewSelector, etc.
+- Renders DimensionsSection, MaterialsSection, GroupingSection, etc.
 - Handles off-the-floor positioning for fillers/panels
+- Handles benchtop-specific settings
 
 **What to modify when adding a new cabinet type:**
 
@@ -645,6 +669,8 @@ export interface Category {
 )}
 ```
 
+3. **Add to `GroupingSection` if it needs view/pair/sync support.**
+
 ---
 
 ### Scene UI Components ([src/features/scene/ui/](../src/features/scene/ui/))
@@ -661,7 +687,7 @@ export interface Category {
 **When adding a new child cabinet type:**
 
 1. Create a new modal component following the existing patterns
-2. Add the modal to ThreeScene.tsx
+2. Add the modal to `ThreeScene.tsx`
 3. Wire up to the appropriate handler
 
 ---
@@ -711,10 +737,21 @@ private formatCabinetName(cabinetType: string): string {
 2. **Handle special material logic in `updateCabinetParts` if needed:**
 
 ```typescript
-// If your new type has special material handling
+// If your new type has special material handling (e.g., using materialOptions)
 const isYourNewType = partDim.partName.includes("YourNewPart")
 if (isYourNewType) {
-  // Special material logic
+  // Special material logic using getCarcassColorName or getDoorColorName
+}
+```
+
+3. **Skip non-manufactured types in `updateCabinetParts`:**
+
+```typescript
+if (
+  cabinet.cabinetType === "appliance" ||
+  cabinet.cabinetType === "yourNonManufacturedType"
+) {
+  return
 }
 ```
 
@@ -740,6 +777,7 @@ if (isYourNewType) {
 export interface SavedCabinet {
   // ... existing fields
   yourNewTypeParentCabinetId?: string // <-- Add if child type
+  yourNewTypeProperty?: number // <-- Add type-specific properties
 }
 ```
 

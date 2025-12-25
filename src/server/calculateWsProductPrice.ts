@@ -69,9 +69,21 @@ export async function calculateWsProductPrice(
 
   let response: Response
   try {
+    // Normalize dimension values: "yes"/"no" -> 1/0
+    const normalizedDims = Object.fromEntries(
+      Object.entries(payload.dims).map(([key, value]) => {
+        if (typeof value === "string") {
+          const lowerValue = value.toLowerCase()
+          if (lowerValue === "yes") return [key, 1]
+          if (lowerValue === "no") return [key, 0]
+        }
+        return [key, value]
+      })
+    )
+
     const requestBody = {
       productId: payload.productId,
-      dimensions: payload.dims,
+      dimensions: normalizedDims,
       materials: payload.materialSelections,
       currencyCode: payload.currencyCode,
     }

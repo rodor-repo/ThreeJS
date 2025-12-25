@@ -32,14 +32,14 @@ export const SaveModal: React.FC<SaveModalProps> = ({
   return (
     <AnimatePresence>
       {isOpen && (
-        <>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black bg-opacity-50 z-[100]"
+            className="absolute inset-0 bg-black bg-opacity-50"
           />
 
           {/* Modal */}
@@ -48,7 +48,7 @@ export const SaveModal: React.FC<SaveModalProps> = ({
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
             transition={{ duration: 0.2 }}
-            className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white rounded-lg shadow-xl z-[101]"
+            className="relative w-full max-w-md bg-white rounded-lg shadow-xl z-[101] overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
@@ -117,7 +117,7 @@ export const SaveModal: React.FC<SaveModalProps> = ({
               </button>
             </div>
           </motion.div>
-        </>
+        </div>
       )}
     </AnimatePresence>
   )

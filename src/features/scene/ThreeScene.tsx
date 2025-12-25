@@ -28,6 +28,7 @@ import { ViewDetailDrawer } from './ui/ViewDetailDrawer'
 import { ProductsListDrawer } from './ui/ProductsListDrawer'
 import { SaveModal } from './ui/SaveModal'
 import { DeleteConfirmationModal } from './ui/DeleteConfirmationModal'
+import { AddToCartModal } from './ui/AddToCartModal'
 import { NestingModal } from './ui/NestingModal'
 import { WsProducts, WsRooms } from '@/types/erpTypes'
 import type { ViewId } from '../cabinets/ViewManager'
@@ -57,6 +58,9 @@ import {
   handleBenchtopSelect as handleBenchtopSelectHandler,
   handleBenchtopToggle as handleBenchtopToggleHandler
 } from './utils/handlers/benchtopHandler'
+import { collectCartItems } from './utils/cartUtils'
+import { addToCart } from '@/server/addToCart'
+import toast from 'react-hot-toast'
 import { useWallTransparency } from './hooks/useWallTransparency'
 import { ModeToggle } from './ui/ModeToggle'
 import { CartSection } from './ui/CartSection'
@@ -528,9 +532,78 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     [cabinetGroups, updateCabinetLock]
   )
 
+  const [isAddingToCart, setIsAddingToCart] = useState(false)
+  const [showAddToCartModal, setShowAddToCartModal] = useState(false)
+  const [cartItemsToAdd, setCartItemsToAdd] = useState<{ items: ReturnType<typeof collectCartItems>['items'], skipped: ReturnType<typeof collectCartItems>['skipped'] } | null>(null)
+
   const handleAddToCart = useCallback(() => {
-    // TODO: Implement add to cart functionality
-  }, [])
+    if (cabinets.length === 0) {
+      toast.error("No cabinets in the scene to add to cart.")
+      return
+    }
+
+    // Collect items from all cabinets
+    const { items, skipped } = collectCartItems(cabinets)
+
+    console.log({ items, skipped })
+
+    if (items.length === 0) {
+      toast.error(
+        skipped.length > 0
+          ? `No items ready. ${skipped.length} cabinet(s) need configuration.`
+          : "Please configure your cabinets first."
+      )
+      return
+    }
+
+    // Store items and open modal
+    setCartItemsToAdd({ items, skipped })
+    setShowAddToCartModal(true)
+  }, [cabinets])
+
+  const handleConfirmAddToCart = useCallback(async (projectName: string, userEmail: string) => {
+    if (!cartItemsToAdd) return
+
+    setIsAddingToCart(true)
+
+    try {
+      const response = await addToCart(cartItemsToAdd.items, projectName, userEmail)
+
+      if (response.success) {
+        setShowAddToCartModal(false)
+        setCartItemsToAdd(null)
+        
+        if (response.itemErrors && response.itemErrors.length > 0) {
+          toast.success(
+            `Added ${response.itemsAdded} item(s) to cart! (${response.itemErrors.length} had errors)`,
+            { duration: 5000 }
+          )
+        } else {
+          toast.success(
+            `Added ${response.itemsAdded} item(s) to cart! Total: $${response.projectTotals.totalPrice.toFixed(2)}`,
+            { duration: 4000 }
+          )
+        }
+      } else {
+        toast.error(
+          `Failed to add to cart: ${response.error}`,
+          { duration: 5000 }
+        )
+      }
+    } catch (error) {
+      console.error("Add to cart error:", error)
+      toast.error("An unexpected error occurred. Please try again.")
+    } finally {
+      setIsAddingToCart(false)
+    }
+  }, [cartItemsToAdd])
+
+  const handleCloseAddToCartModal = useCallback(() => {
+    if (!isAddingToCart) {
+      setShowAddToCartModal(false)
+      setCartItemsToAdd(null)
+    }
+  }, [isAddingToCart])
 
   const handleShowProducts = useCallback(() => {
     setShowProductsDrawer(true)
@@ -627,6 +700,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         totalPrice={totalPrice}
         onAddToCart={handleAddToCart}
         onShowProducts={handleShowProducts}
+        isLoading={isAddingToCart}
       />
 
       {selectedMode === 'admin' && (
@@ -1328,6 +1402,16 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
           }
         }}
         itemName="the selected cabinet"
+      />
+
+      {/* Add to Cart Modal */}
+      <AddToCartModal
+        isOpen={showAddToCartModal}
+        onClose={handleCloseAddToCartModal}
+        onConfirm={handleConfirmAddToCart}
+        itemCount={cartItemsToAdd?.items.length ?? 0}
+        skippedCount={cartItemsToAdd?.skipped.length ?? 0}
+        isLoading={isAddingToCart}
       />
 
       {/* Nesting Modal */}

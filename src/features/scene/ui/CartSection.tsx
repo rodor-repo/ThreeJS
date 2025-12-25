@@ -1,25 +1,47 @@
 import React from "react"
-import { ShoppingCart, ChevronDown } from "lucide-react"
+import { ShoppingCart, ChevronDown, Loader2 } from "lucide-react"
 
 interface CartSectionProps {
   totalPrice: number
   onAddToCart: () => void
   onShowProducts: () => void
+  isLoading?: boolean
 }
 
-export const CartSection: React.FC<CartSectionProps> = ({ totalPrice, onAddToCart, onShowProducts }) => {
+export const CartSection: React.FC<CartSectionProps> = ({ 
+  totalPrice, 
+  onAddToCart, 
+  onShowProducts,
+  isLoading = false 
+}) => {
   return (
     <div className="absolute top-4 right-4 flex flex-col items-end gap-2 z-10">
       <button
         onClick={(e) => {
           e.stopPropagation()
-          onAddToCart()
+          if (!isLoading) {
+            onAddToCart()
+          }
         }}
-        className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg shadow-lg transition-colors duration-200 flex items-center gap-2 w-full"
-        title="Add to Cart"
+        disabled={isLoading}
+        className={`${
+          isLoading 
+            ? "bg-green-400 cursor-not-allowed" 
+            : "bg-green-600 hover:bg-green-700"
+        } text-white px-6 py-3 rounded-lg shadow-lg transition-colors duration-200 flex items-center justify-center gap-2 w-full`}
+        title={isLoading ? "Adding to cart..." : "Add to Cart"}
       >
-        <ShoppingCart size={20} />
-        <span>Add to Cart</span>
+        {isLoading ? (
+          <>
+            <Loader2 size={20} className="animate-spin" />
+            <span>Adding...</span>
+          </>
+        ) : (
+          <>
+            <ShoppingCart size={20} />
+            <span>Add to Cart</span>
+          </>
+        )}
       </button>
 
       <div

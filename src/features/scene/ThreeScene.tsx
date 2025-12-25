@@ -98,7 +98,7 @@ interface ThreeSceneProps {
   /** Current app mode - admin or user */
   selectedMode: AppMode
   /** Callback when mode changes */
-  setSelectedMode: React.Dispatch<React.SetStateAction<AppMode>>
+  setSelectedMode: (mode: AppMode) => void
 }
 
 const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChange, selectedCategory, selectedSubcategory, isMenuOpen = false, selectedProductId, wsProducts, onLoadRoomReady, selectedApplianceType, onApplianceCreated, currentRoomId, wsRooms, selectedMode, setSelectedMode }) => {
@@ -879,6 +879,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         onSaveRoom={handleSaveUserRoom}
         isLoading={isAddingToCart}
         isSaving={isSavingRoom}
+        appMode={selectedMode}
       />
 
       {selectedMode === 'admin' && (

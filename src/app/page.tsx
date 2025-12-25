@@ -29,6 +29,9 @@ export default function Home() {
   // URL query state for room selection
   const [roomId, setRoomId] = useQueryState('roomId')
 
+  // URL query state for app mode (admin/user)
+  const [modeParam, setModeParam] = useQueryState('mode')
+
   // Fetch wsRooms config via React Query
   const { data: wsRooms, isLoading: wsRoomsLoading } = useWsRoomsQuery()
 
@@ -144,6 +147,18 @@ export default function Home() {
     setSelectedProductId(undefined)
   }
 
+  // Sync selectedMode with mode query param
+  useEffect(() => {
+    if (modeParam === 'admin' || modeParam === 'user') {
+      setSelectedMode(modeParam as AppMode)
+    }
+  }, [modeParam])
+
+  const handleModeChange = useCallback((mode: AppMode) => {
+    setSelectedMode(mode)
+    setModeParam(mode)
+  }, [setModeParam])
+
   return (
     <main className="h-screen w-full relative">
       {/* Main Menu - Hidden in User mode */}
@@ -183,7 +198,7 @@ export default function Home() {
         currentRoomId={roomId}
         wsRooms={wsRooms ?? null}
         selectedMode={selectedMode}
-        setSelectedMode={setSelectedMode}
+        setSelectedMode={handleModeChange}
       />
     </main>
   )

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Move, Focus, Trash2, Box } from 'lucide-react'
+import type { AppMode } from '../context/ModeContext'
 
 type Props = {
   isDragging: boolean
@@ -18,9 +19,10 @@ type Props = {
   isMenuOpen?: boolean
   isOrthoView?: boolean
   onResetTo3D?: () => void
+  mode?: AppMode
 }
 
-export const CameraControls: React.FC<Props> = ({ isDragging, cameraMode, onToggleMode, onReset, onClear, onX, onY, onZ, onToggleDimensions, onToggleNumbers, numbersVisible = false, onDelete, canDelete = false, isMenuOpen = false, isOrthoView = false, onResetTo3D }) => {
+export const CameraControls: React.FC<Props> = ({ isDragging, cameraMode, onToggleMode, onReset, onClear, onX, onY, onZ, onToggleDimensions, onToggleNumbers, numbersVisible = false, onDelete, canDelete = false, isMenuOpen = false, isOrthoView = false, onResetTo3D, mode = 'admin' }) => {
   const [isHovered, setIsHovered] = useState(false)
   const [showXYZButtons, setShowXYZButtons] = useState(false)
   const xyzContainerRef = useRef<HTMLDivElement>(null)
@@ -162,15 +164,17 @@ export const CameraControls: React.FC<Props> = ({ isDragging, cameraMode, onTogg
         )}
       </div>
 
-      <button
-        onClick={onClear}
-        className="bg-red-600 hover:bg-red-700 text-white p-3 rounded-full shadow-lg transition-colors duration-200"
-        title="Clear all cabinets"
-      >
-        <div className="flex items-center justify-center w-6 h-6">
-          <span className="text-lg font-bold">C</span>
-        </div>
-      </button>
+      {mode === 'admin' && (
+        <button
+          onClick={onClear}
+          className="bg-red-600 hover:bg-red-700 text-white p-3 rounded-full shadow-lg transition-colors duration-200"
+          title="Clear all cabinets"
+        >
+          <div className="flex items-center justify-center w-6 h-6">
+            <span className="text-lg font-bold">C</span>
+          </div>
+        </button>
+      )}
 
       {onToggleDimensions && (
         <button
@@ -196,7 +200,7 @@ export const CameraControls: React.FC<Props> = ({ isDragging, cameraMode, onTogg
         </button>
       )}
 
-      {onDelete && (
+      {mode === 'admin' && onDelete && (
         <button
           onClick={(e) => {
             e.stopPropagation()

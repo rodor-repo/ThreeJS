@@ -28,6 +28,7 @@ import { ViewDetailDrawer } from './ui/ViewDetailDrawer'
 import { ProductsListDrawer } from './ui/ProductsListDrawer'
 import { SaveModal } from './ui/SaveModal'
 import { DeleteConfirmationModal } from './ui/DeleteConfirmationModal'
+import { AddToCartModal } from './ui/AddToCartModal'
 import { NestingModal } from './ui/NestingModal'
 import { WsProducts, WsRooms } from '@/types/erpTypes'
 import type { ViewId } from '../cabinets/ViewManager'
@@ -37,7 +38,7 @@ import { usePartData } from '@/nesting/usePartData'
 import { handleViewDimensionChange } from './utils/handlers/viewDimensionHandler'
 import { handleSplashbackHeightChange } from './utils/handlers/splashbackHandler'
 import { handleKickerHeightChange } from './utils/handlers/kickerHeightHandler'
-import { handleProductDimensionChange } from './utils/handlers/productDimensionHandler'
+import { handleProductDimensionChange, getWidthConstraints } from './utils/handlers/productDimensionHandler'
 import { handleDeleteCabinet } from './utils/handlers/deleteCabinetHandler'
 import { updateAllDependentComponents } from './utils/handlers/dependentComponentsHandler'
 import { handleFillerSelect as handleFillerSelectHandler, handleFillerToggle as handleFillerToggleHandler } from './utils/handlers/fillerHandler'
@@ -57,6 +58,10 @@ import {
   handleBenchtopSelect as handleBenchtopSelectHandler,
   handleBenchtopToggle as handleBenchtopToggleHandler
 } from './utils/handlers/benchtopHandler'
+import { collectCartItems } from './utils/cartUtils'
+import { addToCart } from '@/server/addToCart'
+import { useSaveUserRoom, useLoadUserRoom } from '@/hooks/useUserRoomsQuery'
+import toast from 'react-hot-toast'
 import { useWallTransparency } from './hooks/useWallTransparency'
 import { ModeToggle } from './ui/ModeToggle'
 import { CartSection } from './ui/CartSection'
@@ -64,6 +69,12 @@ import { BottomRightActions } from './ui/BottomRightActions'
 import { HistoryControls } from './ui/HistoryControls'
 import { SaveButton } from './ui/SaveButton'
 import { DimensionLineControls } from './ui/DimensionLineControls'
+import { AppMode, ModeContext } from './context/ModeContext'
+import { UserWidthSlider } from './ui/UserWidthSlider'
+import { UserRoomsModal } from './ui/UserRoomsModal'
+import { SaveRoomModal } from './ui/SaveRoomModal'
+import { serializeRoom } from './utils/roomPersistenceUtils'
+import type { UserSavedRoom, RoomCategory } from '@/data/savedRooms'
 
 interface ThreeSceneProps {
   wallDimensions: WallDims
@@ -84,18 +95,30 @@ interface ThreeSceneProps {
   currentRoomId?: string | null
   /** WsRooms config from Firestore - contains room categories and entries */
   wsRooms?: WsRooms | null
+  /** Current app mode - admin or user */
+  selectedMode: AppMode
+  /** Callback when mode changes */
+  setSelectedMode: React.Dispatch<React.SetStateAction<AppMode>>
 }
 
-const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChange, selectedCategory, selectedSubcategory, isMenuOpen = false, selectedProductId, wsProducts, onLoadRoomReady, selectedApplianceType, onApplianceCreated, currentRoomId, wsRooms }) => {
+const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChange, selectedCategory, selectedSubcategory, isMenuOpen = false, selectedProductId, wsProducts, onLoadRoomReady, selectedApplianceType, onApplianceCreated, currentRoomId, wsRooms, selectedMode, setSelectedMode }) => {
   const mountRef = useRef<HTMLDivElement>(null);
   const [cameraMode, setCameraMode] = useState<'constrained' | 'free'>('constrained')
   const [dimensionsVisible, setDimensionsVisible] = useState(true)
   const [numbersVisible, setNumbersVisible] = useState(false)
-  const [selectedMode, setSelectedMode] = useState<'admin' | 'user'>('user') // Radio button selection
+  // Use prop if provided, otherwise use internal state (for backward compatibility)
+  // const [internalMode, setInternalMode] = useState<AppMode>('admin')
+  // const selectedMode = selectedModeProp ?? internalMode
+  // const setSelectedMode = onModeChange ?? setInternalMode
   const [isOrthoView, setIsOrthoView] = useState(false) // Track ortho view state for UI
   const [cameraViewMode, setCameraViewMode] = useState<'x' | 'y' | 'z' | null>(null) // Track which ortho view is active
   const [showProductsDrawer, setShowProductsDrawer] = useState(false) // Control products list drawer
   const [showNestingModal, setShowNestingModal] = useState(false) // Control nesting modal
+  const [showUserRoomsModal, setShowUserRoomsModal] = useState(false) // Control user rooms modal
+  const [showSaveRoomModal, setShowSaveRoomModal] = useState(false) // Control save room modal
+  const [isSavingRoom, setIsSavingRoom] = useState(false) // Track save room loading state
+  // User room state: tracks if we're editing a previously saved user room
+  const [currentUserRoom, setCurrentUserRoom] = useState<UserSavedRoom | null>(null)
   // Cabinet groups: Map of cabinetId -> array of { cabinetId, percentage }
   const [cabinetGroups, setCabinetGroups] = useState<Map<string, Array<{ cabinetId: string; percentage: number }>>>(new Map())
   // Cabinet sync relationships: Map of cabinetId -> array of synced cabinetIds
@@ -147,6 +170,10 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
   // Part data manager - tracks all part dimensions (X, Y, Z) for export
   // Automatically updates when cabinets array changes
   const partData = usePartData(cabinets, wsProducts)
+
+  // User room mutations (React Query)
+  const saveUserRoomMutation = useSaveUserRoom()
+  const loadUserRoomMutation = useLoadUserRoom()
 
   // Snap guides for visual feedback during cabinet dragging
   const { updateSnapGuides, clearSnapGuides } = useSnapGuides(sceneRef, wallDimensions)
@@ -241,7 +268,8 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     leftWallRef,
     rightWallRef,
     handleWallClick,
-    { isOrthoActiveRef, orthoCameraRef } // orthoRefs
+    { isOrthoActiveRef, orthoCameraRef }, // orthoRefs
+    selectedMode
   )
 
   useWallTransparency({
@@ -518,9 +546,239 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     [cabinetGroups, updateCabinetLock]
   )
 
+  const [isAddingToCart, setIsAddingToCart] = useState(false)
+  const [showAddToCartModal, setShowAddToCartModal] = useState(false)
+  const [cartItemsToAdd, setCartItemsToAdd] = useState<{ items: ReturnType<typeof collectCartItems>['items'], skipped: ReturnType<typeof collectCartItems>['skipped'] } | null>(null)
+
   const handleAddToCart = useCallback(() => {
-    // TODO: Implement add to cart functionality
+    if (cabinets.length === 0) {
+      toast.error("No cabinets in the scene to add to cart.")
+      return
+    }
+
+    // Collect items from all cabinets
+    const { items, skipped } = collectCartItems(cabinets)
+
+    console.log({ items, skipped })
+
+    if (items.length === 0) {
+      toast.error(
+        skipped.length > 0
+          ? `No items ready. ${skipped.length} cabinet(s) need configuration.`
+          : "Please configure your cabinets first."
+      )
+      return
+    }
+
+    // Store items and open modal
+    setCartItemsToAdd({ items, skipped })
+    setShowAddToCartModal(true)
+  }, [cabinets])
+
+  const handleConfirmAddToCart = useCallback(async (projectName: string, userEmail: string) => {
+    if (!cartItemsToAdd) return
+
+    setIsAddingToCart(true)
+
+    try {
+      // Pass existing projectId if we're updating a user room
+      const response = await addToCart(
+        cartItemsToAdd.items, 
+        projectName, 
+        userEmail,
+        currentUserRoom?.projectId
+      )
+
+      if (response.success) {
+        // Save or update the user room after successful add to cart
+        if (currentRoomId) {
+          try {
+            // Get room category from wsRooms
+            const roomMeta = wsRooms?.rooms?.[currentRoomId]
+            const categoryId = roomMeta?.categoryId
+            const categoryName = categoryId
+              ? wsRooms?.categories?.[categoryId]?.category
+              : undefined
+
+            // Serialize current room state
+            const roomData = serializeRoom({
+              cabinets,
+              cabinetGroups,
+              wallDimensions,
+              wallColor,
+              activeViews: viewManager.activeViews,
+              getCabinetView: viewManager.getCabinetView,
+              wsProducts,
+              roomName: currentRoomName || projectName,
+              roomCategory: (categoryName as RoomCategory) || "Kitchen",
+              cabinetSyncs,
+            })
+
+            // Save user room with project details using mutation
+            const saveResult = await saveUserRoomMutation.mutateAsync({
+              ...roomData,
+              userRoomId: currentUserRoom?.id,
+              userEmail: userEmail.toLowerCase().trim(),
+              originalRoomId: currentRoomId,
+              originalRoomName: currentRoomName || "",
+              projectName,
+              projectId: response.projectId,
+              updatedAt: new Date().toISOString(),
+            })
+
+            // Update current user room state
+            setCurrentUserRoom((prev) => ({
+              ...roomData,
+              id: saveResult.userRoomId,
+              userEmail: userEmail.toLowerCase().trim(),
+              originalRoomId: currentRoomId,
+              originalRoomName: currentRoomName || "",
+              projectName,
+              projectId: response.projectId,
+              createdAt: prev?.createdAt || new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            }))
+
+            console.log("User room saved:", saveResult.userRoomId)
+          } catch (saveError) {
+            console.error("Failed to save user room:", saveError)
+            // Don't fail the whole operation if room save fails
+          }
+        }
+
+        setShowAddToCartModal(false)
+        setCartItemsToAdd(null)
+        
+        if (response.itemErrors && response.itemErrors.length > 0) {
+          toast.success(
+            `Added ${response.itemsAdded} item(s) to cart! (${response.itemErrors.length} had errors)`,
+            { duration: 5000 }
+          )
+        } else {
+          toast.success(
+            `Added ${response.itemsAdded} item(s) to cart! Total: $${response.projectTotals.totalPrice.toFixed(2)}`,
+            { duration: 4000 }
+          )
+        }
+      } else {
+        toast.error(
+          `Failed to add to cart: ${response.error}`,
+          { duration: 5000 }
+        )
+      }
+    } catch (error) {
+      console.error("Add to cart error:", error)
+      toast.error("An unexpected error occurred. Please try again.")
+    } finally {
+      setIsAddingToCart(false)
+    }
+  }, [cartItemsToAdd, currentUserRoom, currentRoomId, currentRoomName, wsRooms, cabinets, cabinetGroups, wallDimensions, wallColor, viewManager, wsProducts, cabinetSyncs, saveUserRoomMutation])
+
+  const handleCloseAddToCartModal = useCallback(() => {
+    if (!isAddingToCart) {
+      setShowAddToCartModal(false)
+      setCartItemsToAdd(null)
+    }
+  }, [isAddingToCart])
+
+  // Handler to show user rooms modal
+  const handleShowMyRooms = useCallback(() => {
+    setShowUserRoomsModal(true)
   }, [])
+
+  // Handler to load a user room
+  const handleLoadUserRoom = useCallback(async (userRoomId: string) => {
+    try {
+      const userRoom = await loadUserRoomMutation.mutateAsync(userRoomId)
+      if (userRoom) {
+        // Set the user room state first
+        setCurrentUserRoom(userRoom)
+        // Load the room using existing room loading logic
+        await loadRoom(userRoom)
+        // Reset history with the loaded room
+        resetHistory(userRoom)
+        setShowUserRoomsModal(false)
+        toast.success(`Loaded: ${userRoom.name}`)
+      } else {
+        toast.error("Room not found")
+      }
+    } catch (err) {
+      console.error("Failed to load user room:", err)
+      toast.error("Failed to load room. Please try again.")
+    }
+  }, [loadRoom, resetHistory, loadUserRoomMutation])
+
+  // Handler to show save user room modal
+  const handleSaveUserRoom = useCallback(() => {
+    if (!currentRoomId) {
+      toast.error("Please load a room template first")
+      return
+    }
+    setShowSaveRoomModal(true)
+  }, [currentRoomId])
+
+  // Handler to confirm save room (without adding to cart)
+  const handleConfirmSaveRoom = useCallback(async (projectName: string, userEmail: string) => {
+    if (!currentRoomId) return
+
+    setIsSavingRoom(true)
+
+    try {
+      // Get room category from wsRooms
+      const roomMeta = wsRooms?.rooms?.[currentRoomId]
+      const categoryId = roomMeta?.categoryId
+      const categoryName = categoryId
+        ? wsRooms?.categories?.[categoryId]?.category
+        : undefined
+
+      // Serialize current room state
+      const roomData = serializeRoom({
+        cabinets,
+        cabinetGroups,
+        wallDimensions,
+        wallColor,
+        activeViews: viewManager.activeViews,
+        getCabinetView: viewManager.getCabinetView,
+        wsProducts,
+        roomName: currentRoomName || projectName,
+        roomCategory: (categoryName as RoomCategory) || "Kitchen",
+        cabinetSyncs,
+      })
+
+      // Save user room using mutation
+      const saveResult = await saveUserRoomMutation.mutateAsync({
+        ...roomData,
+        userRoomId: currentUserRoom?.id,
+        userEmail: userEmail.toLowerCase().trim(),
+        originalRoomId: currentRoomId,
+        originalRoomName: currentRoomName || "",
+        projectName,
+        projectId: currentUserRoom?.projectId,
+        updatedAt: new Date().toISOString(),
+      })
+
+      // Update current user room state
+      setCurrentUserRoom((prev) => ({
+        ...roomData,
+        id: saveResult.userRoomId,
+        userEmail: userEmail.toLowerCase().trim(),
+        originalRoomId: currentRoomId,
+        originalRoomName: currentRoomName || "",
+        projectName,
+        projectId: currentUserRoom?.projectId,
+        createdAt: prev?.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }))
+
+      setShowSaveRoomModal(false)
+      toast.success("Room saved successfully!")
+    } catch (error) {
+      console.error("Failed to save room:", error)
+      toast.error("Failed to save room. Please try again.")
+    } finally {
+      setIsSavingRoom(false)
+    }
+  }, [currentRoomId, currentRoomName, currentUserRoom, wsRooms, cabinets, cabinetGroups, wallDimensions, wallColor, viewManager, wsProducts, cabinetSyncs, saveUserRoomMutation])
 
   const handleShowProducts = useCallback(() => {
     setShowProductsDrawer(true)
@@ -571,8 +829,42 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     setShowNestingModal(true)
   }, [])
 
+  // Handle width change from UserWidthSlider in User mode
+  // Uses actual selectedCabinets to support sync relationships when multiple cabinets are selected
+  const handleUserWidthChange = useCallback((cabinetId: string, newWidth: number) => {
+    const cabinet = cabinets.find(c => c.cabinetId === cabinetId)
+    if (!cabinet) return
+
+    handleProductDimensionChange(
+      {
+        width: newWidth,
+        height: cabinet.carcass.dimensions.height,
+        depth: cabinet.carcass.dimensions.depth
+      },
+      {
+        selectedCabinet: cabinet,
+        cabinets,
+        cabinetSyncs,
+        selectedCabinets,
+        cabinetGroups,
+        viewManager,
+        wallDimensions
+      }
+    )
+
+    // Update part data for all affected cabinets
+    partData.updateCabinet(cabinet)
+    // Also update synced cabinets if they exist
+    const syncedCabinetIds = cabinetSyncs.get(cabinet.cabinetId) || []
+    syncedCabinetIds.forEach(syncId => {
+      const syncedCab = cabinets.find(c => c.cabinetId === syncId)
+      if (syncedCab) partData.updateCabinet(syncedCab)
+    })
+    debouncedIncrementDimensionVersion()
+  }, [cabinets, cabinetSyncs, cabinetGroups, viewManager, wallDimensions, partData, debouncedIncrementDimensionVersion, selectedCabinets])
 
   return (
+    <ModeContext.Provider value={selectedMode}>
     <div className="relative w-full h-screen overflow-hidden">
       {/* 3D Scene Container */}
       <div ref={mountRef} className="w-full h-full" />
@@ -583,14 +875,20 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         totalPrice={totalPrice}
         onAddToCart={handleAddToCart}
         onShowProducts={handleShowProducts}
+        onShowMyRooms={handleShowMyRooms}
+        onSaveRoom={handleSaveUserRoom}
+        isLoading={isAddingToCart}
+        isSaving={isSavingRoom}
       />
 
-      <BottomRightActions
-        cabinetsCount={cabinets.length}
-        onExport={handleExport}
-        onNesting={handleNesting}
-        onSettings={handleSettingsClick}
-      />
+      {selectedMode === 'admin' && (
+        <BottomRightActions
+          cabinetsCount={cabinets.length}
+          onExport={handleExport}
+          onNesting={handleNesting}
+          onSettings={handleSettingsClick}
+        />
+      )}
 
       {/* Settings Sidebar */}
       <SettingsSidebar
@@ -722,13 +1020,14 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         isMenuOpen={isMenuOpen}
         isOrthoView={isOrthoView}
         onResetTo3D={() => { resetToPerspective(zoomLevel); setIsOrthoView(false); setCameraViewMode(null); }}
+        mode={selectedMode}
       />
 
       {/* Camera Movement Instructions moved to CameraControls component - appears on hover */}
 
-      {/* Cabinet Lock Icons - appear on double-click */}
+      {/* Cabinet Lock Icons - appear on double-click (Admin mode only) */}
       {/* Don't show icons for fillers/panels added from modal (marked with hideLockIcons) */}
-      {cabinetWithLockIcons &&
+      {selectedMode === 'admin' && cabinetWithLockIcons &&
         !cabinetWithLockIcons.hideLockIcons && (
           <CabinetLockIcons
             cabinet={cabinetWithLockIcons}
@@ -758,6 +1057,20 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
           />
         )}
 
+      {/* User Width Slider - appears on right-click (User mode only) */}
+      {selectedMode === 'user' && cabinetWithLockIcons && (() => {
+        const constraints = getWidthConstraints(cabinetWithLockIcons.productId)
+        return (
+          <UserWidthSlider
+            cabinet={cabinetWithLockIcons}
+            onClose={() => setCabinetWithLockIcons(null)}
+            onWidthChange={handleUserWidthChange}
+            minWidth={constraints?.min}
+            maxWidth={constraints?.max}
+          />
+        )
+      })()}
+
       {/* CabinetsInfoPanel hidden per user request */}
       {/* <CabinetsInfoPanel cabinets={cabinets} /> */}
 
@@ -783,8 +1096,8 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         />
       )}
 
-      {/* Product Panel - shown when NON-appliance cabinet is selected (includes benchtops) */}
-      {showProductPanel && selectedCabinet?.cabinetType !== 'appliance' && (
+      {/* Product Panel - shown when NON-appliance cabinet is selected (Admin mode only) */}
+      {selectedMode === 'admin' && showProductPanel && selectedCabinet?.cabinetType !== 'appliance' && (
         <ProductPanel
           isVisible={true}
           onClose={() => {
@@ -1269,6 +1582,36 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         itemName="the selected cabinet"
       />
 
+      {/* Add to Cart Modal */}
+      <AddToCartModal
+        isOpen={showAddToCartModal}
+        onClose={handleCloseAddToCartModal}
+        onConfirm={handleConfirmAddToCart}
+        itemCount={cartItemsToAdd?.items.length ?? 0}
+        skippedCount={cartItemsToAdd?.skipped.length ?? 0}
+        isLoading={isAddingToCart}
+        initialEmail={currentUserRoom?.userEmail}
+        initialProjectName={currentUserRoom?.projectName}
+        isUserRoomMode={!!currentUserRoom}
+      />
+
+      {/* User Rooms Modal */}
+      <UserRoomsModal
+        isOpen={showUserRoomsModal}
+        onClose={() => setShowUserRoomsModal(false)}
+        onSelectRoom={handleLoadUserRoom}
+      />
+
+      {/* Save Room Modal */}
+      <SaveRoomModal
+        isOpen={showSaveRoomModal}
+        onClose={() => setShowSaveRoomModal(false)}
+        onConfirm={handleConfirmSaveRoom}
+        isLoading={isSavingRoom}
+        initialEmail={currentUserRoom?.userEmail}
+        initialProjectName={currentUserRoom?.projectName}
+      />
+
       {/* Nesting Modal */}
       <NestingModal
         isOpen={showNestingModal}
@@ -1297,7 +1640,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         jumpTo={jumpTo}
       />
 
-      <SaveButton onSave={openSaveModal} />
+      {selectedMode === 'admin' && <SaveButton onSave={openSaveModal} />}
 
       <DimensionLineControls
         hasSelection={!!selectedDimLineId}
@@ -1307,7 +1650,8 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         isOrthoView={isOrthoView}
       />
     </div>
-  );
-};
+    </ModeContext.Provider>
+  )
+}
 
-export default WallScene;
+export default WallScene

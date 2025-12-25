@@ -306,9 +306,10 @@ export async function restoreRoom({
   setWallColor(savedRoom.wallSettings.color)
 
   // Extract all unique product IDs from saved cabinets and prefetch their data
+  // Skip appliance products as they don't need cabinet type fetching
   const productIds = savedRoom.cabinets
     .map((c) => c.productId)
-    .filter((id): id is string => !!id)
+    .filter((id): id is string => !!id && !id.startsWith("appliance-"))
   await prefetchProductData(productIds)
 
   // After prefetching, sync material options for all productIds (including cached ones)

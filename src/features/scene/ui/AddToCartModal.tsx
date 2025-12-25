@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, ShoppingCart } from 'lucide-react'
+import { X, ShoppingCart, RefreshCw } from 'lucide-react'
 
 interface AddToCartModalProps {
   isOpen: boolean
@@ -9,6 +9,12 @@ interface AddToCartModalProps {
   itemCount: number
   skippedCount: number
   isLoading?: boolean
+  /** Pre-fill email (for user room mode) */
+  initialEmail?: string
+  /** Pre-fill project name (for user room mode) */
+  initialProjectName?: string
+  /** Whether updating an existing project */
+  isUserRoomMode?: boolean
 }
 
 export const AddToCartModal: React.FC<AddToCartModalProps> = ({
@@ -17,7 +23,10 @@ export const AddToCartModal: React.FC<AddToCartModalProps> = ({
   onConfirm,
   itemCount,
   skippedCount,
-  isLoading = false
+  isLoading = false,
+  initialEmail,
+  initialProjectName,
+  isUserRoomMode = false,
 }) => {
   const defaultProjectName = `Kitchen Design - ${new Date().toLocaleDateString("en-AU", {
     day: "2-digit",
@@ -27,21 +36,34 @@ export const AddToCartModal: React.FC<AddToCartModalProps> = ({
 
   const [projectName, setProjectName] = useState(defaultProjectName)
   const [userEmail, setUserEmail] = useState('')
+  const hasInitialized = useRef(false)
 
-  // Load email from localStorage on mount
+  // Load email from initialEmail prop or localStorage on mount
   useEffect(() => {
-    const savedEmail = localStorage.getItem('userEmail')
-    if (savedEmail) {
-      setUserEmail(savedEmail)
+    if (initialEmail) {
+      setUserEmail(initialEmail)
+    } else {
+      const savedEmail = localStorage.getItem('userEmail')
+      if (savedEmail) {
+        setUserEmail(savedEmail)
+      }
     }
-  }, [])
+  }, [initialEmail])
 
-  // Reset project name when modal opens
+  // Set project name when modal opens
   useEffect(() => {
     if (isOpen) {
-      setProjectName(defaultProjectName)
+      // Use initialProjectName if provided (user room mode), otherwise use default
+      if (initialProjectName && !hasInitialized.current) {
+        setProjectName(initialProjectName)
+        hasInitialized.current = true
+      } else if (!initialProjectName) {
+        setProjectName(defaultProjectName)
+      }
+    } else {
+      hasInitialized.current = false
     }
-  }, [isOpen, defaultProjectName])
+  }, [isOpen, initialProjectName, defaultProjectName])
 
   const handleConfirm = () => {
     if (projectName.trim() && userEmail.trim()) {
@@ -110,6 +132,12 @@ export const AddToCartModal: React.FC<AddToCartModalProps> = ({
                     ({skippedCount} item{skippedCount !== 1 ? 's' : ''} will be skipped - not configured)
                   </p>
                 )}
+                {isUserRoomMode && (
+                  <p className="text-blue-600 text-sm mt-2 flex items-center justify-center gap-1">
+                    <RefreshCw size={14} />
+                    Updating existing project
+                  </p>
+                )}
               </div>
 
               <div className="space-y-4">
@@ -128,7 +156,7 @@ export const AddToCartModal: React.FC<AddToCartModalProps> = ({
                     autoFocus={!userEmail}
                   />
                   <p className="text-xs text-gray-500">
-                    The email associated with your nbb webshop account.
+                    The email associated with your webshop account.
                   </p>
                 </div>
 

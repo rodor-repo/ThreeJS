@@ -125,6 +125,49 @@ export interface SavedRoom {
 }
 
 /**
+ * User-specific room data stored in Firestore.
+ * Extends SavedRoom with user context and webshop project details.
+ *
+ * Storage path: companies/{companyId}/wsUserRooms/{userRoomId}
+ */
+export interface UserSavedRoom extends SavedRoom {
+  /** User's email address - used for querying */
+  userEmail: string
+  /** Original admin template room ID */
+  originalRoomId: string
+  /** Original admin template room name (for display) */
+  originalRoomName: string
+  /** Webshop project name */
+  projectName: string
+  /** Webshop project ID (returned from addToCart) */
+  projectId?: string
+  /** Timestamp when user room was created */
+  createdAt: string
+  /** Timestamp when user room was last updated */
+  updatedAt: string
+}
+
+/**
+ * Minimal data for user room list display (lightweight query)
+ */
+export interface UserRoomListItem {
+  /** Firestore document ID */
+  id: string
+  /** User-friendly room name (from SavedRoom.name or generated) */
+  name: string
+  /** Original template name */
+  originalRoomName: string
+  /** Project name for webshop */
+  projectName: string
+  /** Project ID if already added to cart */
+  projectId?: string
+  /** Last updated timestamp */
+  updatedAt: string
+  /** Room category */
+  category: RoomCategory
+}
+
+/**
  * Generate a unique ID for a room.
  * Used for local state management.
  */

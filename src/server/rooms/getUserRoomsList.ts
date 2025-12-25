@@ -1,0 +1,66 @@
+"use server"
+
+import { getAdminDb, getCompanyId } from "@/server/firebase"
+import type { UserRoomListItem, RoomCategory } from "@/data/savedRooms"
+
+/**
+ * Get a list of user's saved rooms.
+ *
+ * Path: companies/{companyId}/wsUserRooms (query by userEmail)
+ *
+ * Returns minimal data for list display, sorted by updatedAt desc (client-side).
+ * Uses .select() for better performance by only fetching needed fields.
+ *
+ * @param userEmail - The user's email to query
+ * @returns Array of user room list items
+ */
+export async function getUserRoomsList(
+  userEmail: string
+): Promise<UserRoomListItem[]> {
+  if (!userEmail) {
+    throw new Error("userEmail is required to get user rooms list")
+  }
+
+  const db = getAdminDb()
+  const companyId = getCompanyId()
+
+  const collectionRef = db
+    .collection("companies")
+    .doc(companyId)
+    .collection("wsUserRooms")
+
+  // Query by email only (no orderBy to avoid needing a composite index)
+  // Uses .select() to only fetch the fields we need for the list view
+  const querySnapshot = await collectionRef
+    .where("userEmail", "==", userEmail.toLowerCase().trim())
+    .select(
+      "name",
+      "originalRoomName",
+      "projectName",
+      "projectId",
+      "updatedAt",
+      "createdAt",
+      "category"
+    )
+    .get()
+
+  const rooms = querySnapshot.docs.map((doc) => {
+    const data = doc.data()
+    return {
+      id: doc.id,
+      name: data.name || `Room ${doc.id.slice(-6)}`,
+      originalRoomName: data.originalRoomName || "Unknown Template",
+      projectName: data.projectName || "",
+      projectId: data.projectId,
+      updatedAt: data.updatedAt || data.createdAt || "",
+      category: (data.category as RoomCategory) || "Kitchen",
+    }
+  })
+
+  // Sort by updatedAt descending (most recent first) - client-side sort
+  return rooms.sort((a, b) => {
+    const dateA = new Date(a.updatedAt).getTime() || 0
+    const dateB = new Date(b.updatedAt).getTime() || 0
+    return dateB - dateA
+  })
+}

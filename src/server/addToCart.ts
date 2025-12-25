@@ -21,6 +21,7 @@ export type AddToCartRequest = {
   userEmail: string
   projectName: string
   items: ProductConfig[]
+  projectId?: string
 }
 
 export type ItemError = {
@@ -62,11 +63,13 @@ export type AddToCartResponse =
  * @param items - Array of product configurations to add to cart
  * @param projectName - Name for the shopping cart project (optional, defaults to timestamp-based name)
  * @param userEmail - Email of the user (optional, defaults to it@cabinetworx.com.au)
+ * @param projectId - Existing project ID for updating (optional, creates new project if not provided)
  */
 export async function addToCart(
   items: ProductConfig[],
   projectName?: string,
-  userEmail?: string
+  userEmail?: string,
+  projectId?: string
 ): Promise<AddToCartResponse> {
   if (!items || items.length === 0) {
     return {
@@ -140,6 +143,7 @@ export async function addToCart(
     userEmail: finalUserEmail,
     projectName: finalProjectName,
     items: normalizedItems,
+    ...(projectId && { projectId }),
   }
 
   let response: Response

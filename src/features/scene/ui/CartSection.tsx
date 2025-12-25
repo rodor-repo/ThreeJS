@@ -1,18 +1,24 @@
 import React from "react"
-import { ShoppingCart, ChevronDown, Loader2 } from "lucide-react"
+import { ShoppingCart, ChevronDown, Loader2, FolderOpen, Save } from "lucide-react"
 
 interface CartSectionProps {
   totalPrice: number
   onAddToCart: () => void
   onShowProducts: () => void
+  onShowMyRooms?: () => void
+  onSaveRoom?: () => void
   isLoading?: boolean
+  isSaving?: boolean
 }
 
-export const CartSection: React.FC<CartSectionProps> = ({ 
-  totalPrice, 
-  onAddToCart, 
+export const CartSection: React.FC<CartSectionProps> = ({
+  totalPrice,
+  onAddToCart,
   onShowProducts,
-  isLoading = false 
+  onShowMyRooms,
+  onSaveRoom,
+  isLoading = false,
+  isSaving = false,
 }) => {
   return (
     <div className="absolute top-4 right-4 flex flex-col items-end gap-2 z-10">
@@ -24,11 +30,10 @@ export const CartSection: React.FC<CartSectionProps> = ({
           }
         }}
         disabled={isLoading}
-        className={`${
-          isLoading 
-            ? "bg-green-400 cursor-not-allowed" 
-            : "bg-green-600 hover:bg-green-700"
-        } text-white px-6 py-3 rounded-lg shadow-lg transition-colors duration-200 flex items-center justify-center gap-2 w-full`}
+        className={`${isLoading
+          ? "bg-green-400 cursor-not-allowed"
+          : "bg-green-600 hover:bg-green-700"
+          } text-white px-6 py-3 rounded-lg shadow-lg transition-colors duration-200 flex items-center justify-center gap-2 w-full`}
         title={isLoading ? "Adding to cart..." : "Add to Cart"}
       >
         {isLoading ? (
@@ -43,6 +48,49 @@ export const CartSection: React.FC<CartSectionProps> = ({
           </>
         )}
       </button>
+
+      {onShowMyRooms && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            onShowMyRooms()
+          }}
+          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg shadow-lg transition-colors duration-200 flex items-center justify-center gap-2 w-full text-sm"
+          title="View My Saved Rooms"
+        >
+          <FolderOpen size={16} />
+          <span>My Rooms</span>
+        </button>
+      )}
+
+      {onSaveRoom && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            if (!isSaving) {
+              onSaveRoom()
+            }
+          }}
+          disabled={isSaving}
+          className={`${isSaving
+              ? "bg-gray-400 cursor-not-allowed"
+              : "bg-gray-600 hover:bg-gray-700"
+            } text-white px-4 py-2 rounded-lg shadow-lg transition-colors duration-200 flex items-center justify-center gap-2 w-full text-sm`}
+          title="Save Room Design"
+        >
+          {isSaving ? (
+            <>
+              <Loader2 size={16} className="animate-spin" />
+              <span>Saving...</span>
+            </>
+          ) : (
+            <>
+              <Save size={16} />
+              <span>Save Room</span>
+            </>
+          )}
+        </button>
+      )}
 
       <div
         className="bg-white px-4 py-1 rounded-lg shadow-lg border border-gray-200 w-full text-center relative"

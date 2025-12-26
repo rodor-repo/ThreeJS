@@ -7,6 +7,7 @@ import type { CabinetData, WallDimensions } from '@/features/scene/types'
 import { View, ViewId } from '@/features/cabinets/ViewManager'
 import { repositionViewCabinets, checkLeftWallOverflow } from '@/features/scene/utils/handlers/viewRepositionHandler'
 import { applyWidthChangeWithLock } from '@/features/scene/utils/handlers/lockBehaviorHandler'
+import { updateAllDependentComponents } from '@/features/scene/utils/handlers/dependentComponentsHandler'
 import { toastThrottled } from './ProductPanel'
 import { CollapsibleSection } from './productPanel/components/CollapsibleSection'
 import { useCollapsibleSections } from './productPanel/hooks/useCollapsibleSections'
@@ -293,6 +294,13 @@ export const AppliancePanel: React.FC<AppliancePanelProps> = ({
     // Update carcass dimensions (this is the shell)
     selectedCabinet.carcass.updateDimensions(newShellDims)
 
+    // Update all dependent components (benchtop, kicker, etc.)
+    updateAllDependentComponents(selectedCabinet, cabinets, wallDimensions, {
+      widthChanged: dimension === 'width',
+      heightChanged: dimension === 'height',
+      depthChanged: dimension === 'depth',
+    })
+
     // Update local visual state
     if (dimension === 'width') setVisualWidth(value)
     if (dimension === 'height') setVisualHeight(value)
@@ -402,6 +410,12 @@ export const AppliancePanel: React.FC<AppliancePanelProps> = ({
     // Update config (this also rebuilds, but dimensions are already set)
     selectedCabinet.carcass.updateConfig(newConfig)
 
+    // Update all dependent components (benchtop, kicker, etc.)
+    updateAllDependentComponents(selectedCabinet, cabinets, wallDimensions, {
+      widthChanged: true, // Gaps always affect shell width
+      heightChanged: gap === 'top',
+    })
+
     // Update local gap state
     if (gap === 'top') setTopGap(value)
     if (gap === 'left') setLeftGap(value)
@@ -432,6 +446,13 @@ export const AppliancePanel: React.FC<AppliancePanelProps> = ({
     selectedCabinet.carcass.updateConfig({
       applianceKickerHeight: value,
     })
+
+    // Update all dependent components (benchtop, kicker, etc.)
+    updateAllDependentComponents(selectedCabinet, cabinets, wallDimensions, {
+      heightChanged: true,
+      kickerHeightChanged: true,
+    })
+
     setKickerHeight(value)
   }, [selectedCabinet, visualHeight, topGap])
 

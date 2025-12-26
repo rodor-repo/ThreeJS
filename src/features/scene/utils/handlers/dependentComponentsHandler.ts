@@ -294,8 +294,8 @@ export function updateAllDependentComponents(
     })
   }
 
-  // Update benchtop position for base cabinets
-  if (cabinet.cabinetType === "base") {
+  // Update benchtop position for base and appliance cabinets
+  if (cabinet.cabinetType === "base" || cabinet.cabinetType === "appliance") {
     updateBenchtopPosition(cabinet, allCabinets, {
       dimensionsChanged:
         changes.heightChanged ||
@@ -332,7 +332,10 @@ export function updateAllDependentComponents(
       }
 
       // Update parent benchtop (affects benchtop length)
-      if (parentCabinet.cabinetType === "base") {
+      if (
+        parentCabinet.cabinetType === "base" ||
+        parentCabinet.cabinetType === "appliance"
+      ) {
         updateBenchtopPosition(parentCabinet, allCabinets, {
           dimensionsChanged: true,
           positionChanged:

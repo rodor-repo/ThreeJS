@@ -174,9 +174,9 @@ export const CabinetLockIcons: React.FC<Props> = ({
     return sorted.length > 0 ? sorted[0].id : null
   }, [wsProducts])
 
-  // Initialize T state based on whether benchtop exists as a separate CabinetData entry (only for base cabinets)
+  // Initialize T state based on whether benchtop exists as a separate CabinetData entry (only for base and appliance cabinets)
   const [isTOn, setIsTOn] = useState(() => {
-    if (cabinet.cabinetType === 'base') {
+    if (cabinet.cabinetType === 'base' || cabinet.cabinetType === 'appliance') {
       // Check if benchtop exists as a separate CabinetData entry
       const existingBenchtopCabinet = allCabinets.find(
         (c) => c.cabinetType === 'benchtop' && c.benchtopParentCabinetId === cabinet.cabinetId
@@ -186,9 +186,9 @@ export const CabinetLockIcons: React.FC<Props> = ({
     return false
   })
 
-  // Sync T state with actual benchtop existence when cabinet dimensions change (only for base cabinets)
+  // Sync T state with actual benchtop existence when cabinet dimensions change (only for base and appliance cabinets)
   useEffect(() => {
-    if (cabinet.cabinetType === 'base') {
+    if (cabinet.cabinetType === 'base' || cabinet.cabinetType === 'appliance') {
       // Check if benchtop exists as a separate CabinetData entry
       const existingBenchtopCabinet = allCabinets.find(
         (c) => c.cabinetType === 'benchtop' && c.benchtopParentCabinetId === cabinet.cabinetId
@@ -398,8 +398,8 @@ export const CabinetLockIcons: React.FC<Props> = ({
         )}
       </div>
 
-      {/* T Icon above Center Lock - Toggleable, for Base cabinets only (Benchtop) */}
-      {showLetterIcons && cabinet.cabinetType === 'base' && (
+      {/* T Icon above Center Lock - Toggleable, for Base and Appliance cabinets (Benchtop) */}
+      {showLetterIcons && (cabinet.cabinetType === 'base' || cabinet.cabinetType === 'appliance') && (
         <div
           className={`fixed z-50 bg-white rounded-full shadow-lg border-2 transition-colors cursor-pointer flex items-center justify-center ${isTOn
               ? 'border-blue-600 hover:border-blue-700'

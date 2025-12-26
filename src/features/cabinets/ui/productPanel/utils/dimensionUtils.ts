@@ -168,16 +168,31 @@ export function getExtractedDimensions(
 
     // Check by GDId first, then also check by dimension name
     const isWidthByGD = gdId && gdMapping.widthGDIds.includes(gdId)
-    const isWidthByName = dimName.includes('length') || dimName.includes('width')
-    const isWidthDim = isWidthByGD || isWidthByName
-    
     const isHeightByGD = gdId && gdMapping.heightGDIds.includes(gdId)
-    const isHeightByName = dimName.includes('thickness') || dimName.includes('height')
-    const isHeightDim = isHeightByGD || isHeightByName
-    
     const isDepthByGD = gdId && gdMapping.depthGDIds.includes(gdId)
+
+    const isWidthByName = dimName.includes('length') || dimName.includes('width')
+    const isHeightByName = dimName.includes('thickness') || dimName.includes('height')
     const isDepthByName = dimName.includes('depth')
-    const isDepthDim = isDepthByGD || isDepthByName
+
+    // Determine the primary dimension type, prioritizing GD over name
+    let isWidthDim = false
+    let isHeightDim = false
+    let isDepthDim = false
+
+    if (isWidthByGD) {
+      isWidthDim = true
+    } else if (isHeightByGD) {
+      isHeightDim = true
+    } else if (isDepthByGD) {
+      isDepthDim = true
+    } else if (isWidthByName) {
+      isWidthDim = true
+    } else if (isHeightByName) {
+      isHeightDim = true
+    } else if (isDepthByName) {
+      isDepthDim = true
+    }
 
     if (isWidthDim) {
       width = toNum(v) || width
@@ -393,22 +408,25 @@ export function syncCabinetDimensionsToValues(
     
     // Check by GDId first, then fallback to dimension name
     const isWidthByGD = gdId && gdMapping.widthGDIds.includes(gdId)
-    const isWidthByName = dimName.includes('length') || dimName.includes('width')
-    const isWidthDim = isWidthByGD || isWidthByName
-    
     const isHeightByGD = gdId && gdMapping.heightGDIds.includes(gdId)
-    const isHeightByName = dimName.includes('thickness') || dimName.includes('height')
-    const isHeightDim = isHeightByGD || isHeightByName
-    
     const isDepthByGD = gdId && gdMapping.depthGDIds.includes(gdId)
-    const isDepthByName = dimName.includes('depth')
-    const isDepthDim = isDepthByGD || isDepthByName
 
-    if (isWidthDim) {
+    const isWidthByName = dimName.includes('length') || dimName.includes('width')
+    const isHeightByName = dimName.includes('thickness') || dimName.includes('height')
+    const isDepthByName = dimName.includes('depth')
+
+    // Determine the primary dimension type, prioritizing GD over name
+    if (isWidthByGD) {
       nextValues[dimId] = cabinetDimensions.width
-    } else if (isHeightDim) {
+    } else if (isHeightByGD) {
       nextValues[dimId] = cabinetDimensions.height
-    } else if (isDepthDim) {
+    } else if (isDepthByGD) {
+      nextValues[dimId] = cabinetDimensions.depth
+    } else if (isWidthByName) {
+      nextValues[dimId] = cabinetDimensions.width
+    } else if (isHeightByName) {
+      nextValues[dimId] = cabinetDimensions.height
+    } else if (isDepthByName) {
       nextValues[dimId] = cabinetDimensions.depth
     }
   }

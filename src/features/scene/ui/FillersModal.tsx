@@ -15,60 +15,38 @@ export const FillersModal: React.FC<Props> = ({ isOpen, onClose, wsProducts, onP
   const [hoveredProduct, setHoveredProduct] = useState<{ id: string; img: string; name: string } | null>(null)
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 })
   const modalRef = React.useRef<HTMLDivElement>(null)
-  // Find Fillers category and get all products
+  // Find Fillers and Panels based on design type3D
   const allProducts = React.useMemo(() => {
     if (!wsProducts) return []
 
-    // Find category that contains "Filler" in its name
-    const fillersCategory = Object.entries(wsProducts.categories).find(([, cat]) =>
-      cat.category.toLowerCase().includes('filler') || cat.category.toLowerCase().includes('panel')
-    )
-
-    if (!fillersCategory) return []
-
-    const [categoryId] = fillersCategory
-
-    // Get all subcategories for this category with their names
-    const subcategories = Object.entries(wsProducts.subCategories)
-      .filter(([, sc]) => sc.categoryId === categoryId)
-      .map(([subId, sc]) => ({ id: subId, name: sc.subCategory }))
-
-    // Create a map of designId to subcategory name for quick lookup
-    const designToSubcategory = new Map<string, string>()
-    Object.entries(wsProducts.designs).forEach(([designId, design]) => {
-      const subcategory = subcategories.find(sc => sc.id === design.subCategoryId)
-      if (subcategory) {
-        designToSubcategory.set(designId, subcategory.name.toLowerCase())
-      }
-    })
-
-    // Get all active products for these designs
-    const active = Object.entries(wsProducts.products).filter(
-      ([, p]) => p.status === 'Active' && p.enabled3D === true && designToSubcategory.has(p.designId)
-    )
-    
-    // Map products with their type (panel or filler)
-    const productsWithType = active.map(([id, p]) => {
-      const subcategoryName = designToSubcategory.get(p.designId) || ''
-      const isPanel = subcategoryName.includes('panel') && !subcategoryName.includes('filler')
-      const isFiller = subcategoryName.includes('filler') || (!isPanel && !subcategoryName.includes('panel'))
-      
-      return {
+    const productsWithType = Object.entries(wsProducts.products)
+      .map(([id, p]) => {
+        const designEntry = wsProducts.designs[p.designId]
+        const type3D = designEntry?.type3D
+        return {
+          id,
+          product: p,
+          type3D,
+        }
+      })
+      .filter(({ product, type3D }) =>
+        product.status === 'Active' &&
+        product.enabled3D === true &&
+        (type3D === 'panel' || type3D === 'filler')
+      )
+      .map(({ id, product, type3D }) => ({
         id,
-        name: p.product,
-        img: p.indexImageAlt?.[0],
-        sortNum: Number(p.sortNum),
-        type: isPanel ? 'panel' : 'filler', // 'panel' or 'filler'
-      }
-    })
-    
-    // Sort: Panels first (type='panel'), then Fillers (type='filler')
-    // Within each group, sort by sortNum
+        name: product.product,
+        img: product.indexImageAlt?.[0],
+        sortNum: Number(product.sortNum),
+        type: type3D === 'panel' ? 'panel' : 'filler',
+      }))
+
     const sorted = _.sortBy(productsWithType, [
-      (p) => p.type === 'panel' ? 0 : 1, // Panels first (0), Fillers second (1)
-      (p) => p.sortNum // Then by sortNum within each group
+      p => p.type === 'panel' ? 0 : 1,
+      p => p.sortNum,
     ])
-    
+
     return sorted.map(({ id, name, img }) => ({
       id,
       name,

@@ -158,6 +158,11 @@ export function getExtractedDimensions(
   let shelfCount = initialDefaults?.shelfCount
   let drawerQty = initialDefaults?.drawerQty
   let doorQty = initialDefaults?.doorQty
+
+  // Track if dimensions were set by GDId to prevent name-based false positives
+  let widthSetByGD = false
+  let heightSetByGD = false
+  let depthSetByGD = false
   
   const pendingDrawerHeights: Record<number, number> = {}
 
@@ -166,33 +171,25 @@ export function getExtractedDimensions(
     const gdId = dimObj.GDId
     const dimName = (dimObj.dim || '').toLowerCase()
 
-    // Check by GDId first, then also check by dimension name
-    const isWidthByGD = gdId && gdMapping.widthGDIds.includes(gdId)
-    const isHeightByGD = gdId && gdMapping.heightGDIds.includes(gdId)
-    const isDepthByGD = gdId && gdMapping.depthGDIds.includes(gdId)
+    // Check by GDId first
+    const isWidthByGD = !!(gdId && gdMapping.widthGDIds.includes(gdId))
+    const isHeightByGD = !!(gdId && gdMapping.heightGDIds.includes(gdId))
+    const isDepthByGD = !!(gdId && gdMapping.depthGDIds.includes(gdId))
 
-    const isWidthByName = dimName.includes('length') || dimName.includes('width')
-    const isHeightByName = dimName.includes('thickness') || dimName.includes('height')
-    const isDepthByName = dimName.includes('depth')
+    // Stricter name-based matching as a fallback
+    const isWidthByName = dimName === 'length' || dimName === 'width'
+    const isHeightByName = dimName === 'thickness' || dimName === 'height'
+    const isDepthByName = dimName === 'depth'
 
-    // Determine the primary dimension type, prioritizing GD over name
-    let isWidthDim = false
-    let isHeightDim = false
-    let isDepthDim = false
+    // Determine the primary dimension type
+    // Prioritize GD matches, then fallback to name matches ONLY if no GDId is present on this dimension
+    let isWidthDim = isWidthByGD || (!gdId && isWidthByName && !widthSetByGD)
+    let isHeightDim = isHeightByGD || (!gdId && isHeightByName && !heightSetByGD)
+    let isDepthDim = isDepthByGD || (!gdId && isDepthByName && !depthSetByGD)
 
-    if (isWidthByGD) {
-      isWidthDim = true
-    } else if (isHeightByGD) {
-      isHeightDim = true
-    } else if (isDepthByGD) {
-      isDepthDim = true
-    } else if (isWidthByName) {
-      isWidthDim = true
-    } else if (isHeightByName) {
-      isHeightDim = true
-    } else if (isDepthByName) {
-      isDepthDim = true
-    }
+    if (isWidthByGD) widthSetByGD = true
+    if (isHeightByGD) heightSetByGD = true
+    if (isDepthByGD) depthSetByGD = true
 
     if (isWidthDim) {
       width = toNum(v) || width
@@ -406,28 +403,31 @@ export function syncCabinetDimensionsToValues(
     const gdId = dimObj.GDId
     const dimName = (dimObj.dim || '').toLowerCase()
     
-    // Check by GDId first, then fallback to dimension name
-    const isWidthByGD = gdId && gdMapping.widthGDIds.includes(gdId)
-    const isHeightByGD = gdId && gdMapping.heightGDIds.includes(gdId)
-    const isDepthByGD = gdId && gdMapping.depthGDIds.includes(gdId)
+    // Check by GDId first
+    const isWidthByGD = !!(gdId && gdMapping.widthGDIds.includes(gdId))
+    const isHeightByGD = !!(gdId && gdMapping.heightGDIds.includes(gdId))
+    const isDepthByGD = !!(gdId && gdMapping.depthGDIds.includes(gdId))
 
-    const isWidthByName = dimName.includes('length') || dimName.includes('width')
-    const isHeightByName = dimName.includes('thickness') || dimName.includes('height')
-    const isDepthByName = dimName.includes('depth')
+    // Stricter name-based matching as a fallback
+    const isWidthByName = dimName === 'length' || dimName === 'width'
+    const isHeightByName = dimName === 'thickness' || dimName === 'height'
+    const isDepthByName = dimName === 'depth'
 
-    // Determine the primary dimension type, prioritizing GD over name
+    // Only update if it's a GD match OR a strict name match without a GDId
     if (isWidthByGD) {
       nextValues[dimId] = cabinetDimensions.width
     } else if (isHeightByGD) {
       nextValues[dimId] = cabinetDimensions.height
     } else if (isDepthByGD) {
       nextValues[dimId] = cabinetDimensions.depth
-    } else if (isWidthByName) {
-      nextValues[dimId] = cabinetDimensions.width
-    } else if (isHeightByName) {
-      nextValues[dimId] = cabinetDimensions.height
-    } else if (isDepthByName) {
-      nextValues[dimId] = cabinetDimensions.depth
+    } else if (!gdId) {
+      if (isWidthByName) {
+        nextValues[dimId] = cabinetDimensions.width
+      } else if (isHeightByName) {
+        nextValues[dimId] = cabinetDimensions.height
+      } else if (isDepthByName) {
+        nextValues[dimId] = cabinetDimensions.depth
+      }
     }
   }
 

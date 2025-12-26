@@ -181,8 +181,7 @@ export const createCabinet = (
   type: CabinetType,
   subcategoryId: string,
   opts?: {
-    indexOffset?: number
-    spacing?: number
+    initialX?: number
     customDimensions?: Partial<CarcassDimensions>
     productId?: string
     fillerType?: "linear" | "l-shape"
@@ -257,10 +256,8 @@ export const createCabinet = (
       : undefined
   )
 
-  // position by index to avoid overlap if desired
-  const index = opts?.indexOffset ?? 0
-  const spacing = opts?.spacing ?? 100
-  carcass.group.position.x = index * (dimensions.width + spacing)
+  // Position cabinet: use initialX if provided, otherwise default to 0
+  carcass.group.position.x = opts?.initialX ?? 0
 
   return {
     group: carcass.group,

@@ -43,19 +43,33 @@ export const useCabinets = (
         customDimensions?: Partial<CarcassDimensions>
         additionalProps?: AdditionalCabinetProps
         applianceType?: "dishwasher" | "washingMachine" | "sideBySideFridge"
+        initialX?: number
       }
     ) => {
       if (!sceneRef.current) return
 
-      const { productId, productName, fillerReturnPosition, customDimensions, additionalProps, applianceType } = options || {}
+      const { productId, productName, fillerReturnPosition, customDimensions, additionalProps, applianceType, initialX: providedInitialX } = options || {}
 
       const fillerType =
         categoryType === "filler"
           ? productName?.toLowerCase().includes("l shape") ? "l-shape" : "linear"
           : undefined
 
+      // Calculate initialX: find the rightmost side of any existing cabinet
+      let initialX = providedInitialX ?? 0
+      if (providedInitialX === undefined && cabinets.length > 0) {
+        // Find the maximum X + width among all cabinets
+        const rightEdges = cabinets.map((cab) => {
+          // Use carcass dimensions width
+          return cab.group.position.x + cab.carcass.dimensions.width
+        })
+        const maxRightEdge = Math.max(...rightEdges)
+        const spacing = 100 // Constant spacing
+        initialX = maxRightEdge + spacing
+      }
+
       const data = createCabinetEntry(categoryType, subcategoryType, {
-        indexOffset: cabinetCounter,
+        initialX,
         productId,
         fillerType,
         fillerReturnPosition,
@@ -74,7 +88,7 @@ export const useCabinets = (
       setSortNumberCounter((prev) => prev + 1)
       return cabinetWithProps
     },
-    [sceneRef, cabinetCounter, sortNumberCounter]
+    [sceneRef, cabinetCounter, sortNumberCounter, cabinets]
   )
 
 

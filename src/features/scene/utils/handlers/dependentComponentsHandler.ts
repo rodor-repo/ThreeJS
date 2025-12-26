@@ -243,8 +243,12 @@ export function updateAllDependentComponents(
   // Update child cabinets (fillers/panels)
   updateChildCabinets(cabinet, allCabinets, changes)
 
-  // Update kicker position for base and tall cabinets
-  if (cabinet.cabinetType === "base" || cabinet.cabinetType === "tall") {
+  // Update kicker position for base, tall, and appliance cabinets
+  if (
+    cabinet.cabinetType === "base" ||
+    cabinet.cabinetType === "tall" ||
+    cabinet.cabinetType === "appliance"
+  ) {
     updateKickerPosition(cabinet, allCabinets, {
       dimensionsChanged:
         changes.heightChanged ||
@@ -322,7 +326,8 @@ export function updateAllDependentComponents(
       // Update parent kicker (affects kicker width extension)
       if (
         parentCabinet.cabinetType === "base" ||
-        parentCabinet.cabinetType === "tall"
+        parentCabinet.cabinetType === "tall" ||
+        parentCabinet.cabinetType === "appliance"
       ) {
         updateKickerPosition(parentCabinet, allCabinets, {
           dimensionsChanged: true,

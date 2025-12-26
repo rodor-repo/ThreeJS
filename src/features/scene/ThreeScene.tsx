@@ -1431,14 +1431,29 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
             }
           }}
           onKickerHeightChange={(kickerHeight) => {
-            if (selectedCabinet) {
+            if (selectedCabinet?.viewId) {
+              handleKickerHeightChange(
+                selectedCabinet.viewId as ViewId,
+                kickerHeight,
+                {
+                  cabinets,
+                  viewManager,
+                  wallDimensions,
+                }
+              );
+            } else if (selectedCabinet) {
               // Update the kicker height and reposition the cabinet
               selectedCabinet.carcass.updateKickerHeight(kickerHeight);
 
               // Update all dependent components
-              updateAllDependentComponents(selectedCabinet, cabinets, wallDimensions, {
-                kickerHeightChanged: true
-              })
+              updateAllDependentComponents(
+                selectedCabinet,
+                cabinets,
+                wallDimensions,
+                {
+                  kickerHeightChanged: true,
+                }
+              );
             }
           }}
           onDoorToggle={(enabled) => {

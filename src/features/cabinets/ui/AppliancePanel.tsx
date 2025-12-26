@@ -146,7 +146,6 @@ export const AppliancePanel: React.FC<AppliancePanelProps> = ({
   const [topGap, setTopGap] = useState(0)
   const [leftGap, setLeftGap] = useState(0)
   const [rightGap, setRightGap] = useState(0)
-  const [kickerHeight, setKickerHeight] = useState(100)
 
   // Panel expand/collapse state (matching ProductPanel)
   const [isExpanded, setIsExpanded] = useState(true)
@@ -167,14 +166,13 @@ export const AppliancePanel: React.FC<AppliancePanelProps> = ({
       const rGap = config.applianceRightGap || 0
       const kHeight = config.applianceKickerHeight || 100
 
-      // Calculate visual dimensions from shell - gaps - kicker
+      // Calculate visual dimensions from shell - gaps (shell no longer includes kicker)
       setVisualWidth(shellDims.width - lGap - rGap)
-      setVisualHeight(shellDims.height - tGap - kHeight)
+      setVisualHeight(shellDims.height - tGap)
       setVisualDepth(shellDims.depth)
       setTopGap(tGap)
       setLeftGap(lGap)
       setRightGap(rGap)
-      setKickerHeight(kHeight)
     }
   }, [selectedCabinet])
 
@@ -223,9 +221,9 @@ export const AppliancePanel: React.FC<AppliancePanelProps> = ({
     const oldShellWidth = selectedCabinet.carcass.dimensions.width
     const oldX = selectedCabinet.group.position.x
 
-    // Calculate new shell dimensions (visual + gaps + kicker)
+    // Calculate new shell dimensions (visual + gaps)
     const newShellWidth = dimension === 'width' ? value + leftGap + rightGap : visualWidth + leftGap + rightGap
-    const newShellHeight = dimension === 'height' ? value + topGap + kickerHeight : visualHeight + topGap + kickerHeight
+    const newShellHeight = dimension === 'height' ? value + topGap : visualHeight + topGap
     const newShellDepth = dimension === 'depth' ? value : visualDepth
 
     const newShellDims = {
@@ -329,9 +327,9 @@ export const AppliancePanel: React.FC<AppliancePanelProps> = ({
     const newLeftGap = gap === 'left' ? value : leftGap
     const newRightGap = gap === 'right' ? value : rightGap
 
-    // Calculate new shell dimensions (visual dimensions stay the same, includes kicker!)
+    // Calculate new shell dimensions (visual dimensions stay the same)
     const newShellWidth = visualWidth + newLeftGap + newRightGap
-    const newShellHeight = visualHeight + newTopGap + kickerHeight
+    const newShellHeight = visualHeight + newTopGap
     const newShellDepth = visualDepth
 
     const newShellDims = {
@@ -427,38 +425,9 @@ export const AppliancePanel: React.FC<AppliancePanelProps> = ({
     }
   }, [selectedCabinet, visualWidth, visualHeight, visualDepth, topGap, leftGap, rightGap, triggerViewReposition, cabinets, cabinetGroups, viewManager])
 
-  // Update kicker height - this also changes shell height
-  const handleKickerChange = useCallback((value: number) => {
-    if (!selectedCabinet?.carcass) return
-
-    // Calculate new shell height (visual + topGap + new kicker)
-    const newShellHeight = visualHeight + topGap + value
-    const newShellDims = {
-      width: selectedCabinet.carcass.dimensions.width,
-      height: newShellHeight,
-      depth: selectedCabinet.carcass.dimensions.depth,
-    }
-
-    // Update shell dimensions
-    selectedCabinet.carcass.updateDimensions(newShellDims)
-
-    // Update config with new kicker height
-    selectedCabinet.carcass.updateConfig({
-      applianceKickerHeight: value,
-    })
-
-    // Update all dependent components (benchtop, kicker, etc.)
-    updateAllDependentComponents(selectedCabinet, cabinets, wallDimensions, {
-      heightChanged: true,
-      kickerHeightChanged: true,
-    })
-
-    setKickerHeight(value)
-  }, [selectedCabinet, visualHeight, topGap])
-
   // Calculate displayed shell dimensions for info display
   const shellWidth = useMemo(() => visualWidth + leftGap + rightGap, [visualWidth, leftGap, rightGap])
-  const shellHeight = useMemo(() => visualHeight + topGap + kickerHeight, [visualHeight, topGap, kickerHeight])
+  const shellHeight = useMemo(() => visualHeight + topGap, [visualHeight, topGap])
 
   if (!isVisible || !selectedCabinet) return null
 
@@ -607,25 +576,6 @@ export const AppliancePanel: React.FC<AppliancePanelProps> = ({
                   {shellWidth}mm × {shellHeight}mm × {visualDepth}mm
                 </p>
               </div>
-            </div>
-          </CollapsibleSection>
-
-          {/* Kicker Section */}
-          <CollapsibleSection
-            id="applianceKicker"
-            title="Kicker"
-            icon={<SizeIcon />}
-          >
-            <div className="space-y-4">
-              <p className="text-xs text-gray-500 mb-3">Height of kick panels at the base of the appliance</p>
-              <SliderInput
-                label="Kicker Height"
-                value={kickerHeight}
-                min={16}
-                max={170}
-                step={1}
-                onChange={handleKickerChange}
-              />
             </div>
           </CollapsibleSection>
 

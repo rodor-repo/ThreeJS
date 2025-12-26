@@ -2,6 +2,7 @@ import { useEffect, useMemo } from "react"
 import type { ViewId, ViewManager } from "../../cabinets/ViewManager"
 import { WALL_THICKNESS } from "../lib/sceneUtils"
 import type { CabinetData, WallDimensions } from "../types"
+import { getCabinetHorizontalEdges } from "../utils/handlers/sharedCabinetUtils"
 
 type UseWallsAutoAdjustOptions = {
   cabinets: CabinetData[]
@@ -59,10 +60,9 @@ export const useWallsAutoAdjust = ({
 
     let rightmostX = 0
     viewCabinets.forEach((cabinet) => {
-      const cabinetRightEdge =
-        cabinet.group.position.x + cabinet.carcass.dimensions.width
-      if (cabinetRightEdge > rightmostX) {
-        rightmostX = cabinetRightEdge
+      const { right } = getCabinetHorizontalEdges(cabinet)
+      if (right > rightmostX) {
+        rightmostX = right
       }
     })
 
@@ -102,10 +102,9 @@ export const useWallsAutoAdjust = ({
     if (!isWallLinkedToView) {
       let rightmostCabinetEdge = 0
       cabinets.forEach((cabinet) => {
-        const cabinetRightEdge =
-          cabinet.group.position.x + cabinet.carcass.dimensions.width
-        if (cabinetRightEdge > rightmostCabinetEdge) {
-          rightmostCabinetEdge = cabinetRightEdge
+        const { right } = getCabinetHorizontalEdges(cabinet)
+        if (right > rightmostCabinetEdge) {
+          rightmostCabinetEdge = right
         }
       })
 
@@ -133,10 +132,9 @@ export const useWallsAutoAdjust = ({
           // Find rightmost edge of cabinets in the linked view
           let rightmostX = 0
           viewCabinets.forEach((cabinet) => {
-            const cabinetRightEdge =
-              cabinet.group.position.x + cabinet.carcass.dimensions.width
-            if (cabinetRightEdge > rightmostX) {
-              rightmostX = cabinetRightEdge
+            const { right } = getCabinetHorizontalEdges(cabinet)
+            if (right > rightmostX) {
+              rightmostX = right
             }
           })
 
@@ -157,9 +155,7 @@ export const useWallsAutoAdjust = ({
 
         let maxPenetration = 0
         cabinets.forEach((cabinet) => {
-          const cabinetLeft = cabinet.group.position.x
-          const cabinetRight =
-            cabinet.group.position.x + cabinet.carcass.dimensions.width
+          const { left: cabinetLeft, right: cabinetRight } = getCabinetHorizontalEdges(cabinet)
 
           if (cabinetLeft < wallRight && cabinetRight > wallLeft) {
             const penetration = Math.max(0, cabinetRight - wallRight)

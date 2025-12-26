@@ -523,6 +523,107 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     })
   }, [cabinets, wsProducts, createCabinet, deleteCabinet])
 
+  const handleBenchtopOverhangChange = useCallback((cabinetId: string, type: 'front' | 'left' | 'right', value: number) => {
+    const benchtopCabinet = cabinets.find(c => c.cabinetId === cabinetId)
+    if (!benchtopCabinet || benchtopCabinet.cabinetType !== 'benchtop') return
+
+    // Update the overhang value on the CabinetData (for persistence)
+    if (type === 'front') {
+      benchtopCabinet.benchtopFrontOverhang = value
+    } else if (type === 'left') {
+      benchtopCabinet.benchtopLeftOverhang = value
+    } else if (type === 'right') {
+      benchtopCabinet.benchtopRightOverhang = value
+    }
+
+    // If front overhang changed, recalculate and update depth
+    if (type === 'front') {
+      const parentCabinet = cabinets.find(c => c.cabinetId === benchtopCabinet.benchtopParentCabinetId)
+      const parentDepth = parentCabinet?.carcass.dimensions.depth ?? 600
+      const FIXED_DEPTH_EXTENSION = 20
+      const newDepth = parentDepth + FIXED_DEPTH_EXTENSION + value
+      benchtopCabinet.carcass.dimensions.depth = newDepth
+    }
+
+    // Use CarcassAssembly method to update the benchtop mesh
+    benchtopCabinet.carcass.updateBenchtopOverhangs(
+      benchtopCabinet.benchtopFrontOverhang,
+      benchtopCabinet.benchtopLeftOverhang,
+      benchtopCabinet.benchtopRightOverhang
+    )
+
+    // Update position after overhang change
+    const parentCabinet = cabinets.find(c => c.cabinetId === benchtopCabinet.benchtopParentCabinetId)
+    if (parentCabinet) {
+      updateAllDependentComponents(parentCabinet, cabinets, wallDimensions, {
+        widthChanged: true,
+        heightChanged: true,
+        depthChanged: true
+      })
+    }
+
+    // Trigger re-render to update UI snapshots
+    setSelectedCabinets(prev => prev.map(cab => ({ ...cab })))
+  }, [cabinets, wallDimensions, setSelectedCabinets])
+
+  const handleBenchtopThicknessChange = useCallback((cabinetId: string, value: number) => {
+    const benchtopCabinet = cabinets.find(c => c.cabinetId === cabinetId)
+    if (!benchtopCabinet || benchtopCabinet.cabinetType !== 'benchtop') return
+
+    // Only for child benchtops (have a parent)
+    if (!benchtopCabinet.benchtopParentCabinetId) return
+
+    // Clamp value between 20 and 60
+    const clampedValue = Math.max(20, Math.min(60, value))
+
+    // Store thickness on CabinetData for persistence
+    benchtopCabinet.benchtopThickness = clampedValue
+
+    // Get current dimensions
+    const currentWidth = benchtopCabinet.carcass.dimensions.width
+    const currentDepth = benchtopCabinet.carcass.dimensions.depth
+
+    // Update via CarcassAssembly.updateDimensions() - height = thickness for benchtop
+    benchtopCabinet.carcass.updateDimensions({
+      width: currentWidth,
+      height: clampedValue,
+      depth: currentDepth,
+    })
+
+    // Update position after thickness change
+    const parentCabinet = cabinets.find(c => c.cabinetId === benchtopCabinet.benchtopParentCabinetId)
+    if (parentCabinet) {
+      updateAllDependentComponents(parentCabinet, cabinets, wallDimensions, {
+        widthChanged: true,
+        heightChanged: true,
+        depthChanged: true
+      })
+    }
+
+    // Trigger re-render to update UI snapshots
+    setSelectedCabinets(prev => prev.map(cab => ({ ...cab })))
+  }, [cabinets, wallDimensions, setSelectedCabinets])
+
+  const handleBenchtopHeightFromFloorChange = useCallback((cabinetId: string, value: number) => {
+    const benchtopCabinet = cabinets.find(c => c.cabinetId === cabinetId)
+    if (!benchtopCabinet || benchtopCabinet.cabinetType !== 'benchtop') return
+
+    // Only for independent benchtops (no parent)
+    if (benchtopCabinet.benchtopParentCabinetId) return
+
+    // Clamp value between 0 and 1200
+    const clampedValue = Math.max(0, Math.min(1200, value))
+
+    // Update the height from floor value on CabinetData
+    benchtopCabinet.benchtopHeightFromFloor = clampedValue
+
+    // Update the Y position of the benchtop group
+    benchtopCabinet.group.position.setY(clampedValue)
+
+    // Trigger re-render to update UI snapshots
+    setSelectedCabinets(prev => prev.map(cab => ({ ...cab })))
+  }, [cabinets, setSelectedCabinets])
+
   // Handle bulkhead selection from modal - creates bulkhead with proper product association
   const handleBulkheadSelect = useCallback((cabinetId: string, productId: string) => {
     handleBulkheadSelectHandler(cabinetId, productId, {
@@ -1278,106 +1379,9 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
             })
           }}
 
-          onBenchtopOverhangChange={(cabinetId, type, value) => {
-            const benchtopCabinet = cabinets.find(c => c.cabinetId === cabinetId)
-            if (!benchtopCabinet || benchtopCabinet.cabinetType !== 'benchtop') return
-
-            // Update the overhang value on the CabinetData (for persistence)
-            if (type === 'front') {
-              benchtopCabinet.benchtopFrontOverhang = value
-            } else if (type === 'left') {
-              benchtopCabinet.benchtopLeftOverhang = value
-            } else if (type === 'right') {
-              benchtopCabinet.benchtopRightOverhang = value
-            }
-
-            // If front overhang changed, recalculate and update depth
-            if (type === 'front') {
-              const parentCabinet = cabinets.find(c => c.cabinetId === benchtopCabinet.benchtopParentCabinetId)
-              const parentDepth = parentCabinet?.carcass.dimensions.depth ?? 600
-              const FIXED_DEPTH_EXTENSION = 20
-              const newDepth = parentDepth + FIXED_DEPTH_EXTENSION + value
-              benchtopCabinet.carcass.dimensions.depth = newDepth
-            }
-
-            // Use CarcassAssembly method to update the benchtop mesh
-            benchtopCabinet.carcass.updateBenchtopOverhangs(
-              benchtopCabinet.benchtopFrontOverhang,
-              benchtopCabinet.benchtopLeftOverhang,
-              benchtopCabinet.benchtopRightOverhang
-            )
-
-            // Update position after overhang change
-            const parentCabinet = cabinets.find(c => c.cabinetId === benchtopCabinet.benchtopParentCabinetId)
-            if (parentCabinet) {
-              updateAllDependentComponents(parentCabinet, cabinets, wallDimensions, {
-                widthChanged: true,
-                heightChanged: true,
-                depthChanged: true
-              })
-            }
-
-            // Trigger re-render to update UI snapshots
-            setSelectedCabinets(prev => prev.map(cab => ({ ...cab })))
-          }}
-
-          onBenchtopThicknessChange={(cabinetId, value) => {
-            const benchtopCabinet = cabinets.find(c => c.cabinetId === cabinetId)
-            if (!benchtopCabinet || benchtopCabinet.cabinetType !== 'benchtop') return
-
-            // Only for child benchtops (have a parent)
-            if (!benchtopCabinet.benchtopParentCabinetId) return
-
-            // Clamp value between 20 and 60
-            const clampedValue = Math.max(20, Math.min(60, value))
-
-            // Store thickness on CabinetData for persistence
-            benchtopCabinet.benchtopThickness = clampedValue
-
-            // Get current dimensions
-            const currentWidth = benchtopCabinet.carcass.dimensions.width
-            const currentDepth = benchtopCabinet.carcass.dimensions.depth
-
-            // Update via CarcassAssembly.updateDimensions() - height = thickness for benchtop
-            benchtopCabinet.carcass.updateDimensions({
-              width: currentWidth,
-              height: clampedValue,
-              depth: currentDepth,
-            })
-
-            // Update position after thickness change
-            const parentCabinet = cabinets.find(c => c.cabinetId === benchtopCabinet.benchtopParentCabinetId)
-            if (parentCabinet) {
-              updateAllDependentComponents(parentCabinet, cabinets, wallDimensions, {
-                widthChanged: true,
-                heightChanged: true,
-                depthChanged: true
-              })
-            }
-
-            // Trigger re-render to update UI snapshots
-            setSelectedCabinets(prev => prev.map(cab => ({ ...cab })))
-          }}
-
-          onBenchtopHeightFromFloorChange={(cabinetId, value) => {
-            const benchtopCabinet = cabinets.find(c => c.cabinetId === cabinetId)
-            if (!benchtopCabinet || benchtopCabinet.cabinetType !== 'benchtop') return
-
-            // Only for independent benchtops (no parent)
-            if (benchtopCabinet.benchtopParentCabinetId) return
-
-            // Clamp value between 0 and 1200
-            const clampedValue = Math.max(0, Math.min(1200, value))
-
-            // Update the height from floor value on CabinetData
-            benchtopCabinet.benchtopHeightFromFloor = clampedValue
-
-            // Update the Y position of the benchtop group
-            benchtopCabinet.group.position.setY(clampedValue)
-
-            // Trigger re-render to update UI snapshots
-            setSelectedCabinets(prev => prev.map(cab => ({ ...cab })))
-          }}
+          onBenchtopOverhangChange={handleBenchtopOverhangChange}
+          onBenchtopThicknessChange={handleBenchtopThicknessChange}
+          onBenchtopHeightFromFloorChange={handleBenchtopHeightFromFloorChange}
 
           onShelfCountChange={(newCount: number) => {
             if (selectedCabinet) {
@@ -1427,14 +1431,29 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
             }
           }}
           onKickerHeightChange={(kickerHeight) => {
-            if (selectedCabinet) {
+            if (selectedCabinet?.viewId) {
+              handleKickerHeightChange(
+                selectedCabinet.viewId as ViewId,
+                kickerHeight,
+                {
+                  cabinets,
+                  viewManager,
+                  wallDimensions,
+                }
+              );
+            } else if (selectedCabinet) {
               // Update the kicker height and reposition the cabinet
               selectedCabinet.carcass.updateKickerHeight(kickerHeight);
 
               // Update all dependent components
-              updateAllDependentComponents(selectedCabinet, cabinets, wallDimensions, {
-                kickerHeightChanged: true
-              })
+              updateAllDependentComponents(
+                selectedCabinet,
+                cabinets,
+                wallDimensions,
+                {
+                  kickerHeightChanged: true,
+                }
+              );
             }
           }}
           onDoorToggle={(enabled) => {

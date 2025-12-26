@@ -1,5 +1,5 @@
 import { CabinetData, WallDimensions } from "../../types"
-import { clampPositionX } from "./sharedCabinetUtils"
+import { clampPositionX, getCabinetHorizontalEdges } from "./sharedCabinetUtils"
 import { updateAllDependentComponents } from "./dependentComponentsHandler"
 
 /**
@@ -16,25 +16,32 @@ export function applyWidthChangeWithLock(
   const rightLock = cabinet.rightLock ?? false
   const widthDelta = newWidth - oldWidth
 
+  const { left: leftEdge, right: rightEdge } = getCabinetHorizontalEdges(cabinet)
+  const isCentered = cabinet.cabinetType === 'kicker' || cabinet.cabinetType === 'bulkhead'
+
   if (leftLock && rightLock) {
     // Both locks are active - cannot resize width
     return null
   } else if (leftLock) {
     // Left edge is locked - keep left edge fixed, move right edge
-    // Position stays the same (left edge is frozen)
-    return { newX: oldX, positionChanged: false }
+    // For centered types: newCenter = leftEdge + newWidth / 2
+    // For left-aligned types: newX = leftEdge
+    const newX = isCentered ? leftEdge + newWidth / 2 : leftEdge
+    return { newX, positionChanged: Math.abs(newX - oldX) > 0.1 }
   } else if (rightLock) {
     // Right edge is locked - keep right edge fixed, move left edge
-    const rightEdge = oldX + oldWidth
-    const newX = rightEdge - newWidth
-    const clampedX = clampPositionX(newX)
+    // For centered types: newCenter = rightEdge - newWidth / 2
+    // For left-aligned types: newX = rightEdge - newWidth
+    const newX = isCentered ? rightEdge - newWidth / 2 : rightEdge - newWidth
+    const clampedX = isCentered ? newX : clampPositionX(newX) // Don't clamp center position directly the same way
     return { newX: clampedX, positionChanged: Math.abs(clampedX - oldX) > 0.1 }
   } else {
     // Neither lock is active - cabinet extends/shrinks equally from center
-    // Center position stays fixed
-    const centerX = oldX + oldWidth / 2
-    const newX = centerX - newWidth / 2
-    const clampedX = clampPositionX(newX)
+    // For centered types: position (center) stays fixed
+    // For left-aligned types: position (left) moves to maintain center
+    const centerX = leftEdge + oldWidth / 2
+    const newX = isCentered ? centerX : centerX - newWidth / 2
+    const clampedX = isCentered ? newX : clampPositionX(newX)
     return { newX: clampedX, positionChanged: Math.abs(clampedX - oldX) > 0.1 }
   }
 }

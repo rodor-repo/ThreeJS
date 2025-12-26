@@ -169,7 +169,9 @@ export function serializeRoom({
       drawerQuantity: cabinet.carcass.config.drawerQuantity,
       drawerHeights: cabinet.carcass.config.drawerHeights,
       kickerHeight:
-        cabinet.cabinetType === "base" || cabinet.cabinetType === "tall"
+        cabinet.cabinetType === "base" ||
+        cabinet.cabinetType === "tall" ||
+        cabinet.cabinetType === "appliance"
           ? cabinet.group.position.y
           : undefined,
       leftLock: cabinet.leftLock,
@@ -189,7 +191,6 @@ export function serializeRoom({
       applianceTopGap: cabinet.carcass.config.applianceTopGap,
       applianceLeftGap: cabinet.carcass.config.applianceLeftGap,
       applianceRightGap: cabinet.carcass.config.applianceRightGap,
-      applianceKickerHeight: cabinet.carcass.config.applianceKickerHeight,
       fridgeDoorCount: cabinet.carcass.config.fridgeDoorCount,
       fridgeDoorSide: cabinet.carcass.config.fridgeDoorSide,
       // Benchtop properties
@@ -435,7 +436,6 @@ export async function restoreRoom({
             applianceTopGap: savedCabinet.applianceTopGap || 0,
             applianceLeftGap: savedCabinet.applianceLeftGap || 0,
             applianceRightGap: savedCabinet.applianceRightGap || 0,
-            applianceKickerHeight: savedCabinet.applianceKickerHeight || 100,
             fridgeDoorCount: savedCabinet.fridgeDoorCount,
             fridgeDoorSide: savedCabinet.fridgeDoorSide,
           })
@@ -478,7 +478,8 @@ export async function restoreRoom({
         if (
           savedCabinet.kickerHeight !== undefined &&
           (cabinetData.cabinetType === "base" ||
-            cabinetData.cabinetType === "tall")
+            cabinetData.cabinetType === "tall" ||
+            cabinetData.cabinetType === "appliance")
         ) {
           cabinetData.carcass.updateKickerHeight(savedCabinet.kickerHeight)
         }

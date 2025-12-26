@@ -3,6 +3,7 @@ import * as THREE from "three"
 import type { CabinetData, WallDimensions } from "../types"
 import type { ViewManager } from "../../cabinets/ViewManager"
 import { WALL_THICKNESS } from "../lib/sceneUtils"
+import { getCabinetHorizontalEdges } from "../utils/handlers/sharedCabinetUtils"
 import {
   disposeGroup,
   type WallOffsetContext,
@@ -287,10 +288,9 @@ export function useDimensionLinesEnhanced(options: UseDimensionLinesEnhancedOpti
         cabinets.forEach((cabinet) => {
           // Skip all child products
           if (isChildProduct(cabinet)) return
-          const x = cabinet.group.position.x
-          const width = cabinet.carcass.dimensions.width
-          allMinX = Math.min(allMinX, x)
-          allMaxX = Math.max(allMaxX, x + width)
+          const { left, right } = getCabinetHorizontalEdges(cabinet)
+          allMinX = Math.min(allMinX, left)
+          allMaxX = Math.max(allMaxX, right)
         })
         const overallWidthAll = allMaxX - allMinX
 
@@ -300,10 +300,9 @@ export function useDimensionLinesEnhanced(options: UseDimensionLinesEnhancedOpti
         let baseTallMinX = Infinity
         let baseTallMaxX = -Infinity
         baseTallCabinets.forEach((cabinet) => {
-          const x = cabinet.group.position.x
-          const width = cabinet.carcass.dimensions.width
-          baseTallMinX = Math.min(baseTallMinX, x)
-          baseTallMaxX = Math.max(baseTallMaxX, x + width)
+          const { left, right } = getCabinetHorizontalEdges(cabinet)
+          baseTallMinX = Math.min(baseTallMinX, left)
+          baseTallMaxX = Math.max(baseTallMaxX, right)
         })
         const overallWidthBaseTall = baseTallMaxX - baseTallMinX
 

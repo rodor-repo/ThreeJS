@@ -1,5 +1,6 @@
 import type { CabinetData } from "../types"
 import { WALL_THICKNESS } from "./sceneUtils"
+import { getCabinetHorizontalEdges } from "../utils/handlers/sharedCabinetUtils"
 
 /**
  * Cabinet types that should be excluded from snap detection.
@@ -197,8 +198,17 @@ export function getCabinetRelativeEffectiveBounds(
 ): { leftOffset: number; rightOffset: number } {
   const parentWidth = cabinet.carcass.dimensions.width
   
-  let minRelLeft = 0
-  let maxRelRight = parentWidth
+  // Determine relative bounds based on whether the cabinet is centered or left-aligned
+  let minRelLeft: number
+  let maxRelRight: number
+  
+  if (cabinet.cabinetType === 'kicker' || cabinet.cabinetType === 'bulkhead') {
+    minRelLeft = -parentWidth / 2
+    maxRelRight = parentWidth / 2
+  } else {
+    minRelLeft = 0
+    maxRelRight = parentWidth
+  }
 
   // Find child fillers/panels
   for (const c of allCabinets) {
@@ -233,7 +243,8 @@ export function getCabinetRelativeEffectiveBounds(
  * Optimized to avoid unnecessary filtering
  */
 export function getEffectiveLeftEdge(cabinet: CabinetData, allCabinets: CabinetData[]): number {
-  let minLeft = cabinet.group.position.x
+  const { left } = getCabinetHorizontalEdges(cabinet)
+  let minLeft = left
   
   // Find child fillers/panels on the left side - single pass optimization
   for (const c of allCabinets) {
@@ -260,7 +271,8 @@ export function getEffectiveLeftEdge(cabinet: CabinetData, allCabinets: CabinetD
  * Optimized to avoid unnecessary filtering
  */
 export function getEffectiveRightEdge(cabinet: CabinetData, allCabinets: CabinetData[]): number {
-  const cabinetRight = cabinet.group.position.x + cabinet.carcass.dimensions.width
+  const { right } = getCabinetHorizontalEdges(cabinet)
+  const cabinetRight = right
   let maxRight = cabinetRight
   
   // Find child fillers/panels on the right side - single pass optimization

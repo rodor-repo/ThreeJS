@@ -1,6 +1,32 @@
+import { CabinetData } from "../../types"
+
 /**
  * Shared utility functions used across cabinet dimension handlers
  */
+
+/**
+ * Calculates the horizontal edges of a cabinet in world space.
+ * Correctly handles different cabinet types (some are centered, some are left-aligned).
+ */
+export function getCabinetHorizontalEdges(cabinet: CabinetData): { left: number; right: number } {
+  const width = cabinet.carcass.dimensions.width
+  const posX = cabinet.group.position.x
+  
+  // Kickers and bulkheads are centered on their X position in world space
+  if (cabinet.cabinetType === 'kicker' || cabinet.cabinetType === 'bulkhead') {
+    return {
+      left: posX - width / 2,
+      right: posX + width / 2
+    }
+  }
+  
+  // Traditional cabinets, fillers, panels, appliances, benchtops, underpanels are left-aligned
+  // (position.x is their left edge)
+  return {
+    left: posX,
+    right: posX + width
+  }
+}
 
 /**
  * Helper function to check if two cabinets are paired

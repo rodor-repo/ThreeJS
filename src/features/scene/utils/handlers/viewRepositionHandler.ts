@@ -1,6 +1,6 @@
 import { CabinetData, WallDimensions } from "../../types"
 import { ViewId } from "../../../cabinets/ViewManager"
-import { areCabinetsPaired, clampPositionX } from "./sharedCabinetUtils"
+import { areCabinetsPaired, clampPositionX, getCabinetHorizontalEdges } from "./sharedCabinetUtils"
 import { updateAllDependentComponents } from "./dependentComponentsHandler"
 
 interface ViewManagerResult {
@@ -34,9 +34,9 @@ export const checkLeftWallOverflow = (
       continue
 
     // Check if this cabinet is to the LEFT of the changing cabinet
-    const cabRightEdge = cab.group.position.x + cab.carcass.dimensions.width
+    const { right: cabRightEdge, left: cabLeftEdge } = getCabinetHorizontalEdges(cab)
     if (cabRightEdge < changingRightEdge) {
-      const newX = cab.group.position.x - pushAmount
+      const newX = cabLeftEdge - pushAmount
       if (newX < 0) {
         const overflow = Math.abs(newX)
         if (maxOverflow === null || overflow > maxOverflow) {

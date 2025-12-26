@@ -105,7 +105,7 @@ export const hasLeftAdjacentCabinet = (
   parentCabinet: CabinetData,
   allCabinets: CabinetData[]
 ): boolean => {
-  return !!getLeftAdjacentCabinet(parentCabinet, allCabinets, { allowedTypes: ["base"] })
+  return !!getLeftAdjacentCabinet(parentCabinet, allCabinets, { allowedTypes: ["base", "appliance"] })
 }
 
 /**
@@ -115,5 +115,5 @@ export const hasRightAdjacentCabinet = (
   parentCabinet: CabinetData,
   allCabinets: CabinetData[]
 ): boolean => {
-  return !!getRightAdjacentCabinet(parentCabinet, allCabinets, { allowedTypes: ["base"] })
+  return !!getRightAdjacentCabinet(parentCabinet, allCabinets, { allowedTypes: ["base", "appliance"] })
 }

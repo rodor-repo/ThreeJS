@@ -167,7 +167,6 @@ const getDefaultConfig = (
         applianceTopGap: appDefaults.topGap,
         applianceLeftGap: appDefaults.sideGap,
         applianceRightGap: appDefaults.sideGap,
-        applianceKickerHeight: appDefaults.kickerHeight,
         fridgeDoorCount: APPLIANCE_DEFAULTS.sideBySideFridge.fridgeDoorCount,
         fridgeDoorSide: APPLIANCE_DEFAULTS.sideBySideFridge.fridgeDoorSide,
       }
@@ -181,8 +180,7 @@ export const createCabinet = (
   type: CabinetType,
   subcategoryId: string,
   opts?: {
-    indexOffset?: number
-    spacing?: number
+    initialX?: number
     customDimensions?: Partial<CarcassDimensions>
     productId?: string
     fillerType?: "linear" | "l-shape"
@@ -212,14 +210,14 @@ export const createCabinet = (
   
   // For appliances, use per-type dimensions from APPLIANCE_DEFAULTS
   // Note: APPLIANCE_DEFAULTS.dimensions are VISUAL dimensions
-  // Shell dimensions = visual dimensions + gaps + kicker height
+  // Shell dimensions = visual dimensions + gaps (kicker height is handled by positioning)
   let applianceDims: Partial<CarcassDimensions> = {}
   if (resolvedType === "appliance" && opts?.applianceType) {
     const appDefaults = APPLIANCE_DEFAULTS[opts.applianceType]
     // Shell width = visual width + left gap + right gap
     const shellWidth = appDefaults.dimensions.width + (appDefaults.sideGap * 2)
-    // Shell height = visual height + top gap + kicker height
-    const shellHeight = appDefaults.dimensions.height + appDefaults.topGap + appDefaults.kickerHeight
+    // Shell height = visual height + top gap
+    const shellHeight = appDefaults.dimensions.height + appDefaults.topGap
     applianceDims = {
       width: shellWidth,
       height: shellHeight,
@@ -257,10 +255,14 @@ export const createCabinet = (
       : undefined
   )
 
-  // position by index to avoid overlap if desired
-  const index = opts?.indexOffset ?? 0
-  const spacing = opts?.spacing ?? 100
-  carcass.group.position.x = index * (dimensions.width + spacing)
+  // Position cabinet: use initialX if provided, otherwise default to 0
+  carcass.group.position.x = opts?.initialX ?? 0
+
+  // For appliances, also set Y position to kicker height
+  if (type === "appliance" && opts?.applianceType) {
+    const appDefaults = APPLIANCE_DEFAULTS[opts.applianceType]
+    carcass.group.position.y = appDefaults.kickerHeight
+  }
 
   return {
     group: carcass.group,

@@ -74,13 +74,28 @@ export const DimensionsSection: React.FC<DimensionsSectionProps> = ({
           // Child benchtops can only edit thickness (height in carcass terms)
           // Check by GDId first, then fallback to dimension name
           const dimName = (dimObj.dim || '').toLowerCase()
-          const isWidthOrLengthByGD = dimObj.GDId && gdMapping.widthGDIds.includes(dimObj.GDId)
-          const isWidthOrLengthByName = dimName.includes('length') || dimName.includes('width')
-          const isWidthOrLengthDim = isWidthOrLengthByGD || isWidthOrLengthByName
-          
+          const isWidthByGD = dimObj.GDId && gdMapping.widthGDIds.includes(dimObj.GDId)
+          const isHeightByGD = dimObj.GDId && gdMapping.heightGDIds.includes(dimObj.GDId)
           const isDepthByGD = dimObj.GDId && gdMapping.depthGDIds.includes(dimObj.GDId)
+
+          const isWidthByName = dimName.includes('length') || dimName.includes('width')
+          const isHeightByName = dimName.includes('thickness') || dimName.includes('height')
           const isDepthByName = dimName.includes('depth')
-          const isDepthDim = isDepthByGD || isDepthByName
+
+          let isWidthOrLengthDim = false
+          let isDepthDim = false
+
+          if (isWidthByGD) {
+            isWidthOrLengthDim = true
+          } else if (isHeightByGD) {
+            // height is thickness for benchtops, not disabled
+          } else if (isDepthByGD) {
+            isDepthDim = true
+          } else if (isWidthByName) {
+            isWidthOrLengthDim = true
+          } else if (isDepthByName) {
+            isDepthDim = true
+          }
           
           const isDisabledForChildBenchtop = isChildBenchtop && (isWidthOrLengthDim || isDepthDim)
 

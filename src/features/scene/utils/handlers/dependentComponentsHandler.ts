@@ -243,8 +243,12 @@ export function updateAllDependentComponents(
   // Update child cabinets (fillers/panels)
   updateChildCabinets(cabinet, allCabinets, changes)
 
-  // Update kicker position for base and tall cabinets
-  if (cabinet.cabinetType === "base" || cabinet.cabinetType === "tall") {
+  // Update kicker position for base, tall, and appliance cabinets
+  if (
+    cabinet.cabinetType === "base" ||
+    cabinet.cabinetType === "tall" ||
+    cabinet.cabinetType === "appliance"
+  ) {
     updateKickerPosition(cabinet, allCabinets, {
       dimensionsChanged:
         changes.heightChanged ||
@@ -294,8 +298,8 @@ export function updateAllDependentComponents(
     })
   }
 
-  // Update benchtop position for base cabinets
-  if (cabinet.cabinetType === "base") {
+  // Update benchtop position for base and appliance cabinets
+  if (cabinet.cabinetType === "base" || cabinet.cabinetType === "appliance") {
     updateBenchtopPosition(cabinet, allCabinets, {
       dimensionsChanged:
         changes.heightChanged ||
@@ -322,7 +326,8 @@ export function updateAllDependentComponents(
       // Update parent kicker (affects kicker width extension)
       if (
         parentCabinet.cabinetType === "base" ||
-        parentCabinet.cabinetType === "tall"
+        parentCabinet.cabinetType === "tall" ||
+        parentCabinet.cabinetType === "appliance"
       ) {
         updateKickerPosition(parentCabinet, allCabinets, {
           dimensionsChanged: true,
@@ -332,7 +337,10 @@ export function updateAllDependentComponents(
       }
 
       // Update parent benchtop (affects benchtop length)
-      if (parentCabinet.cabinetType === "base") {
+      if (
+        parentCabinet.cabinetType === "base" ||
+        parentCabinet.cabinetType === "appliance"
+      ) {
         updateBenchtopPosition(parentCabinet, allCabinets, {
           dimensionsChanged: true,
           positionChanged:

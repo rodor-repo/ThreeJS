@@ -34,11 +34,6 @@ export const handleKickerHeightChange = (
     // Update the kicker height which will also update the Y position
     cabinet.carcass.updateKickerHeight(kickerHeight)
 
-    // For appliances, also update their config for persistence/panel syncing
-    if (cabinet.cabinetType === "appliance") {
-      cabinet.carcass.config.applianceKickerHeight = kickerHeight
-    }
-
     // Update all dependent components
     updateAllDependentComponents(cabinet, cabinets, wallDimensions, {
       kickerHeightChanged: true,

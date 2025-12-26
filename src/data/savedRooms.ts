@@ -80,7 +80,6 @@ export interface SavedCabinet {
   applianceTopGap?: number
   applianceLeftGap?: number
   applianceRightGap?: number
-  applianceKickerHeight?: number
   /** Benchtop specific properties */
   benchtopParentCabinetId?: string
   benchtopFrontOverhang?: number

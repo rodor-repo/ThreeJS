@@ -54,7 +54,6 @@ export interface CarcassConfig {
   applianceRightGap?: number // Gap on right side (default: 0mm)
   fridgeDoorCount?: 1 | 2 // Number of doors for fridge (default: 2)
   fridgeDoorSide?: "left" | "right" // Handle side/door pivot for 1-door fridge (default: left)
-  applianceKickerHeight?: number // Height of appliance kicker panels (default: 100mm)
   // Benchtop-specific options
   benchtopFrontOverhang?: number // Extends depth toward +Z (default: 20mm for child, 0 for standalone)
   benchtopLeftOverhang?: number // Extends from left edge toward -X (default: 0)

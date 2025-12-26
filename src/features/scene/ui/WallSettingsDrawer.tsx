@@ -4,6 +4,7 @@ import { X, ChevronLeft, Plus, Trash2 } from 'lucide-react'
 import type { WallDimensions, CabinetData } from '../types'
 import { WALL_THICKNESS } from '../lib/sceneUtils'
 import type { View, ViewManager, ViewId } from '@/features/cabinets/ViewManager'
+import { getCabinetHorizontalEdges } from '../utils/handlers/sharedCabinetUtils'
 
 type Props = {
   isOpen: boolean
@@ -82,12 +83,12 @@ export const WallSettingsDrawer: React.FC<Props> = ({
     
     if (viewCabinets.length === 0) return 0
     
-    // Find the rightmost edge: cabinet X position + cabinet width
+    // Find the rightmost edge: correctly handle centered vs left-aligned cabinets
     let rightmostX = 0
     viewCabinets.forEach(cabinet => {
-      const cabinetRightEdge = cabinet.group.position.x + cabinet.carcass.dimensions.width
-      if (cabinetRightEdge > rightmostX) {
-        rightmostX = cabinetRightEdge
+      const { right } = getCabinetHorizontalEdges(cabinet)
+      if (right > rightmostX) {
+        rightmostX = right
       }
     })
     

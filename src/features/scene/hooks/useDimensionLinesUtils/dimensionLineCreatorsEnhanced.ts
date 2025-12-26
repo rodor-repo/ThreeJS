@@ -1,7 +1,6 @@
 import * as THREE from "three"
-import type { CabinetData } from "../../types"
-import type { ViewManager } from "../../../cabinets/ViewManager"
-import type { WallDimensions } from "../../types"
+import type { CabinetData, WallDimensions } from "../../types"
+import { getCabinetHorizontalEdges } from "../../utils/handlers/sharedCabinetUtils"
 import {
   DIMENSION_CONSTANTS,
   createCompleteDimension,
@@ -17,6 +16,7 @@ import {
 } from "./dimensionLineState"
 import type { DimensionLineOffset3D } from "./dimensionLineState"
 import { setDimensionLineMetadata } from "./dimensionLineDrag"
+import { ViewManager } from "@/features/cabinets/ViewManager"
 
 /**
  * Interface for dimension line offset configuration
@@ -56,22 +56,11 @@ export function createWidthDimension(
 
   const isBulkhead = cabinet.cabinetType === "bulkhead"
 
-  let xLeftEdge: number
-  let xRightEdge: number
-  let yTopEdge: number
-
-  if (isBulkhead) {
-    xLeftEdge = x - width / 2
-    xRightEdge = x + width / 2
-    yTopEdge = y + height / 2
-  } else {
-    xLeftEdge = x
-    xRightEdge = x + width
-    yTopEdge = y + height
-  }
+  const { left: xLeftEdge, right: xRightEdge } = getCabinetHorizontalEdges(cabinet)
+  const yTopEdge = cabinet.cabinetType === "bulkhead" ? y + height / 2 : y + height
 
   let dimensionZ: number
-  if (isBulkhead) {
+  if (cabinet.cabinetType === "bulkhead") {
     dimensionZ = z + depth / 2
   } else {
     dimensionZ = z + depth + baseOffset
@@ -146,16 +135,14 @@ export function createHeightDimension(
 
   const isBulkhead = cabinet.cabinetType === "bulkhead"
 
-  let xLeftEdge: number
+  const { left: xLeftEdge } = getCabinetHorizontalEdges(cabinet)
   let yBottomEdge: number
   let yTopEdge: number
 
   if (isBulkhead) {
-    xLeftEdge = x - width / 2
     yBottomEdge = y - height / 2
     yTopEdge = y + height / 2
   } else {
-    xLeftEdge = x
     yBottomEdge = y
     yTopEdge = y + height
   }
@@ -377,13 +364,12 @@ export function createOverallWidthDimensionEnhanced(
   let maxY = -Infinity
 
   filteredCabinets.forEach((cabinet) => {
-    const x = cabinet.group.position.x
+    const { left, right } = getCabinetHorizontalEdges(cabinet)
     const y = cabinet.group.position.y
-    const width = cabinet.carcass.dimensions.width
     const height = cabinet.carcass.dimensions.height
 
-    minX = Math.min(minX, x)
-    maxX = Math.max(maxX, x + width)
+    minX = Math.min(minX, left)
+    maxX = Math.max(maxX, right)
     maxY = Math.max(maxY, y + height)
   })
 
@@ -620,12 +606,11 @@ export function createBaseTallOverallWidthDimensionEnhanced(
   let minY = Infinity
 
   baseTallCabinets.forEach((cabinet) => {
-    const x = cabinet.group.position.x
+    const { left, right } = getCabinetHorizontalEdges(cabinet)
     const y = cabinet.group.position.y
-    const width = cabinet.carcass.dimensions.width
 
-    minX = Math.min(minX, x)
-    maxX = Math.max(maxX, x + width)
+    minX = Math.min(minX, left)
+    maxX = Math.max(maxX, right)
     minY = Math.min(minY, y)
   })
 

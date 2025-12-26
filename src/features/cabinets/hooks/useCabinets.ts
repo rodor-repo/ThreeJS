@@ -10,6 +10,7 @@ import {
 import type { CabinetData } from "../../scene/types"
 import type { CabinetType, CarcassDimensions } from "@/features/carcass"
 import { cabinetPanelState } from "../ui/ProductPanel"
+import { getCabinetHorizontalEdges } from "../../scene/utils/handlers/sharedCabinetUtils"
 
 /** Additional properties to merge into the created CabinetData */
 type AdditionalCabinetProps = Partial<Omit<CabinetData, 'group' | 'carcass' | 'cabinetType' | 'subcategoryId' | 'cabinetId'>>
@@ -60,8 +61,8 @@ export const useCabinets = (
       if (providedInitialX === undefined && cabinets.length > 0) {
         // Find the maximum X + width among all cabinets
         const rightEdges = cabinets.map((cab) => {
-          // Use carcass dimensions width
-          return cab.group.position.x + cab.carcass.dimensions.width
+          const { right } = getCabinetHorizontalEdges(cab)
+          return right
         })
         const maxRightEdge = Math.max(...rightEdges)
         const spacing = 100 // Constant spacing

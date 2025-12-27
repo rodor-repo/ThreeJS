@@ -52,7 +52,19 @@ function getDefaultBenchtopProductId(wsProducts: WsProducts): string | null {
 }
 
 /**
- * Creates a benchtop for a base cabinet.
+ * Check if a cabinet supports benchtop (base cabinets or dishwasher/washingMachine appliances)
+ */
+function supportsBenchtop(cabinet: CabinetData): boolean {
+  if (cabinet.cabinetType === "base") return true
+  if (cabinet.cabinetType === "appliance") {
+    const applianceType = cabinet.carcass?.config?.applianceType
+    return applianceType === "dishwasher" || applianceType === "washingMachine"
+  }
+  return false
+}
+
+/**
+ * Creates a benchtop for a base cabinet or appliance (dishwasher/washingMachine).
  * Uses the standard cabinetFactory flow via createCabinet().
  */
 export const handleBenchtopSelect = (
@@ -64,7 +76,7 @@ export const handleBenchtopSelect = (
   if (!wsProducts) return
 
   const parentCabinet = cabinets.find((c) => c.cabinetId === cabinetId)
-  if (!parentCabinet || parentCabinet.cabinetType !== "base") {
+  if (!parentCabinet || !supportsBenchtop(parentCabinet)) {
     return
   }
 
@@ -90,27 +102,42 @@ export const handleBenchtopSelect = (
   )
   if (existingBenchtopCabinet) return
 
-  // Calculate effective dimensions
-  const { effectiveLength, effectiveLeftX } = getEffectiveBenchtopDimensions(parentCabinet, cabinets)
-  
-  // Benchtop dimensions:
-  // width = effective length (cabinet + children)
-  // height = thickness (38mm fixed)
-  // depth = parent cabinet depth + 20mm (fixed) + front overhang
+  const isAppliance = parentCabinet.cabinetType === "appliance"
   const benchtopThickness = DEFAULT_BENCHTOP_THICKNESS
-  
-  // Default overhangs for child benchtops
-  const frontOverhang = DEFAULT_BENCHTOP_FRONT_OVERHANG
-  const leftOverhang = 0
-  const rightOverhang = 0
 
-  const benchtopDepth = calculateBenchtopDepth(parentCabinet.carcass.dimensions.depth, frontOverhang)
+  // Calculate effective dimensions including child fillers/panels (applies to both base cabinets and appliances)
+  const { effectiveLength, effectiveLeftX } = getEffectiveBenchtopDimensions(parentCabinet, cabinets)
+
+  let benchtopWidth: number
+  let benchtopDepth: number
+  let benchtopX: number
+  let frontOverhang = 0
+  let leftOverhang = 0
+  let rightOverhang = 0
+
+  if (isAppliance) {
+    // For appliances (dishwasher/washingMachine):
+    // Use effective length (shell + child fillers/panels), no overhangs
+    // The benchtop sits exactly on top of the shell
+    benchtopWidth = effectiveLength
+    benchtopDepth = parentCabinet.carcass.dimensions.depth
+    benchtopX = effectiveLeftX
+  } else {
+    // For base cabinets:
+    // Use effective dimensions including child fillers/panels
+    // Default overhangs for child benchtops
+    frontOverhang = DEFAULT_BENCHTOP_FRONT_OVERHANG
+    
+    benchtopWidth = effectiveLength
+    benchtopDepth = calculateBenchtopDepth(parentCabinet.carcass.dimensions.depth, frontOverhang)
+    benchtopX = effectiveLeftX
+  }
 
   // Use createCabinet (cabinetFactory) instead of manual creation
   const benchtopCabinet = createCabinet("benchtop", subcategoryId, {
     productId: finalProductId,
     customDimensions: {
-      width: effectiveLength,
+      width: benchtopWidth,
       height: benchtopThickness,
       depth: benchtopDepth,
     },
@@ -132,7 +159,7 @@ export const handleBenchtopSelect = (
   const parentZ = parentCabinet.group.position.z
 
   benchtopCabinet.group.position.set(
-    effectiveLeftX,
+    benchtopX,
     parentY + parentHeight,
     parentZ
   )
@@ -148,7 +175,7 @@ export const handleBenchtopToggle = (
   if (enabled) return
 
   const cabinet = cabinets.find((c) => c.cabinetId === cabinetId)
-  if (!cabinet || cabinet.cabinetType !== "base") {
+  if (!cabinet || !supportsBenchtop(cabinet)) {
     return
   }
 

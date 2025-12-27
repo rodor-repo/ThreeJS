@@ -63,7 +63,12 @@ import { CartSection } from './ui/CartSection'
 import { BottomRightActions } from './ui/BottomRightActions'
 import { HistoryControls } from './ui/HistoryControls'
 import { SaveButton } from './ui/SaveButton'
+import { MergeBenchtopsButton } from './ui/MergeBenchtopsButton'
 import { DimensionLineControls } from './ui/DimensionLineControls'
+import { mergeBenchtops, canMergeBenchtops, getSelectedBenchtops, analyzeBenchtopsForMerge } from './utils/handlers/mergeBenchtopsHandler'
+import { mergeKickers, canMergeKickers, getSelectedKickers, analyzeKickersForMerge } from './utils/handlers/mergeKickersHandler'
+import { MergeModal, MergeWarning, MergeItemType } from './ui/MergeBenchtopsModal'
+import { MergeButton } from './ui/MergeBenchtopsButton'
 
 interface ThreeSceneProps {
   wallDimensions: WallDims
@@ -168,6 +173,12 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
 
   // Cabinet numbering system
   useCabinetNumbers(sceneRef, cabinets, numbersVisible)
+
+  // Merge modal state (for benchtops and kickers)
+  const [showMergeModal, setShowMergeModal] = useState(false)
+  const [mergeWarnings, setMergeWarnings] = useState<MergeWarning[]>([])
+  const [itemsToMerge, setItemsToMerge] = useState<CabinetData[]>([])
+  const [mergeItemType, setMergeItemType] = useState<MergeItemType>('benchtop')
 
   const cameraDrag = useCameraDrag(
     cameraRef,
@@ -1283,6 +1294,75 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
       />
 
       <SaveButton onSave={openSaveModal} />
+
+      {/* Merge Benchtops Button */}
+      <MergeButton
+        isVisible={canMergeBenchtops(selectedCabinets) && !canMergeKickers(selectedCabinets)}
+        mergeType="benchtop"
+        onMerge={() => {
+          const selectedBenchtops = getSelectedBenchtops(selectedCabinets)
+          const warnings = analyzeBenchtopsForMerge(selectedBenchtops)
+          setItemsToMerge(selectedBenchtops)
+          setMergeWarnings(warnings)
+          setMergeItemType('benchtop')
+          setShowMergeModal(true)
+        }}
+      />
+
+      {/* Merge Kickers Button */}
+      <MergeButton
+        isVisible={canMergeKickers(selectedCabinets) && !canMergeBenchtops(selectedCabinets)}
+        mergeType="kicker"
+        onMerge={() => {
+          const selectedKickers = getSelectedKickers(selectedCabinets)
+          const warnings = analyzeKickersForMerge(selectedKickers)
+          setItemsToMerge(selectedKickers)
+          setMergeWarnings(warnings)
+          setMergeItemType('kicker')
+          setShowMergeModal(true)
+        }}
+      />
+
+      <MergeModal
+        isOpen={showMergeModal}
+        onClose={() => {
+          setShowMergeModal(false)
+          setMergeWarnings([])
+          setItemsToMerge([])
+        }}
+        onConfirm={() => {
+          let mergedItem: CabinetData | null = null
+          
+          if (mergeItemType === 'benchtop') {
+            mergedItem = mergeBenchtops({
+              selectedBenchtops: itemsToMerge,
+              createCabinet,
+              deleteCabinet,
+            })
+          } else if (mergeItemType === 'kicker') {
+            mergedItem = mergeKickers({
+              selectedKickers: itemsToMerge,
+              createCabinet,
+              deleteCabinet,
+            })
+          }
+          
+          if (mergedItem) {
+            // Clear selection and select the new merged item
+            setSelectedCabinets([mergedItem])
+            setSelectedCabinet(mergedItem)
+          } else {
+            setSelectedCabinets([])
+            setSelectedCabinet(null)
+          }
+          setShowMergeModal(false)
+          setMergeWarnings([])
+          setItemsToMerge([])
+        }}
+        warnings={mergeWarnings}
+        itemCount={itemsToMerge.length}
+        itemType={mergeItemType}
+      />
 
       <DimensionLineControls
         hasSelection={!!selectedDimLineId}

@@ -7,6 +7,7 @@ import type { CabinetData, WallDimensions } from '@/features/scene/types'
 import { ViewId } from '@/features/cabinets/ViewManager'
 import { repositionViewCabinets, checkLeftWallOverflow } from '@/features/scene/utils/handlers/viewRepositionHandler'
 import { applyWidthChangeWithLock } from '@/features/scene/utils/handlers/lockBehaviorHandler'
+import { updateAllDependentComponents } from '@/features/scene/utils/handlers/dependentComponentsHandler'
 import { toastThrottled } from './ProductPanel'
 import { CollapsibleSection } from './productPanel/components/CollapsibleSection'
 import { useCollapsibleSections } from './productPanel/hooks/useCollapsibleSections'
@@ -302,7 +303,15 @@ export const AppliancePanel: React.FC<AppliancePanelProps> = ({
         triggerViewReposition(widthDelta, oldX, oldShellWidth)
       }
     }
-  }, [selectedCabinet, visualWidth, visualHeight, visualDepth, topGap, leftGap, rightGap, triggerViewReposition, cabinets, cabinetGroups, viewManager])
+
+    // Update all dependent components (child fillers/panels and benchtop)
+    updateAllDependentComponents(selectedCabinet, cabinets, wallDimensions, {
+      widthChanged: dimension === 'width',
+      heightChanged: dimension === 'height',
+      depthChanged: dimension === 'depth',
+      positionChanged: dimension === 'width',
+    })
+  }, [selectedCabinet, visualWidth, visualHeight, visualDepth, topGap, leftGap, rightGap, triggerViewReposition, cabinets, cabinetGroups, viewManager, wallDimensions])
 
   // Update gaps when changed
   // This changes the shell size while keeping visual size the same
@@ -408,7 +417,14 @@ export const AppliancePanel: React.FC<AppliancePanelProps> = ({
     if (Math.abs(widthDelta) > 0.1) {
       triggerViewReposition(widthDelta, oldX, oldShellWidth)
     }
-  }, [selectedCabinet, visualWidth, visualHeight, visualDepth, topGap, leftGap, rightGap, triggerViewReposition, cabinets, cabinetGroups, viewManager])
+
+    // Update all dependent components (child fillers/panels and benchtop)
+    updateAllDependentComponents(selectedCabinet, cabinets, wallDimensions, {
+      widthChanged: gap === 'left' || gap === 'right',
+      heightChanged: gap === 'top',
+      positionChanged: gap === 'left' || gap === 'right',
+    })
+  }, [selectedCabinet, visualWidth, visualHeight, visualDepth, topGap, leftGap, rightGap, triggerViewReposition, cabinets, cabinetGroups, viewManager, wallDimensions])
 
   // Update kicker height - this also changes shell height
   const handleKickerChange = useCallback((value: number) => {
@@ -430,7 +446,13 @@ export const AppliancePanel: React.FC<AppliancePanelProps> = ({
       applianceKickerHeight: value,
     })
     setKickerHeight(value)
-  }, [selectedCabinet, visualHeight, topGap])
+
+    // Update all dependent components (child fillers/panels and benchtop)
+    updateAllDependentComponents(selectedCabinet, cabinets, wallDimensions, {
+      heightChanged: true,
+      kickerHeightChanged: true,
+    })
+  }, [selectedCabinet, visualHeight, topGap, cabinets, wallDimensions])
 
   // Calculate displayed shell dimensions for info display
   const shellWidth = useMemo(() => visualWidth + leftGap + rightGap, [visualWidth, leftGap, rightGap])

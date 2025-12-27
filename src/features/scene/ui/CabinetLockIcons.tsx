@@ -174,9 +174,25 @@ export const CabinetLockIcons: React.FC<Props> = ({
     return sorted.length > 0 ? sorted[0].id : null
   }, [wsProducts])
 
-  // Initialize T state based on whether benchtop exists as a separate CabinetData entry (only for base cabinets)
+  // Check if appliance supports benchtop (dishwasher or washingMachine)
+  const applianceType = cabinet.carcass?.config?.applianceType
+  const isApplianceWithBenchtop = cabinet.cabinetType === 'appliance' && 
+    (applianceType === 'dishwasher' || applianceType === 'washingMachine')
+  
+  // T icon is available for base cabinets AND appliances (dishwasher/washingMachine)
+  const supportsBenchtop = cabinet.cabinetType === 'base' || isApplianceWithBenchtop
+  
+  // Hide F, B, U, K, T icons for:
+  // - Independent fillers/panels (added from drawer, not modal)
+  // - Standalone benchtops (they only need lock icons for length extension)
+  // Lock icons should always be visible
+  const isIndependentFillerOrPanel = (cabinet.cabinetType === 'filler' || cabinet.cabinetType === 'panel') && !cabinet.hideLockIcons
+  const isStandaloneBenchtop = cabinet.cabinetType === 'benchtop'
+  const showLetterIcons = !isIndependentFillerOrPanel && !isStandaloneBenchtop
+  
+  // Initialize T state based on whether benchtop exists as a separate CabinetData entry
   const [isTOn, setIsTOn] = useState(() => {
-    if (cabinet.cabinetType === 'base') {
+    if (supportsBenchtop) {
       // Check if benchtop exists as a separate CabinetData entry
       const existingBenchtopCabinet = allCabinets.find(
         (c) => c.cabinetType === 'benchtop' && c.benchtopParentCabinetId === cabinet.cabinetId
@@ -186,9 +202,9 @@ export const CabinetLockIcons: React.FC<Props> = ({
     return false
   })
 
-  // Sync T state with actual benchtop existence when cabinet dimensions change (only for base cabinets)
+  // Sync T state with actual benchtop existence when cabinet dimensions change
   useEffect(() => {
-    if (cabinet.cabinetType === 'base') {
+    if (supportsBenchtop) {
       // Check if benchtop exists as a separate CabinetData entry
       const existingBenchtopCabinet = allCabinets.find(
         (c) => c.cabinetType === 'benchtop' && c.benchtopParentCabinetId === cabinet.cabinetId
@@ -205,6 +221,7 @@ export const CabinetLockIcons: React.FC<Props> = ({
     cabinet.carcass.dimensions.depth,
     cabinet.group.position.y,
     allCabinets,
+    supportsBenchtop,
   ])
 
   // Initialize K state based on whether kicker exists as a separate CabinetData entry
@@ -318,14 +335,6 @@ export const CabinetLockIcons: React.FC<Props> = ({
 
   if (!camera) return null
 
-  // Hide F, B, U, K, T icons for:
-  // - Independent fillers/panels (added from drawer, not modal)
-  // - Standalone benchtops (they only need lock icons for length extension)
-  // Lock icons should always be visible
-  const isIndependentFillerOrPanel = (cabinet.cabinetType === 'filler' || cabinet.cabinetType === 'panel') && !cabinet.hideLockIcons
-  const isStandaloneBenchtop = cabinet.cabinetType === 'benchtop'
-  const showLetterIcons = !isIndependentFillerOrPanel && !isStandaloneBenchtop
-
   return (
     <>
       {/* Backdrop to close on click outside */}
@@ -398,8 +407,8 @@ export const CabinetLockIcons: React.FC<Props> = ({
         )}
       </div>
 
-      {/* T Icon above Center Lock - Toggleable, for Base cabinets only (Benchtop) */}
-      {showLetterIcons && cabinet.cabinetType === 'base' && (
+      {/* T Icon above Center Lock - Toggleable, for Base cabinets and Appliances (Dishwasher/Washing Machine) */}
+      {showLetterIcons && supportsBenchtop && (
         <div
           className={`fixed z-50 bg-white rounded-full shadow-lg border-2 transition-colors cursor-pointer flex items-center justify-center ${isTOn
               ? 'border-blue-600 hover:border-blue-700'

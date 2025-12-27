@@ -13,6 +13,15 @@ import {
 } from "../../lib/snapUtils"
 
 /**
+ * Check if a cabinet is an appliance with benchtop support
+ */
+function isApplianceWithBenchtop(cabinet: CabinetData): boolean {
+  if (cabinet.cabinetType !== "appliance") return false
+  const applianceType = cabinet.carcass?.config?.applianceType
+  return applianceType === "dishwasher" || applianceType === "washingMachine"
+}
+
+/**
  * Updates benchtop position and dimensions when parent cabinet changes
  * Benchtops are separate selectable objects but need to follow parent cabinet
  * 
@@ -48,22 +57,40 @@ export const updateBenchtopPosition = (
   const parentZ = parentCabinet.group.position.z
   const parentHeight = parentCabinet.carcass.dimensions.height
   const parentDepth = parentCabinet.carcass.dimensions.depth
+  const parentWidth = parentCabinet.carcass.dimensions.width
+  
+  const isAppliance = isApplianceWithBenchtop(parentCabinet)
+  const benchtopThickness = benchtopCabinet.benchtopThickness ?? DEFAULT_BENCHTOP_THICKNESS
 
-  // Calculate effective benchtop length including children
-  const { effectiveLength, effectiveLeftX } = getEffectiveBenchtopDimensions(
+  let effectiveLength: number
+  let effectiveLeftX: number
+  let benchtopDepth: number
+  let frontOverhang: number
+  let leftOverhang: number
+  let rightOverhang: number
+
+  // Calculate effective dimensions including child fillers/panels (applies to both base cabinets and appliances)
+  const effectiveDims = getEffectiveBenchtopDimensions(
     parentCabinet,
     allCabinets
   )
+  effectiveLength = effectiveDims.effectiveLength
+  effectiveLeftX = effectiveDims.effectiveLeftX
 
-  // Benchtop dimensions:
-  // Length = effective length (cabinet + children)
-  // Thickness = cabinet property or 38mm (default)
-  // Depth = parent cabinet depth + 20mm (fixed) + front overhang
-  const benchtopThickness = benchtopCabinet.benchtopThickness ?? DEFAULT_BENCHTOP_THICKNESS
-  const frontOverhang = benchtopCabinet.benchtopFrontOverhang ?? DEFAULT_BENCHTOP_FRONT_OVERHANG
-  const leftOverhang = benchtopCabinet.benchtopLeftOverhang ?? 0
-  const rightOverhang = benchtopCabinet.benchtopRightOverhang ?? 0
-  const benchtopDepth = calculateBenchtopDepth(parentDepth, frontOverhang)
+  if (isAppliance) {
+    // For appliances: benchtop matches shell + child fillers/panels
+    // No overhangs for appliance benchtops
+    benchtopDepth = parentDepth
+    frontOverhang = 0
+    leftOverhang = 0
+    rightOverhang = 0
+  } else {
+    // For base cabinets: include overhangs
+    frontOverhang = benchtopCabinet.benchtopFrontOverhang ?? DEFAULT_BENCHTOP_FRONT_OVERHANG
+    leftOverhang = benchtopCabinet.benchtopLeftOverhang ?? 0
+    rightOverhang = benchtopCabinet.benchtopRightOverhang ?? 0
+    benchtopDepth = calculateBenchtopDepth(parentDepth, frontOverhang)
+  }
 
   // Update benchtop dimensions if needed
   if (changes.dimensionsChanged || changes.childChanged) {

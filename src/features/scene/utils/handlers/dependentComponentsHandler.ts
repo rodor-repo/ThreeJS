@@ -142,35 +142,23 @@ export const updateChildCabinets = (
       }
     }
 
-    // 5. Position change: Update child X and Y position to maintain snap position and follow parent Y
+    // 5. Position change: Update child X position only to maintain snap position
+    // IMPORTANT: Preserve child's Y position (Off the Floor value) - don't reset to parent Y
     if (changes.positionChanged) {
-      // Calculate new Y position based on parent Y
-      // For overhead cabinets with overhang: position 20mm lower to align with door overhang
-      let newY = parentY
-      if (isOverheadWithOverhang) {
-        newY = parentY - overhangAmount // Position 20mm lower (negative Y) to align with door overhang
-      }
-
       if (side === "left") {
         childCabinet.group.position.set(
           parentX - childCabinet.carcass.dimensions.width,
-          newY,
+          childCabinet.group.position.y, // Preserve current Y (Off the Floor)
           childCabinet.group.position.z
         )
       } else if (side === "right") {
         childCabinet.group.position.set(
           parentX + parentWidth,
-          newY,
-          childCabinet.group.position.z
-        )
-      } else {
-        // If side is not specified, still update Y position
-        childCabinet.group.position.set(
-          childCabinet.group.position.x,
-          newY,
+          childCabinet.group.position.y, // Preserve current Y (Off the Floor)
           childCabinet.group.position.z
         )
       }
+      // If side is not specified, position doesn't need to change
     }
 
     // 6. Overhang change: Update child height and position for overhead cabinets
@@ -284,8 +272,12 @@ export function updateAllDependentComponents(
     })
   }
 
-  // Update benchtop position for base cabinets
-  if (cabinet.cabinetType === "base") {
+  // Update benchtop position for base cabinets and appliances (dishwasher/washingMachine)
+  const isApplianceWithBenchtop = cabinet.cabinetType === "appliance" && 
+    (cabinet.carcass?.config?.applianceType === "dishwasher" || 
+     cabinet.carcass?.config?.applianceType === "washingMachine")
+  
+  if (cabinet.cabinetType === "base" || isApplianceWithBenchtop) {
     updateBenchtopPosition(cabinet, allCabinets, {
       dimensionsChanged:
         changes.heightChanged ||

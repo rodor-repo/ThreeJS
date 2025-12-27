@@ -167,6 +167,7 @@ const getDefaultConfig = (
         applianceTopGap: appDefaults.topGap,
         applianceLeftGap: appDefaults.sideGap,
         applianceRightGap: appDefaults.sideGap,
+        applianceKickerHeight: appDefaults.kickerHeight,
         fridgeDoorCount: APPLIANCE_DEFAULTS.sideBySideFridge.fridgeDoorCount,
         fridgeDoorSide: APPLIANCE_DEFAULTS.sideBySideFridge.fridgeDoorSide,
       }
@@ -257,12 +258,6 @@ export const createCabinet = (
 
   // Position cabinet: use initialX if provided, otherwise default to 0
   carcass.group.position.x = opts?.initialX ?? 0
-
-  // For appliances, also set Y position to kicker height
-  if (type === "appliance" && opts?.applianceType) {
-    const appDefaults = APPLIANCE_DEFAULTS[opts.applianceType]
-    carcass.group.position.y = appDefaults.kickerHeight
-  }
 
   return {
     group: carcass.group,

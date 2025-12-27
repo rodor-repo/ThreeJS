@@ -164,6 +164,7 @@ export const AppliancePanel: React.FC<AppliancePanelProps> = ({
       const tGap = config.applianceTopGap || 0
       const lGap = config.applianceLeftGap || 0
       const rGap = config.applianceRightGap || 0
+      const kHeight = config.applianceKickerHeight || 100
 
       // Calculate visual dimensions from shell - gaps (shell no longer includes kicker)
       setVisualWidth(shellDims.width - lGap - rGap)

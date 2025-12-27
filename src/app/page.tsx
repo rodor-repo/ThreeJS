@@ -55,12 +55,13 @@ export default function Home() {
   const [selectedApplianceType, setSelectedApplianceType] = useState<'dishwasher' | 'washingMachine' | 'sideBySideFridge' | null>(null)
   const [selectedMode, setSelectedMode] = useState<AppMode>('admin')
 
-  // Track if we've already loaded the room from URL to avoid duplicate loads
-  const initialLoadDoneRef = useRef(false)
+  // Track the last loaded room ID to prevent duplicate loads (e.g. when setting URL + manually loading)
+  const lastLoadedRoomIdRef = useRef<string | null>(null)
 
   // Load room design when roomId changes or on initial load
   useEffect(() => {
-    if (!roomId || !loadRoomRef.current || initialLoadDoneRef.current) return
+    // Skip if no room ID, no load function, or if this room is already loaded
+    if (!roomId || !loadRoomRef.current || roomId === lastLoadedRoomIdRef.current) return
 
     const loadRoomFromId = async () => {
       try {
@@ -82,7 +83,7 @@ export default function Home() {
           }
 
           await loadRoomRef.current(savedRoom)
-          initialLoadDoneRef.current = true
+          lastLoadedRoomIdRef.current = roomId
         }
       } catch (error) {
         console.error('Failed to load room design:', error)
@@ -97,6 +98,11 @@ export default function Home() {
 
   // Handler for when a room is selected from the menu
   const handleRoomSelect = useCallback(async (selectedRoomId: string, design?: RoomDesignData | null) => {
+    // Update ref first to prevent useEffect from loading again when URL changes
+    if (design) {
+        lastLoadedRoomIdRef.current = selectedRoomId
+    }
+
     // Update URL
     await setRoomId(selectedRoomId)
 

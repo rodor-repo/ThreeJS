@@ -81,6 +81,7 @@ export const useSceneInteractions = (
         el.closest("[data-wall-drawer]") ||
         el.closest("[data-views-drawer]") ||
         el.closest("[data-view-drawer]") ||
+        el.closest("[data-products-drawer]") ||
         el.closest("[data-camera-controls]") ||
         el.closest("[data-user-width-slider]") ||
         el.closest("button")

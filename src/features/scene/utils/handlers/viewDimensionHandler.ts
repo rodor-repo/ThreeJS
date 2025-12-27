@@ -1,6 +1,8 @@
 import { CabinetData, WallDimensions } from "../../types"
 import { ViewId } from "../../../cabinets/ViewManager"
-import { cabinetPanelState } from "../../../cabinets/ui/ProductPanel"
+import {
+  updatePersistedSingleValue,
+} from "../../../cabinets/ui/productPanel/hooks/usePersistence"
 import { updateAllDependentComponents } from "./dependentComponentsHandler"
 import {
   applyWidthChangeWithLock,
@@ -67,13 +69,8 @@ export const handleViewDimensionChange = (
 
   // Update each cabinet
   cabinetsToUpdate.forEach(({ cabinet, dimId, productData }) => {
-    // Update cabinetPanelState
-    const persisted = cabinetPanelState.get(cabinet.cabinetId)
-    const updatedValues = { ...(persisted?.values || {}), [dimId]: newValue }
-    cabinetPanelState.set(cabinet.cabinetId, {
-      ...(persisted || { values: {}, materialColor: "#ffffff" }),
-      values: updatedValues,
-    })
+    // Update cabinetPanelState using helper functions to trigger price invalidation
+    updatePersistedSingleValue(cabinet.cabinetId, dimId, newValue)
 
     // Determine which dimension (width/height/depth/shelfQty) this GDId maps to
     const dimObj = productData.product.dims[dimId]
@@ -121,17 +118,7 @@ export const handleViewDimensionChange = (
         if (cab.cabinetType === "top") {
           cab.carcass.updateOverhangDoor(overhangDoor)
           // Update cabinetPanelState if this cabinet has the dimension
-          const cabPersisted = cabinetPanelState.get(cab.cabinetId)
-          if (cabPersisted) {
-            const cabUpdatedValues = {
-              ...cabPersisted.values,
-              [dimId]: newValue,
-            }
-            cabinetPanelState.set(cab.cabinetId, {
-              ...cabPersisted,
-              values: cabUpdatedValues,
-            })
-          }
+          updatePersistedSingleValue(cab.cabinetId, dimId, newValue)
 
           // Update child cabinets when overhang changes
           updateAllDependentComponents(cab, cabinets, wallDimensions, {

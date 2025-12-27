@@ -6,7 +6,6 @@ import { useCabinets } from '../cabinets/hooks/useCabinets'
 import { useViewManager } from '../cabinets/hooks/useViewManager'
 import { CabinetLockIcons } from './ui/CabinetLockIcons'
 import ProductPanel from '../cabinets/ui/ProductPanel'
-import { cabinetPanelState } from '../cabinets/ui/ProductPanel'
 import AppliancePanel from '../cabinets/ui/AppliancePanel'
 import { useRoomPersistence } from './hooks/useRoomPersistence'
 import { useUndoRedo } from './hooks/useUndoRedo'
@@ -63,6 +62,7 @@ import { addToCart } from '@/server/addToCart'
 import { useSaveUserRoom, useLoadUserRoom } from '@/hooks/useUserRoomsQuery'
 import toast from 'react-hot-toast'
 import { useWallTransparency } from './hooks/useWallTransparency'
+import { useAllCabinetPrices } from './hooks/useAllCabinetPrices'
 import { ModeToggle } from './ui/ModeToggle'
 import { CartSection } from './ui/CartSection'
 import { BottomRightActions } from './ui/BottomRightActions'
@@ -170,6 +170,19 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
   // Part data manager - tracks all part dimensions (X, Y, Z) for export
   // Automatically updates when cabinets array changes
   const partData = usePartData(cabinets, wsProducts)
+
+  // Price calculation for all cabinets
+  // Proactively calculates prices without needing to open ProductPanel
+  const {
+    isCalculating: isPriceCalculating,
+    totalPrice,
+    cabinetPrices,
+    isCabinetCalculating,
+    cabinetErrors,
+  } = useAllCabinetPrices({
+    cabinets,
+    enabled: true,
+  })
 
   // User room mutations (React Query)
   const saveUserRoomMutation = useSaveUserRoom()
@@ -414,14 +427,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     openSettings()
   }
 
-  // Calculate total price of all cabinets
-  const totalPrice = useMemo(() => {
-    return cabinets.reduce((sum, cabinet) => {
-      const panelState = cabinetPanelState.get(cabinet.cabinetId)
-      const price = panelState?.price?.amount ?? 0
-      return sum + price
-    }, 0)
-  }, [cabinets])
+  // totalPrice is now provided by useAllCabinetPrices hook
 
   // When the product panel opens for a selected cabinet, try loading its WsProduct config
 
@@ -980,6 +986,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         onSaveRoom={handleSaveUserRoom}
         isLoading={isAddingToCart}
         isSaving={isSavingRoom}
+        isPriceCalculating={isPriceCalculating}
         appMode={selectedMode}
       />
 
@@ -1631,6 +1638,10 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         onClose={() => setShowProductsDrawer(false)}
         cabinets={cabinets}
         wsProducts={wsProducts}
+        totalPrice={totalPrice}
+        cabinetPrices={cabinetPrices}
+        isCabinetCalculating={isCabinetCalculating}
+        cabinetErrors={cabinetErrors}
       />
 
       <HistoryControls

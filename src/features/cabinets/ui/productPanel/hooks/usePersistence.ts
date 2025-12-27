@@ -17,6 +17,43 @@ export type PersistedPanelState = {
  */
 export const cabinetPanelState = new Map<string, PersistedPanelState>()
 
+// ============================================================================
+// Price Invalidation Event System
+// ============================================================================
+
+/**
+ * Listener type for price invalidation events
+ */
+export type PriceInvalidationListener = (cabinetId: string) => void
+
+/**
+ * Set of listeners subscribed to price invalidation events
+ */
+const priceInvalidationListeners = new Set<PriceInvalidationListener>()
+
+/**
+ * Subscribe to price invalidation events
+ * @returns Unsubscribe function
+ */
+export function onPriceNeedsInvalidation(
+  listener: PriceInvalidationListener
+): () => void {
+  priceInvalidationListeners.add(listener)
+  return () => priceInvalidationListeners.delete(listener)
+}
+
+/**
+ * Notify all listeners that a cabinet's price needs recalculation
+ * Exported so handlers can trigger invalidation when updating state directly
+ */
+export function notifyPriceInvalidation(cabinetId: string): void {
+  priceInvalidationListeners.forEach((listener) => listener(cabinetId))
+}
+
+// ============================================================================
+// Persisted State Functions
+// ============================================================================
+
 /**
  * Get persisted state for a cabinet
  */
@@ -34,6 +71,7 @@ export function setPersistedState(
   state: PersistedPanelState
 ): void {
   cabinetPanelState.set(cabinetId, state)
+  notifyPriceInvalidation(cabinetId)
 }
 
 /**
@@ -51,7 +89,7 @@ export function updatePersistedValues(
     )
     return
   }
-  cabinetPanelState.set(cabinetId, { ...current, values })
+  setPersistedState(cabinetId, { ...current, values })
 }
 
 /**
@@ -87,7 +125,7 @@ export function updatePersistedMaterialSelections(
     )
     return
   }
-  cabinetPanelState.set(cabinetId, { ...current, materialSelections })
+  setPersistedState(cabinetId, { ...current, materialSelections })
 }
 
 /**
@@ -117,7 +155,7 @@ export function updatePersistedSingleValue(
   if (!current) {
     throw new Error(`Cabinet panel state not found for: ${cabinetId}`)
   }
-  cabinetPanelState.set(cabinetId, {
+  setPersistedState(cabinetId, {
     ...current,
     values: { ...current.values, [dimId]: value },
   })

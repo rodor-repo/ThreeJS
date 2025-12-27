@@ -32,12 +32,7 @@ export const handleKickerSelect = (
   if (!wsProducts) return
 
   const parentCabinet = cabinets.find((c) => c.cabinetId === cabinetId)
-  if (
-    !parentCabinet ||
-    (parentCabinet.cabinetType !== "base" &&
-      parentCabinet.cabinetType !== "tall" &&
-      parentCabinet.cabinetType !== "appliance")
-  ) {
+  if (!parentCabinet || (parentCabinet.cabinetType !== "base" && parentCabinet.cabinetType !== "tall")) {
     return
   }
 
@@ -125,12 +120,7 @@ export const handleKickerToggle = (
   if (enabled) return
 
   const cabinet = cabinets.find((c) => c.cabinetId === cabinetId)
-  if (
-    !cabinet ||
-    (cabinet.cabinetType !== "base" &&
-      cabinet.cabinetType !== "tall" &&
-      cabinet.cabinetType !== "appliance")
-  ) {
+  if (!cabinet || (cabinet.cabinetType !== "base" && cabinet.cabinetType !== "tall")) {
     return
   }
 

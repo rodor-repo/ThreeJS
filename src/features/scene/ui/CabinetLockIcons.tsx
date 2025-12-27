@@ -209,7 +209,7 @@ export const CabinetLockIcons: React.FC<Props> = ({
 
   // Initialize K state based on whether kicker exists as a separate CabinetData entry
   const [isKOn, setIsKOn] = useState(() => {
-    if (cabinet.cabinetType === 'base' || cabinet.cabinetType === 'tall' || cabinet.cabinetType === 'appliance') {
+    if (cabinet.cabinetType === 'base' || cabinet.cabinetType === 'tall') {
       // Check if kicker exists as a separate CabinetData entry
       const existingKickerCabinet = allCabinets.find(
         (c) => c.cabinetType === 'kicker' && c.kickerParentCabinetId === cabinet.cabinetId
@@ -221,7 +221,7 @@ export const CabinetLockIcons: React.FC<Props> = ({
 
   // Sync K state with actual kicker existence when cabinet dimensions change
   useEffect(() => {
-    if (cabinet.cabinetType === 'base' || cabinet.cabinetType === 'tall' || cabinet.cabinetType === 'appliance') {
+    if (cabinet.cabinetType === 'base' || cabinet.cabinetType === 'tall') {
       // Check if kicker exists as a separate CabinetData entry
       const existingKickerCabinet = allCabinets.find(
         (c) => c.cabinetType === 'kicker' && c.kickerParentCabinetId === cabinet.cabinetId
@@ -497,8 +497,8 @@ export const CabinetLockIcons: React.FC<Props> = ({
         )}
       </div>
 
-      {/* K Icon below Center Lock - Toggleable, only for Base, Tall and Appliance cabinets */}
-      {showLetterIcons && (cabinet.cabinetType === 'base' || cabinet.cabinetType === 'tall' || cabinet.cabinetType === 'appliance') && (
+      {/* K Icon below Center Lock - Toggleable, only for Base and Tall cabinets */}
+      {showLetterIcons && (cabinet.cabinetType === 'base' || cabinet.cabinetType === 'tall') && (
         <div
           className={`fixed z-50 bg-white rounded-full shadow-lg border-2 transition-colors cursor-pointer flex items-center justify-center ${isKOn
               ? 'border-blue-600 hover:border-blue-700'

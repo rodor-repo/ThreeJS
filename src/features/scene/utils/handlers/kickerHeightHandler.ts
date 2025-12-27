@@ -21,15 +21,12 @@ export const handleKickerHeightChange = (
   const cabinetIds = viewManager.getCabinetsInView(viewId as ViewId)
   const viewCabinets = cabinets.filter((c) => cabinetIds.includes(c.cabinetId))
 
-  // Get all base/tall/appliance cabinets in the view
+  // Get all base/tall cabinets in the view
   const baseTallCabinets = viewCabinets.filter(
-    (c) =>
-      c.cabinetType === "base" ||
-      c.cabinetType === "tall" ||
-      c.cabinetType === "appliance"
+    (c) => c.cabinetType === "base" || c.cabinetType === "tall"
   )
 
-  // Update kicker height for all base/tall/appliance cabinets in the view
+  // Update kicker height for all base/tall cabinets in the view
   baseTallCabinets.forEach((cabinet) => {
     // Update the kicker height which will also update the Y position
     cabinet.carcass.updateKickerHeight(kickerHeight)

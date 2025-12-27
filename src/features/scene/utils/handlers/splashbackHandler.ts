@@ -20,13 +20,8 @@ export const handleSplashbackHeightChange = (
   const cabinetIds = viewManager.getCabinetsInView(viewId as ViewId)
   const viewCabinets = cabinets.filter((c) => cabinetIds.includes(c.cabinetId))
 
-  // Get all base/tall/appliance cabinets
-  const baseTallCabinets = viewCabinets.filter(
-    (c) =>
-      c.cabinetType === "base" ||
-      c.cabinetType === "tall" ||
-      c.cabinetType === "appliance"
-  )
+  // Get all base/tall cabinets
+  const baseTallCabinets = viewCabinets.filter(c => c.cabinetType === 'base' || c.cabinetType === 'tall')
   
   // Get all overhead (top) cabinets
   const overheadCabinets = viewCabinets.filter(c => c.cabinetType === 'top')

@@ -3,6 +3,7 @@ import { ViewId } from "../../../cabinets/ViewManager"
 import { toastThrottled } from "@/features/cabinets/ui/ProductPanel"
 import { getClient } from "@/app/QueryProvider"
 import { getProductData } from "@/server/getProductData"
+import { priceQueryKeys } from "@/features/cabinets/ui/productPanel/utils/queryKeys"
 import {
   getCabinetRelativeEffectiveBounds,
   getEffectiveLeftEdge,
@@ -28,7 +29,7 @@ export const getWidthConstraints = (
 ): { min: number; max: number } | null => {
   if (!productId) return null
 
-  const productData = getClient().getQueryData(["productData", productId]) as
+  const productData = getClient().getQueryData(priceQueryKeys.productData(productId)) as
     | Awaited<ReturnType<typeof getProductData>>
     | undefined
 

@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { ChevronLeft } from 'lucide-react'
 import { useQueries } from '@tanstack/react-query'
 import { getProductData } from '@/server/getProductData'
+import { priceQueryKeys } from '@/features/cabinets/ui/productPanel/utils/queryKeys'
 import type { WsProducts, GDThreeJsType } from '@/types/erpTypes'
 import type { CabinetData, WallDimensions } from '../types'
 import { cabinetPanelState } from '@/features/cabinets/ui/ProductPanel'
@@ -47,7 +48,7 @@ export const ViewDetailDrawer: React.FC<Props> = ({
 
   // Memoize queries to keep useQueries stable
   const queries = useMemo(() => uniqueProductIds.map((productId) => ({
-    queryKey: ['productData', productId],
+    queryKey: priceQueryKeys.productData(productId),
     queryFn: () => getProductData(productId),
     enabled: isOpen && !!productId,
     staleTime: 5 * 60 * 1000,

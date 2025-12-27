@@ -10,6 +10,7 @@ import { getRoomDesign, type RoomDesignData } from '@/server/rooms/getRoomDesign
 import _ from 'lodash'
 import { getClient } from '@/app/QueryProvider'
 import { getProductData } from '@/server/getProductData'
+import { priceQueryKeys } from '@/features/cabinets/ui/productPanel/utils/queryKeys'
 import toast from 'react-hot-toast'
 import { useWsProductsQuery } from '@/hooks/useWsProductsQuery'
 
@@ -178,13 +179,13 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect: _onCategorySelect
 
     // Prefetch product data before adding cabinet
     const queryClient = getClient()
-    const cached = queryClient.getQueryData(["productData", productId])
+    const cached = queryClient.getQueryData(priceQueryKeys.productData(productId))
 
     if (!cached) {
       const toastId = toast.loading("Loading product...")
       try {
         const data = await getProductData(productId)
-        queryClient.setQueryData(["productData", productId], data)
+        queryClient.setQueryData(priceQueryKeys.productData(productId), data)
         toast.success("Product loaded", { id: toastId })
       } catch (error) {
         console.error("Failed to prefetch product:", error)

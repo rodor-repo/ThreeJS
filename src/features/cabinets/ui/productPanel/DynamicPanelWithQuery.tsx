@@ -4,6 +4,7 @@ import _ from "lodash"
 import { getProductData } from "@/server/getProductData"
 import { getPartDataManager } from "@/nesting/PartDataManager"
 import { toNum } from "./utils/dimensionUtils"
+import { priceQueryKeys } from "./utils/queryKeys"
 import { DynamicPanel } from "./DynamicPanel"
 import type { ProductPanelProps } from "../productPanel.types"
 
@@ -41,7 +42,7 @@ export const DynamicPanelWithQuery: React.FC<ProductPanelProps> = ({
   const productId = selectedCabinet?.productId
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ["productData", productId],
+    queryKey: priceQueryKeys.productData(productId ?? ""),
     queryFn: async () => {
       if (!productId) throw new Error("No productId")
       const data = await getProductData(productId)

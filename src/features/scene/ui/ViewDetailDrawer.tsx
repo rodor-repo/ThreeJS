@@ -222,13 +222,8 @@ export const ViewDetailDrawer: React.FC<Props> = ({
     
     if (viewCabinets.length < 2) return 20
     
-    // Get all base/tall/appliance cabinets
-    const baseTallCabinets = viewCabinets.filter(
-      (c) =>
-        c.cabinetType === "base" ||
-        c.cabinetType === "tall" ||
-        c.cabinetType === "appliance"
-    )
+    // Get all base/tall cabinets
+    const baseTallCabinets = viewCabinets.filter(c => c.cabinetType === 'base' || c.cabinetType === 'tall')
     
     // Get all overhead (top) cabinets
     const overheadCabinets = viewCabinets.filter(c => c.cabinetType === 'top')
@@ -263,13 +258,8 @@ export const ViewDetailDrawer: React.FC<Props> = ({
     // Get all cabinets in the scene that belong to this view
     const viewCabinets = cabinets.filter(c => c.viewId === viewId)
     
-    // Get all base/tall/appliance cabinets
-    const baseTallCabinets = viewCabinets.filter(
-      (c) =>
-        c.cabinetType === "base" ||
-        c.cabinetType === "tall" ||
-        c.cabinetType === "appliance"
-    )
+    // Get all base/tall cabinets
+    const baseTallCabinets = viewCabinets.filter(c => c.cabinetType === 'base' || c.cabinetType === 'tall')
     
     if (baseTallCabinets.length === 0) return 100
     
@@ -543,7 +533,7 @@ export const ViewDetailDrawer: React.FC<Props> = ({
                 <div className="border border-gray-200 rounded-lg bg-white p-4">
                   <h3 className="font-semibold text-gray-800 mb-4">Kicker Height</h3>
                   <div>
-                    <h4 className="font-medium text-gray-700 mb-3 text-sm">Leg Height for Base, Tall and Appliance Cabinets</h4>
+                    <h4 className="font-medium text-gray-700 mb-3 text-sm">Leg Height for Base and Tall Cabinets</h4>
                     
                     {/* Number input and slider */}
                     <div>

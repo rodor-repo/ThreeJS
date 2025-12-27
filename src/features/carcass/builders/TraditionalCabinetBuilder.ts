@@ -6,6 +6,7 @@ import { CarcassBack } from "../parts/CarcassBack"
 import { CarcassBottom } from "../parts/CarcassBottom"
 import { CarcassTop } from "../parts/CarcassTop"
 import { CarcassShelf } from "../parts/CarcassShelf"
+import { CarcassLeg } from "../parts/CarcassLeg"
 import { MaterialLoader } from "../MaterialLoader"
 import {
   calculatePanelWidth,
@@ -16,6 +17,7 @@ import {
 import { createPartDimension } from "../utils/carcass-geometry-utils"
 import {
   SHELF_OFFSET_FROM_EDGE,
+  LEG_DIAMETER,
   DEFAULT_WARDROBE_DRAWER_HEIGHT,
   DEFAULT_WARDROBE_DRAWER_BUFFER,
   PART_NAMES,
@@ -28,7 +30,7 @@ export class TraditionalCabinetBuilder implements CabinetBuilder {
     this.createBottomPanel(assembly)
     this.createTopPanel(assembly)
     this.createShelves(assembly)
-    assembly.createLegs()
+    this.createLegs(assembly)
 
     // TODO: These will be moved to managers in later phases
     if (assembly.cabinetType === "wardrobe") {
@@ -47,6 +49,7 @@ export class TraditionalCabinetBuilder implements CabinetBuilder {
       assembly.top,
     ])
     assembly.addPartsToGroup(assembly.shelves)
+    assembly.addPartsToGroup(assembly.legs)
     assembly.addPartsToGroup(assembly.drawers)
     assembly.addPartsToGroup(assembly.doors)
 
@@ -323,6 +326,37 @@ export class TraditionalCabinetBuilder implements CabinetBuilder {
         })
 
         assembly.shelves.push(shelf)
+      })
+    }
+  }
+
+  private createLegs(assembly: CarcassAssembly): void {
+    assembly.legs = []
+
+    if (
+      assembly.cabinetType === "base" ||
+      assembly.cabinetType === "tall" ||
+      assembly.cabinetType === "wardrobe"
+    ) {
+      const legHeight = MaterialLoader.getLegHeight()
+      const thickness = assembly.config.material.getThickness()
+
+      const legPositions: Array<
+        "frontLeft" | "frontRight" | "backLeft" | "backRight"
+      > = ["frontLeft", "frontRight", "backLeft", "backRight"]
+
+      legPositions.forEach((position) => {
+        const leg = new CarcassLeg({
+          height: legHeight,
+          diameter: LEG_DIAMETER,
+          position: position,
+          width: assembly.dimensions.width,
+          depth: assembly.dimensions.depth,
+          thickness: thickness,
+          material: assembly.config.material.getMaterial(),
+        })
+
+        assembly.legs.push(leg)
       })
     }
   }

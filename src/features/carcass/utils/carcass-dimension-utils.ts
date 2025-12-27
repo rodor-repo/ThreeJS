@@ -72,7 +72,6 @@ export function calculateCabinetYPosition(
     case "base":
     case "tall":
     case "wardrobe":
-    case "appliance":
       return legHeight
     default:
       return 0

@@ -21,7 +21,7 @@ import { calculateCabinetYPosition } from "./utils/carcass-dimension-utils"
 import { createShelves } from "./utils/shelf-utils"
 import { CabinetType } from "../scene/types"
 import { CabinetBuilder, PartDimension } from "./builders/CabinetBuilder"
-import { BuilderRegistry, TraditionalCabinetBuilder, BULKHEAD_RETURN_THICKNESS, LEG_DIAMETER } from "./builders"
+import { BuilderRegistry, TraditionalCabinetBuilder, BULKHEAD_RETURN_THICKNESS } from "./builders"
 import { CarcassDrawerManager } from "./managers/CarcassDrawerManager"
 import { CarcassDoorManager } from "./managers/CarcassDoorManager"
 
@@ -270,52 +270,20 @@ export class CarcassAssembly {
   }
 
   public updateLegs() {
-    // Only update legs for base, tall, wardrobe, and appliance cabinets
+    // Only update legs for base and tall cabinets
     if (this.legs.length > 0) {
       const thickness = this.config.material.getThickness()
       this.legs.forEach((leg) => {
         leg.updateDimensions(
           leg.height, // Keep current leg height
-          this.dimensions.width,
+        this.dimensions.width,
           this.dimensions.depth,
           thickness
         )
       })
     }
   }
-
-  public createLegs(): void {
-    // Only create legs for base, tall, wardrobe, and appliance cabinets
-    if (["base", "tall", "wardrobe", "appliance"].includes(this.cabinetType)) {
-      // Clear existing legs if any
-      this.removePartsFromGroup(this.legs)
-      this.legs.forEach((leg) => leg.dispose())
-      this.legs = []
-
-      const legHeight = MaterialLoader.getLegHeight()
-      const thickness = this.config.material.getThickness()
-
-      const legPositions: Array<
-        "frontLeft" | "frontRight" | "backLeft" | "backRight"
-      > = ["frontLeft", "frontRight", "backLeft", "backRight"]
-
-      legPositions.forEach((position) => {
-        const leg = new CarcassLeg({
-          height: legHeight,
-          diameter: LEG_DIAMETER,
-          position: position,
-          width: this.dimensions.width,
-          depth: this.dimensions.depth,
-          thickness: thickness,
-          material: this.config.material.getMaterial(),
-        })
-
-        this.legs.push(leg)
-      })
-      this.addPartsToGroup(this.legs)
-    }
-  }
-
+  
   public updateDoors() { this.doorManager.updateDoors() }
   public updateDrawers() { this.drawerManager.updateDrawers() }
 
@@ -386,9 +354,9 @@ export class CarcassAssembly {
           this.config.material.getThickness()
         )
       })
-    }
-    if (["base", "tall", "wardrobe", "appliance"].includes(this.cabinetType)) {
-      this.group.position.y = kickerHeight
+      if (["base", "tall", "wardrobe"].includes(this.cabinetType)) {
+        this.group.position.y = kickerHeight
+      }
     }
   }
 

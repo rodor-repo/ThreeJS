@@ -9,6 +9,7 @@ interface CartSectionProps {
   onSaveRoom?: () => void
   isLoading?: boolean
   isSaving?: boolean
+  isPriceCalculating?: boolean
   appMode?: "admin" | "user"
 }
 
@@ -21,6 +22,7 @@ export const CartSection: React.FC<CartSectionProps> = (props) => {
     onSaveRoom,
     isLoading = false,
     isSaving = false,
+    isPriceCalculating = false,
     appMode,
   } = props
 
@@ -106,6 +108,9 @@ export const CartSection: React.FC<CartSectionProps> = (props) => {
         <div className="text-sm text-gray-600 flex items-center justify-center gap-1">
           Total Price
           <span className="text-[8px] font-normal text-gray-500">(Incl GST)</span>
+          {isPriceCalculating && (
+            <Loader2 size={12} className="animate-spin text-gray-400 ml-1" />
+          )}
         </div>
         <div className="text-xl font-bold text-gray-800">${totalPrice.toFixed(2)}</div>
         <button

@@ -6,6 +6,7 @@ import {
   type SavedView,
 } from "@/data/savedRooms"
 import { cabinetPanelState } from "@/features/cabinets/ui/ProductPanel"
+import { priceQueryKeys } from "@/features/cabinets/ui/productPanel/utils/queryKeys"
 import type { WsProducts } from "@/types/erpTypes"
 import type { CabinetType, CarcassDimensions } from "@/features/carcass"
 import type { CabinetData, WallDimensions as WallDims } from "../types"
@@ -36,7 +37,7 @@ async function prefetchProductData(productIds: string[]): Promise<void> {
   const missingProductIds = _.uniq(
     productIds.filter((productId) => {
       if (!productId) return false
-      const cached = queryClient.getQueryData(["productData", productId])
+      const cached = queryClient.getQueryData(priceQueryKeys.productData(productId))
       return !cached
     })
   )
@@ -58,7 +59,7 @@ async function prefetchProductData(productIds: string[]): Promise<void> {
     missingProductIds.map(async (productId) => {
       const data = await getProductData(productId)
       // Add to cache with infinite gcTime to match ProductPanel behavior
-      queryClient.setQueryData(["productData", productId], data)
+      queryClient.setQueryData(priceQueryKeys.productData(productId), data)
       return productId
     })
   )
@@ -317,7 +318,7 @@ export async function restoreRoom({
   const partDataManager = getPartDataManager()
   const queryClient = getClient()
   productIds.forEach((productId) => {
-    const cached = queryClient.getQueryData(["productData", productId])
+    const cached = queryClient.getQueryData(priceQueryKeys.productData(productId))
     if (
       cached &&
       typeof cached === "object" &&

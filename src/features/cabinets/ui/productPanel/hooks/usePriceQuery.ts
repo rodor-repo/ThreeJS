@@ -5,6 +5,7 @@ import {
   type CalculatePriceRequest,
 } from "@/server/calculateWsProductPrice"
 import type { MaterialSelections } from "../utils/materialUtils"
+import { priceQueryKeys } from "../utils/queryKeys"
 
 /**
  * Price data returned by the query
@@ -70,7 +71,12 @@ export function usePriceQuery(
     status: queryStatus,
     fetchStatus,
   } = useQuery({
-    queryKey: ["wsProductPrice", productId, dims, materialSelections],
+    // Use shared query keys for cache sharing with useAllCabinetPrices
+    queryKey: priceQueryKeys.wsProductPrice(
+      productId || "",
+      dims,
+      materialSelections
+    ),
     queryFn: async () => {
       if (!productId) throw new Error("No productId")
 

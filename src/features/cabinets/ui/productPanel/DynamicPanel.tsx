@@ -155,6 +155,32 @@ export const DynamicPanel: React.FC<DynamicPanelProps> = ({
       selectedCabinet?.cabinetType === "panel") &&
     selectedCabinet?.hideLockIcons === true
 
+  // Calculate if off-the-floor should be shown
+  // Hide for fillers/panels that are children of "top" cabinets
+  const shouldShowOffTheFloor = useMemo(() => {
+    if (
+      selectedCabinet?.cabinetType !== "filler" &&
+      selectedCabinet?.cabinetType !== "panel"
+    ) {
+      return false
+    }
+
+    // If we can't check parent (no allCabinets), default to showing it
+    if (!allCabinets || !selectedCabinet.cabinetId) return true
+
+    // Find the full cabinet data to access parentCabinetId
+    const fullCabinet = allCabinets.find(
+      (c) => c.cabinetId === selectedCabinet.cabinetId
+    )
+    if (!fullCabinet?.parentCabinetId) return true
+
+    const parent = allCabinets.find(
+      (c) => c.cabinetId === fullCabinet.parentCabinetId
+    )
+    // Hide if parent is a "top" cabinet
+    return parent?.cabinetType !== "top"
+  }, [selectedCabinet?.cabinetType, selectedCabinet?.cabinetId, allCabinets])
+
   // Apply dimensions to 3D callback
   const applyDimsTo3D = useCallback(
     (vals: Record<string, number | string>, changedId?: string) => {
@@ -546,8 +572,7 @@ export const DynamicPanel: React.FC<DynamicPanelProps> = ({
             )}
 
             {/* Off the Floor - Only for Fillers and Panels */}
-            {(selectedCabinet?.cabinetType === "filler" ||
-              selectedCabinet?.cabinetType === "panel") && (
+            {shouldShowOffTheFloor && (
                 <CollapsibleSection
                   id="offTheFloor"
                   title="Off The Floor"

@@ -111,6 +111,7 @@ export const DynamicPanel: React.FC<DynamicPanelProps> = ({
   // UI state (minimal - most state is in hooks)
   const [isExpanded, setIsExpanded] = useState(true)
   const [openMaterialId, setOpenMaterialId] = useState<string | null>(null)
+  const [hasHydrated, setHasHydrated] = useState(false)
 
   // GD Mapping hook
   const gdMapping = useGDMapping(threeJsGDs)
@@ -123,6 +124,10 @@ export const DynamicPanel: React.FC<DynamicPanelProps> = ({
 
   // Persistence hook
   const persistence = usePersistence(cabinetId)
+
+  useEffect(() => {
+    setHasHydrated(false)
+  }, [cabinetId])
 
   // Off-the-floor hook (for fillers and panels)
   const offTheFloorState = useOffTheFloor({
@@ -231,6 +236,7 @@ export const DynamicPanel: React.FC<DynamicPanelProps> = ({
       panelState.setValues(result.values)
       panelState.setMaterialColor(result.materialColor)
       panelState.setMaterialSelections(result.materialSelections)
+      setHasHydrated(true)
     },
     onApply3D: applyDimsTo3D,
     onMaterialSelectionsSync: (id, selections) => {
@@ -326,7 +332,7 @@ export const DynamicPanel: React.FC<DynamicPanelProps> = ({
 
   // Persist values and price changes
   useEffect(() => {
-    if (!cabinetId) return
+    if (!cabinetId || !hasHydrated) return
     persistence.setPersisted({
       values: panelState.values,
       materialColor: panelState.materialColor,
@@ -340,6 +346,7 @@ export const DynamicPanel: React.FC<DynamicPanelProps> = ({
     panelState.materialSelections,
     priceQuery.priceData,
     cabinetId,
+    hasHydrated,
   ])
 
   // Handlers

@@ -4,6 +4,12 @@ import type { GDThreeJsType, WsProduct } from "@/types/erpTypes"
 
 export async function getProductData(productId: string) {
   if (!productId) throw new Error("productId is required")
+  
+  // Safety check: Don't fetch data for appliances (fake cabinets)
+  if (productId.startsWith("appliance-")) {
+    throw new Error("Fetching data for appliances is not allowed")
+    // return null  // Return null (or partial mock if strictly needed) to avoid 500 error
+  }
 
   if (
     !process.env.WEBSHOP_URL ||

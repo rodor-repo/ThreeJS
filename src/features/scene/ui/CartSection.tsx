@@ -1,5 +1,6 @@
 import React from "react"
-import { ShoppingCart, ChevronDown, Loader2, FolderOpen, Save } from "lucide-react"
+import { ShoppingCart, ChevronDown, Loader2, FolderOpen, Save, User, ShieldCheck } from "lucide-react"
+import type { AppMode } from "../context/ModeContext"
 
 interface CartSectionProps {
   totalPrice: number
@@ -10,7 +11,9 @@ interface CartSectionProps {
   isLoading?: boolean
   isSaving?: boolean
   isPriceCalculating?: boolean
-  appMode?: "admin" | "user"
+  appMode?: AppMode
+  userEmail?: string | null
+  userRole?: AppMode | null
 }
 
 export const CartSection: React.FC<CartSectionProps> = (props) => {
@@ -24,11 +27,37 @@ export const CartSection: React.FC<CartSectionProps> = (props) => {
     isSaving = false,
     isPriceCalculating = false,
     appMode,
+    userEmail,
+    userRole,
   } = props
 
   const isUserMode = appMode === "user"
+  const displayEmail = userEmail || "Guest user"
+  const showRoleBadge = userRole === "admin"
   return (
     <div className="absolute top-4 right-4 flex flex-col items-end gap-2 z-10">
+      <div className="w-full max-w-xs rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-800 to-blue-700 text-white shadow-2xl border border-white/10 backdrop-blur">
+        <div className="flex items-start gap-3 p-4">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10">
+            <User size={18} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[11px] uppercase tracking-[0.12em] text-white/70">Signed in</p>
+            <p className="text-sm font-semibold truncate" title={displayEmail}>{displayEmail}</p>
+            {showRoleBadge && (
+              <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-white">
+                <ShieldCheck size={14} />
+                Admin
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-2 bg-white/10 px-4 py-2 text-[11px] text-white/80">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />
+          <span>Cart uses this email for checkout</span>
+        </div>
+      </div>
+
       {isUserMode && (
         <button
           onClick={(e) => {

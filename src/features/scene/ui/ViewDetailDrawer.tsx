@@ -39,7 +39,7 @@ export const ViewDetailDrawer: React.FC<Props> = ({
   const uniqueProductIds = useMemo(() => {
     const productIdSet = new Set<string>()
     cabinets.forEach((cabinet) => {
-      if (cabinet.productId) {
+      if (cabinet.productId && !cabinet.productId.startsWith("appliance-")) {
         productIdSet.add(cabinet.productId)
       }
     })

@@ -1,6 +1,6 @@
 import MainPage from '@/components/MainPage'
 import { cookies } from 'next/headers'
-import { USER_SESSION_COOKIE_NAME } from '@/lib/auth/constants'
+import { ADMIN_SESSION_COOKIE_NAME } from '@/lib/auth/constants'
 import { verifyRoomSessionToken } from '@/lib/auth/session'
 
 type UserSession = {
@@ -8,13 +8,13 @@ type UserSession = {
   role: 'admin' | 'user' | null
 }
 
-async function getUserSession(): Promise<UserSession> {
+async function getAdminSession(): Promise<UserSession> {
   const cookieStore = cookies()
-  const token = cookieStore.get(USER_SESSION_COOKIE_NAME)?.value
+  const token = cookieStore.get(ADMIN_SESSION_COOKIE_NAME)?.value
   if (!token) return { email: null, role: null }
 
   const session = await verifyRoomSessionToken(token)
-  if (!session || session.role !== 'user') return { email: null, role: null }
+  if (!session || session.role !== 'admin') return { email: null, role: null }
 
   return {
     email: session.email,
@@ -23,7 +23,7 @@ async function getUserSession(): Promise<UserSession> {
 }
 
 const Page = async () => {
-  const { email, role } = await getUserSession()
+  const { email, role } = await getAdminSession()
 
   return <MainPage userEmail={email} userRole={role} />
 }

@@ -1,5 +1,9 @@
 "use server"
 
+import { cookies } from "next/headers"
+import { USER_SESSION_COOKIE_NAME } from "@/lib/auth/constants"
+import { verifyRoomSessionToken } from "@/lib/auth/session"
+
 // Types matching the Add to Cart API documentation
 
 export type MaterialSelection = {
@@ -62,13 +66,11 @@ export type AddToCartResponse =
  *
  * @param items - Array of product configurations to add to cart
  * @param projectName - Name for the shopping cart project (optional, defaults to timestamp-based name)
- * @param userEmail - Email of the user (optional, defaults to it@cabinetworx.com.au)
  * @param projectId - Existing project ID for updating (optional, creates new project if not provided)
  */
 export async function addToCart(
   items: ProductConfig[],
   projectName?: string,
-  userEmail?: string,
   projectId?: string
 ): Promise<AddToCartResponse> {
   if (!items || items.length === 0) {
@@ -97,7 +99,8 @@ export async function addToCart(
   if (
     !process.env.WEBSHOP_URL ||
     !process.env.WEBSHOP_SECRET_KEY ||
-    !process.env.VERCEL_AUTOMATION_BYPASS_SECRET
+    !process.env.VERCEL_AUTOMATION_BYPASS_SECRET ||
+    !process.env.THREEJS_AUTH_SECRET
   ) {
     return {
       success: false,
@@ -110,8 +113,16 @@ export async function addToCart(
     process.env.WEBSHOP_ADD_TO_CART_URL ||
     `${process.env.WEBSHOP_URL}/api/3D/three-js/add-to-cart`
 
-  // Use provided email or fallback to hardcoded one
-  const finalUserEmail = userEmail || "it@cabinetworx.com.au"
+  const cookieStore = cookies()
+  const sessionToken = cookieStore.get(USER_SESSION_COOKIE_NAME)?.value
+  if (!sessionToken) {
+    return { success: false, error: "AUTH_REQUIRED" }
+  }
+
+  const session = await verifyRoomSessionToken(sessionToken)
+  if (!session) {
+    return { success: false, error: "AUTH_REQUIRED" }
+  }
 
   // Generate project name if not provided
   const finalProjectName =
@@ -140,7 +151,7 @@ export async function addToCart(
   }))
 
   const requestBody: AddToCartRequest = {
-    userEmail: finalUserEmail,
+    userEmail: session.email,
     projectName: finalProjectName,
     items: normalizedItems,
     ...(projectId && { projectId }),

@@ -50,7 +50,7 @@ export const useSceneInteractions = (
   rightWallRef?: React.MutableRefObject<THREE.Group | null>,
   onOpenWallDrawer?: () => void,
   orthoRefs?: OrthoRefs,
-  mode: AppMode = "admin"
+  mode: AppMode = "user"
 ) => {
   const isDraggingCabinetRef = useRef(false)
   const dragStartRef = useRef({ x: 0, y: 0 })

@@ -1,12 +1,10 @@
 import React, { useEffect } from "react"
-import { useQuery } from "@tanstack/react-query"
 import _ from "lodash"
-import { getProductData } from "@/server/getProductData"
 import { getPartDataManager } from "@/nesting/PartDataManager"
 import { toNum } from "./utils/dimensionUtils"
-import { priceQueryKeys } from "./utils/queryKeys"
 import { DynamicPanel } from "./DynamicPanel"
 import type { ProductPanelProps } from "../productPanel.types"
+import { useProductData } from "@/features/cabinets/hooks/useProductData"
 
 /**
  * Wrapper component that fetches product data and passes it to DynamicPanel.
@@ -41,48 +39,40 @@ export const DynamicPanelWithQuery: React.FC<ProductPanelProps> = ({
 }) => {
   const productId = selectedCabinet?.productId
 
-  const { data, isLoading, isError } = useQuery({
-    queryKey: priceQueryKeys.productData(productId ?? ""),
-    queryFn: async () => {
-      if (!productId) throw new Error("No productId")
-      const data = await getProductData(productId)
+  const { data, isLoading, isError } = useProductData(productId)
 
-      // Apply drawer qty and door qty to all products of this productId in the cabinets state
-      if (allCabinets) {
-        for (const cabinet of allCabinets) {
-          const cabProductId = cabinet.carcass?.productId
-          if (cabProductId !== data.product.productId) continue
+  // Apply drawer qty and door qty to all products of this productId in the cabinets state
+  useEffect(() => {
+    if (data && allCabinets && productId) {
+      for (const cabinet of allCabinets) {
+        const cabProductId = cabinet.carcass?.productId
+        if (cabProductId !== data.product.productId) continue
 
-          const drawerQtyGDIds = data.threeJsGDs?.["drawerQty"] || []
-          const doorQtyGDIds = data.threeJsGDs?.["doorQty"] || []
-          const wsProduct = data.product
-          const dimsList = _.sortBy(
-            Object.entries(wsProduct?.dims || {}),
-            ([, dimObj]) => Number(dimObj.sortNum)
-          )
+        const drawerQtyGDIds = data.threeJsGDs?.["drawerQty"] || []
+        const doorQtyGDIds = data.threeJsGDs?.["doorQty"] || []
+        const wsProduct = data.product
+        const dimsList = _.sortBy(
+          Object.entries(wsProduct?.dims || {}),
+          ([, dimObj]) => Number(dimObj.sortNum)
+        )
 
-          let drawerQty: number | undefined =
-            selectedCabinet?.carcass?.config?.drawerQuantity
-          let doorQty: number | undefined =
-            selectedCabinet?.carcass?.config?.doorCount
-          dimsList.forEach(([_id, dimObj]) => {
-            const gdId = dimObj.GDId
-            if (!gdId) return
-            if (drawerQtyGDIds.includes(gdId))
-              drawerQty = toNum(dimObj.defaultValue) || drawerQty
-            if (drawerQty) cabinet.carcass?.updateDrawerQuantity?.(drawerQty)
-            if (doorQtyGDIds.includes(gdId))
-              doorQty = toNum(dimObj.defaultValue) || doorQty
-            if (doorQty) cabinet.carcass?.updateDoorConfiguration?.(doorQty)
-          })
-        }
+        let drawerQty: number | undefined =
+          selectedCabinet?.carcass?.config?.drawerQuantity
+        let doorQty: number | undefined =
+          selectedCabinet?.carcass?.config?.doorCount
+        dimsList.forEach(([_id, dimObj]) => {
+          const gdId = dimObj.GDId
+          if (!gdId) return
+          if (drawerQtyGDIds.includes(gdId))
+            drawerQty = toNum(dimObj.defaultValue) || drawerQty
+          if (drawerQty) cabinet.carcass?.updateDrawerQuantity?.(drawerQty)
+          if (doorQtyGDIds.includes(gdId))
+            doorQty = toNum(dimObj.defaultValue) || doorQty
+          if (doorQty) cabinet.carcass?.updateDoorConfiguration?.(doorQty)
+        })
       }
-      return data
-    },
-    enabled: !!productId,
-    staleTime: 5 * 60 * 1000,
-    gcTime: Infinity,
-  })
+    }
+  }, [data, allCabinets, productId, selectedCabinet?.carcass?.config?.drawerQuantity, selectedCabinet?.carcass?.config?.doorCount])
 
   const wsProduct = data?.product
   const materialOptions = data?.materialOptions

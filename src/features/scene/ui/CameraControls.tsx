@@ -22,7 +22,7 @@ type Props = {
   mode?: AppMode
 }
 
-export const CameraControls: React.FC<Props> = ({ isDragging, cameraMode, onToggleMode, onReset, onClear, onX, onY, onZ, onToggleDimensions, onToggleNumbers, numbersVisible = false, onDelete, canDelete = false, isMenuOpen = false, isOrthoView = false, onResetTo3D, mode = 'admin' }) => {
+export const CameraControls: React.FC<Props> = ({ isDragging, cameraMode, onToggleMode, onReset, onClear, onX, onY, onZ, onToggleDimensions, onToggleNumbers, numbersVisible = false, onDelete, canDelete = false, isMenuOpen = false, isOrthoView = false, onResetTo3D, mode = 'user' }) => {
   const [isHovered, setIsHovered] = useState(false)
   const [showXYZButtons, setShowXYZButtons] = useState(false)
   const xyzContainerRef = useRef<HTMLDivElement>(null)

@@ -69,7 +69,7 @@ import { BottomRightActions } from './ui/BottomRightActions'
 import { HistoryControls } from './ui/HistoryControls'
 import { SaveButton } from './ui/SaveButton'
 import { DimensionLineControls } from './ui/DimensionLineControls'
-import { AppMode, ModeContext } from './context/ModeContext'
+import type { AppMode } from './context/ModeContext'
 import { UserWidthSlider } from './ui/UserWidthSlider'
 import { UserRoomsModal } from './ui/UserRoomsModal'
 import { SaveRoomModal } from './ui/SaveRoomModal'
@@ -690,9 +690,8 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     try {
       // Pass existing projectId if we're updating a user room
       const response = await addToCart(
-        cartItemsToAdd.items, 
-        projectName, 
-        userEmail,
+        cartItemsToAdd.items,
+        projectName,
         currentUserRoom?.projectId
       )
 
@@ -767,6 +766,9 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
             { duration: 4000 }
           )
         }
+      } else if (response.error === "AUTH_REQUIRED") {
+        toast.error("Please sign in to continue. Redirecting...")
+        window.location.reload()
       } else {
         toast.error(
           `Failed to add to cart: ${response.error}`,
@@ -971,7 +973,6 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
   }, [cabinets, cabinetSyncs, cabinetGroups, viewManager, wallDimensions, partData, debouncedIncrementDimensionVersion, selectedCabinets])
 
   return (
-    <ModeContext.Provider value={selectedMode}>
     <div className="relative w-full h-screen overflow-hidden">
       {/* 3D Scene Container */}
       <div ref={mountRef} className="w-full h-full" />
@@ -1666,7 +1667,6 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         isOrthoView={isOrthoView}
       />
     </div>
-    </ModeContext.Provider>
   )
 }
 

@@ -5,12 +5,12 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { useQueryState } from 'nuqs'
 import MainMenu from '@/components/MainMenu'
 import { Category, Subcategory } from '@/components/categoriesData'
+import { useAppMode, type AppMode } from '@/features/scene/context/ModeContext'
 import { WsProducts } from '@/types/erpTypes'
 import type { SavedRoom } from '@/data/savedRooms'
 import type { WallDimensions } from '@/features/scene/types'
 import { getRoomDesign, type RoomDesignData } from '@/server/rooms/getRoomDesign'
 import { useWsRoomsQuery } from '@/hooks/useWsRoomsQuery'
-import type { AppMode } from '@/features/scene/context/ModeContext'
 
 // Dynamically import the Three.js component to avoid SSR issues
 const ThreeScene = dynamic(() => import('@/features/scene/ThreeScene'), {
@@ -28,9 +28,7 @@ const ThreeScene = dynamic(() => import('@/features/scene/ThreeScene'), {
 export default function Home() {
   // URL query state for room selection
   const [roomId, setRoomId] = useQueryState('roomId')
-
-  // URL query state for app mode (admin/user)
-  const [modeParam, setModeParam] = useQueryState('mode')
+  const [selectedMode, setSelectedMode] = useAppMode()
 
   // Fetch wsRooms config via React Query
   const { data: wsRooms, isLoading: wsRoomsLoading } = useWsRoomsQuery()
@@ -53,7 +51,6 @@ export default function Home() {
   const [wsProducts, setWsProducts] = useState<WsProducts | null>(null)
   const loadRoomRef = useRef<((savedRoom: SavedRoom) => Promise<void>) | null>(null)
   const [selectedApplianceType, setSelectedApplianceType] = useState<'dishwasher' | 'washingMachine' | 'sideBySideFridge' | null>(null)
-  const [selectedMode, setSelectedMode] = useState<AppMode>('admin')
 
   // Track the last loaded room ID to prevent duplicate loads (e.g. when setting URL + manually loading)
   const lastLoadedRoomIdRef = useRef<string | null>(null)
@@ -153,17 +150,9 @@ export default function Home() {
     setSelectedProductId(undefined)
   }
 
-  // Sync selectedMode with mode query param
-  useEffect(() => {
-    if (modeParam === 'admin' || modeParam === 'user') {
-      setSelectedMode(modeParam as AppMode)
-    }
-  }, [modeParam])
-
   const handleModeChange = useCallback((mode: AppMode) => {
     setSelectedMode(mode)
-    setModeParam(mode)
-  }, [setModeParam])
+  }, [setSelectedMode])
 
   return (
     <main className="h-screen w-full relative">

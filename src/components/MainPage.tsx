@@ -25,10 +25,16 @@ const ThreeScene = dynamic(() => import('@/features/scene/ThreeScene'), {
   )
 })
 
-export default function Home() {
+type MainPageProps = {
+  userEmail?: string | null
+  userRole?: AppMode | null
+}
+
+export default function MainPage({ userEmail, userRole }: MainPageProps) {
   // URL query state for room selection
   const [roomId, setRoomId] = useQueryState('roomId')
   const [selectedMode, setSelectedMode] = useAppMode()
+  const effectiveUserRole = selectedMode === 'user' ? 'user' : userRole ?? null
 
   // Fetch wsRooms config via React Query
   const { data: wsRooms, isLoading: wsRoomsLoading } = useWsRoomsQuery()
@@ -97,7 +103,7 @@ export default function Home() {
   const handleRoomSelect = useCallback(async (selectedRoomId: string, design?: RoomDesignData | null) => {
     // Update ref first to prevent useEffect from loading again when URL changes
     if (design) {
-        lastLoadedRoomIdRef.current = selectedRoomId
+      lastLoadedRoomIdRef.current = selectedRoomId
     }
 
     // Update URL
@@ -194,6 +200,8 @@ export default function Home() {
         wsRooms={wsRooms ?? null}
         selectedMode={selectedMode}
         setSelectedMode={handleModeChange}
+        userEmail={userEmail ?? null}
+        userRole={effectiveUserRole}
       />
     </main>
   )

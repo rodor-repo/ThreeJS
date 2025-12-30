@@ -22,8 +22,10 @@ export function sanitizeReturnTo(value: string | null | undefined) {
 export function getBridgeProviderFromRequest(
   request: NextRequest
 ): BridgeProvider {
-  const mode = request.nextUrl.searchParams.get("mode")
-  return mode === "admin" ? "controlpanel" : DEFAULT_BRIDGE_PROVIDER
+  const { pathname } = request.nextUrl
+  return pathname.startsWith("/admin")
+    ? "controlpanel"
+    : DEFAULT_BRIDGE_PROVIDER
 }
 
 function getBridgeProviderBaseUrl(provider: BridgeProvider) {

@@ -7,7 +7,8 @@ import {
 } from "@/lib/auth/constants"
 import {
   clearBridgeNonceCookie,
-  setRoomSessionCookie,
+  setAdminSessionCookie,
+  setUserSessionCookie,
 } from "@/lib/auth/cookies"
 import { sanitizeReturnTo, startBridgeFlow } from "@/lib/auth/bridge"
 import { hashBridgeState, verifyBridgeStateToken } from "@/lib/auth/bridgeState"
@@ -172,7 +173,11 @@ export async function GET(request: NextRequest) {
     307
   )
 
-  setRoomSessionCookie(response, sessionToken, getSessionTtlSeconds())
+  if (providerConfig.role === "admin") {
+    setAdminSessionCookie(response, sessionToken, getSessionTtlSeconds())
+  } else {
+    setUserSessionCookie(response, sessionToken, getSessionTtlSeconds())
+  }
   clearBridgeNonceCookie(response)
 
   if (shouldLog) {

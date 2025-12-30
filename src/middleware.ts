@@ -1,5 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server"
-import { BRIDGE_CALLBACK_PATH, SESSION_COOKIE_NAME } from "@/lib/auth/constants"
+import {
+  BRIDGE_CALLBACK_PATH,
+  getSessionCookieNameForProvider,
+} from "@/lib/auth/constants"
 import {
   getBridgeProviderFromRequest,
   getRequestReturnTo,
@@ -22,11 +25,16 @@ export async function middleware(request: NextRequest) {
   }
 
   const provider = getBridgeProviderFromRequest(request)
-  const sessionToken = request.cookies.get(SESSION_COOKIE_NAME)?.value
+  const sessionCookieName = getSessionCookieNameForProvider(provider)
+  const sessionToken = request.cookies.get(sessionCookieName)?.value
   if (sessionToken) {
     const session = await verifyRoomSessionToken(sessionToken)
     if (session) {
-      if (provider === "controlpanel" && session.role !== "admin") {
+      const hasExpectedRole =
+        provider === "controlpanel"
+          ? session.role === "admin"
+          : session.role === "user"
+      if (!hasExpectedRole) {
         return startBridgeFlow(
           request,
           getRequestReturnTo(request),

@@ -99,9 +99,13 @@ interface ThreeSceneProps {
   selectedMode: AppMode
   /** Callback when mode changes */
   setSelectedMode: (mode: AppMode) => void
+  /** Authenticated user email for display */
+  userEmail?: string | null
+  /** Authenticated user role */
+  userRole?: AppMode | null
 }
 
-const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChange, selectedCategory, selectedSubcategory, isMenuOpen = false, selectedProductId, wsProducts, onLoadRoomReady, selectedApplianceType, onApplianceCreated, currentRoomId, wsRooms, selectedMode, setSelectedMode }) => {
+const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChange, selectedCategory, selectedSubcategory, isMenuOpen = false, selectedProductId, wsProducts, onLoadRoomReady, selectedApplianceType, onApplianceCreated, currentRoomId, wsRooms, selectedMode, setSelectedMode, userEmail, userRole }) => {
   const mountRef = useRef<HTMLDivElement>(null);
   const [cameraMode, setCameraMode] = useState<'constrained' | 'free'>('constrained')
   const [dimensionsVisible, setDimensionsVisible] = useState(true)
@@ -989,6 +993,8 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         isSaving={isSavingRoom}
         isPriceCalculating={isPriceCalculating}
         appMode={selectedMode}
+        userEmail={userEmail || null}
+        userRole={userRole || null}
       />
 
       {selectedMode === 'admin' && (

@@ -1,5 +1,7 @@
 "use server"
 
+import { createSwrCache, stableStringify } from "@/server/swrCache"
+
 export type MaterialSelection = {
   priceRangeId: string
   colorId: string
@@ -39,6 +41,11 @@ export type CalculatePriceResponse = {
   breakdown?: ApiPriceResponse
 }
 
+const priceCache = createSwrCache<CalculatePriceResponse>({
+  maxEntries: 100,
+  ttlMs: 5 * 60 * 1000,
+})
+
 /**
  * Calls the webshop pricing endpoint to calculate a price for a configured product.
  * The exact endpoint can be configured via WEBSHOP_CALCULATE_PRICE_URL. If not provided,
@@ -67,99 +74,139 @@ export async function calculateWsProductPrice(
       "No pricing endpoint configured: set WEBSHOP_CALCULATE_PRICE_URL or WEBSHOP_URL"
     )
 
-  let response: Response
-  try {
-    // Normalize dimension values: "yes"/"no" -> 1/0
-    const normalizedDims = Object.fromEntries(
-      Object.entries(payload.dims).map(([key, value]) => {
-        if (typeof value === "string") {
-          const lowerValue = value.toLowerCase()
-          if (lowerValue === "yes") return [key, 1]
-          if (lowerValue === "no") return [key, 0]
-        }
-        return [key, value]
-      })
-    )
+  const normalizedDims = normalizeDimensions(payload.dims)
+  const cacheKey = buildPriceCacheKey(
+    payload.productId,
+    normalizedDims,
+    payload.materialSelections,
+    payload.currencyCode
+  )
 
-    const requestBody = {
-      productId: payload.productId,
-      dimensions: normalizedDims,
-      materials: payload.materialSelections,
-      currencyCode: payload.currencyCode,
-    }
-
-    response = await fetch(url, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.WEBSHOP_SECRET_KEY}`,
-        "Content-Type": "application/json",
-        // Header alone won't prevent framework caching; see fetch options below
-        "Cache-Control": "no-cache",
-        "x-vercel-protection-bypass":
-          process.env.VERCEL_AUTOMATION_BYPASS_SECRET,
-      },
-      body: JSON.stringify(requestBody),
-      // Always compute price with fresh data; disable any caching layers
-      cache: "no-store",
-      // next: { revalidate: 0 },
-    })
-  } catch (err: unknown) {
-    const e = err as Error
-    throw new Error(
-      `Network error calling pricing API: ${e?.message || "unknown error"}`
-    )
-  }
-
-  if (!response.ok) {
-    let text: string | undefined
+  return priceCache.get(cacheKey, async () => {
+    let response: Response
     try {
-      text = await response.text()
-    } catch {}
+      const requestBody = {
+        productId: payload.productId,
+        dimensions: normalizedDims,
+        materials: payload.materialSelections,
+        currencyCode: payload.currencyCode,
+      }
 
-    let json: any
-    if (text) {
-      try {
-        json = JSON.parse(text)
-      } catch {}
+      response = await fetch(url, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.WEBSHOP_SECRET_KEY!}`,
+          "Content-Type": "application/json",
+          // Header alone won't prevent framework caching; see fetch options below
+          "Cache-Control": "no-cache",
+          "x-vercel-protection-bypass":
+            process.env.VERCEL_AUTOMATION_BYPASS_SECRET!,
+        },
+        body: JSON.stringify(requestBody),
+        // Always compute price with fresh data; disable any caching layers
+        cache: "no-store",
+        // next: { revalidate: 0 },
+      })
+    } catch (err: unknown) {
+      const e = err as Error
+      throw new Error(
+        `Network error calling pricing API: ${e?.message || "unknown error"}`
+      )
     }
 
-    const requestId =
-      response.headers.get("x-request-id") ||
-      response.headers.get("x-correlation-id") ||
-      json?.requestId ||
-      json?.traceId ||
-      json?.correlationId
+    if (!response.ok) {
+      let text: string | undefined
+      try {
+        text = await response.text()
+      } catch {}
 
-    const apiErrorMessage =
-      json?.message ||
-      json?.error ||
-      (Array.isArray(json?.errors)
-        ? json.errors?.[0]?.message || json.errors?.[0]
-        : undefined) ||
-      json?.detail ||
-      json?.details
+      let json: any
+      if (text) {
+        try {
+          json = JSON.parse(text)
+        } catch {}
+      }
 
-    const msg =
-      `Failed to calculate price: ${response.status} ${response.statusText}` +
-      (requestId ? ` [requestId: ${requestId}]` : "") +
-      (apiErrorMessage ? ` - ${apiErrorMessage}` : "")
+      const requestId =
+        response.headers.get("x-request-id") ||
+        response.headers.get("x-correlation-id") ||
+        json?.requestId ||
+        json?.traceId ||
+        json?.correlationId
 
-    throw new Error(msg)
-  }
+      const apiErrorMessage =
+        json?.message ||
+        json?.error ||
+        (Array.isArray(json?.errors)
+          ? json.errors?.[0]?.message || json.errors?.[0]
+          : undefined) ||
+        json?.detail ||
+        json?.details
 
-  let data: ApiPriceResponse
-  try {
-    data = await response.json()
-  } catch (e) {
-    throw new Error("Invalid pricing response: not JSON")
-  }
+      const msg =
+        `Failed to calculate price: ${response.status} ${response.statusText}` +
+        (requestId ? ` [requestId: ${requestId}]` : "") +
+        (apiErrorMessage ? ` - ${apiErrorMessage}` : "")
 
-  if (typeof data?.finalPrice !== "number") {
-    throw new Error("Invalid price response")
-  }
+      throw new Error(msg)
+    }
 
-  return {
-    price: data.finalPrice,
-    breakdown: data,
-  }
+    let data: ApiPriceResponse
+    try {
+      data = await response.json()
+    } catch (e) {
+      throw new Error("Invalid pricing response: not JSON")
+    }
+
+    if (typeof data?.finalPrice !== "number") {
+      throw new Error("Invalid price response")
+    }
+
+    return {
+      price: data.finalPrice,
+      breakdown: data,
+    }
+  })
+}
+
+function normalizeDimensions(dims: Record<string, number | string>) {
+  return Object.fromEntries(
+    Object.entries(dims).map(([key, value]) => {
+      if (typeof value === "string") {
+        const lowerValue = value.toLowerCase()
+        if (lowerValue === "yes") return [key, 1]
+        if (lowerValue === "no") return [key, 0]
+      }
+      return [key, value]
+    })
+  )
+}
+
+function normalizeMaterialSelectionsForKey(
+  selections: Record<string, MaterialSelection>
+) {
+  return Object.fromEntries(
+    Object.entries(selections).map(([materialId, selection]) => [
+      materialId,
+      {
+        priceRangeId: selection.priceRangeId ?? "",
+        colorId: selection.colorId ?? "",
+        finishId: selection.finishId ?? "",
+      },
+    ])
+  )
+}
+
+function buildPriceCacheKey(
+  productId: string,
+  dims: Record<string, number | string>,
+  materialSelections: Record<string, MaterialSelection>,
+  currencyCode?: string
+) {
+  return `price:${stableStringify({
+    productId,
+    dims,
+    materialSelections: normalizeMaterialSelectionsForKey(materialSelections),
+    currencyCode: currencyCode ?? null,
+  })}`
 }

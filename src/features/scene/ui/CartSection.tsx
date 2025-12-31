@@ -1,7 +1,8 @@
 import React from "react"
-import { ShoppingCart, ChevronDown, Loader2, FolderOpen, Save, User, ShieldCheck } from "lucide-react"
+import { ShoppingCart, ChevronDown, Loader2, FolderOpen, Save, User, ShieldCheck, RefreshCcw } from "lucide-react"
 import type { AppMode } from "../context/ModeContext"
 import _ from "lodash"
+import { clearAuthSessionCookies } from "@/server/logout"
 
 interface CartSectionProps {
   totalPrice: number
@@ -14,7 +15,7 @@ interface CartSectionProps {
   isPriceCalculating?: boolean
   appMode?: AppMode
   userEmail?: string | null
-  userRole?: AppMode | null
+  userRole?: "user" | "admin" | null
 }
 
 export const CartSection: React.FC<CartSectionProps> = (props) => {
@@ -32,9 +33,36 @@ export const CartSection: React.FC<CartSectionProps> = (props) => {
     userRole,
   } = props
 
+  const [isResyncingEmail, setIsResyncingEmail] = React.useState(false)
+
   const isUserMode = appMode === "user"
   const displayEmail = userEmail || "Guest user"
   const showRoleBadge = userRole === "admin"
+
+  const getResyncConfirmMessage = () => {
+    if (showRoleBadge) {
+      return "Resync email from JoinerLinx?\n\nWe’ll resync your email from the JoinerLinx account you’re currently signed into, then refresh this page. Continue?"
+    }
+
+    return "Resync email from the webshop?\n\nWe’ll resync your email from the webshop account you’re currently signed into, then refresh this page. Continue?"
+  }
+
+  const onResyncEmail = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (isResyncingEmail) return
+
+    const shouldContinue = window.confirm(getResyncConfirmMessage())
+    if (!shouldContinue) return
+
+    setIsResyncingEmail(true)
+    try {
+      await clearAuthSessionCookies()
+      window.location.reload()
+    } catch {
+      setIsResyncingEmail(false)
+      window.alert("Couldn’t resync your email right now. Please try again.")
+    }
+  }
 
   const cx = (...classes: Array<string | false | null | undefined>) => _.join(_.compact(classes), ' ')
 
@@ -49,12 +77,29 @@ export const CartSection: React.FC<CartSectionProps> = (props) => {
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between">
               <p className="text-[10px] uppercase tracking-wider font-bold text-gray-400">Signed in as</p>
-              {showRoleBadge && (
-                <span className="inline-flex items-center gap-1 rounded-md bg-gray-900 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-sm">
-                  <ShieldCheck size={10} />
-                  Admin
-                </span>
-              )}
+              <div className="flex items-center gap-2">
+                {showRoleBadge && (
+                  <span className="inline-flex items-center gap-1 rounded-md bg-gray-900 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-sm">
+                    <ShieldCheck size={10} />
+                    Admin
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={onResyncEmail}
+                  disabled={isResyncingEmail}
+                  className={cx(
+                    "inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] font-bold uppercase tracking-wide shadow-sm transition-colors",
+                    isResyncingEmail
+                      ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed"
+                      : "bg-white text-gray-700 border-gray-200 hover:bg-indigo-50 hover:text-indigo-700"
+                  )}
+                  title={showRoleBadge ? "Resync email from JoinerLinx" : "Resync email from webshop"}
+                >
+                  <RefreshCcw size={10} className={isResyncingEmail ? "animate-spin" : ""} />
+                  <span>{isResyncingEmail ? "Resyncing" : "Reload"}</span>
+                </button>
+              </div>
             </div>
             <p className="text-sm font-bold text-gray-900 truncate mt-0.5" title={displayEmail}>
               {displayEmail}

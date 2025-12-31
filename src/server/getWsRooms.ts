@@ -1,7 +1,13 @@
 "use server"
 
 import { getAdminDb, getCompanyId } from "@/server/firebase"
+import { createSwrCache } from "@/server/swrCache"
 import type { WsRooms } from "@/types/erpTypes"
+
+const wsRoomsCache = createSwrCache<WsRooms>({
+  maxEntries: 1,
+  ttlMs: 5 * 60 * 1000,
+})
 
 /**
  * Fetch the wsRooms configuration document from Firestore.
@@ -18,18 +24,20 @@ export async function getWsRooms(): Promise<WsRooms> {
   const db = getAdminDb()
   const companyId = getCompanyId()
 
-  const docRef = db
-    .collection("companies")
-    .doc(companyId)
-    .collection("settings")
-    .doc("wsRooms")
-  const docSnap = await docRef.get()
+  return wsRoomsCache.get(`wsRooms:${companyId}`, async () => {
+    const docRef = db
+      .collection("companies")
+      .doc(companyId)
+      .collection("settings")
+      .doc("wsRooms")
+    const docSnap = await docRef.get()
 
-  if (!docSnap.exists) {
-    throw new Error(`wsRooms document not found for company ${companyId}`)
-  }
+    if (!docSnap.exists) {
+      throw new Error(`wsRooms document not found for company ${companyId}`)
+    }
 
-  const data = docSnap.data() as WsRooms
+    const data = docSnap.data() as WsRooms
 
-  return data
+    return data
+  })
 }

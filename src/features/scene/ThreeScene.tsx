@@ -688,7 +688,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     setShowAddToCartModal(true)
   }, [cabinets])
 
-  const handleConfirmAddToCart = useCallback(async (projectName: string, _userEmail: string) => {
+  const handleConfirmAddToCart = useCallback(async (projectName: string) => {
     if (!cartItemsToAdd) return
 
     setIsAddingToCart(true)
@@ -995,6 +995,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         appMode={selectedMode}
         userEmail={userEmail || null}
         userRole={userRole || null}
+        hasProjectId={!!currentUserRoom?.projectId}
       />
 
       {selectedMode === 'admin' && (
@@ -1608,10 +1609,11 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         onConfirm={handleConfirmAddToCart}
         itemCount={cartItemsToAdd?.items.length ?? 0}
         skippedCount={cartItemsToAdd?.skipped.length ?? 0}
+        skippedItems={cartItemsToAdd?.skipped ?? []}
         isLoading={isAddingToCart}
-        initialEmail={currentUserRoom?.userEmail}
         initialProjectName={currentUserRoom?.projectName}
         isUserRoomMode={!!currentUserRoom}
+        hasProjectId={!!currentUserRoom?.projectId}
       />
 
       {/* User Rooms Modal */}

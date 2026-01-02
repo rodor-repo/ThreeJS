@@ -47,6 +47,15 @@ export function collectCartItems(
       continue
     }
 
+    // Skip appliance cabinets
+    if (cabinet.productId.startsWith("appliance-")) {
+      skipped.push({
+        cabinetId: cabinet.cabinetId,
+        reason: "Appliance cabinets are visual only",
+      })
+      continue
+    }
+
     // // Skip certain cabinet types that shouldn't be added directly
     // // (they may be accessories or sub-items)
     // if (

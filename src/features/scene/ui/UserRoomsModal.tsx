@@ -1,6 +1,6 @@
 import React from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { X, FolderOpen, Trash2, Calendar, Package, Loader2 } from "lucide-react"
+import { X, FolderOpen, Trash2, Calendar, Package, Loader2, CircleCheckBig } from "lucide-react"
 import { useUserRoomsList, useDeleteUserRoom } from "@/hooks/useUserRoomsQuery"
 
 interface UserRoomsModalProps {
@@ -157,18 +157,28 @@ export const UserRoomsModal: React.FC<UserRoomsModalProps> = ({
                       </span>
                     </div>
                   </div>
-                  <button
-                    onClick={(e) => handleDelete(e, room.id)}
-                    disabled={deleteRoomMutation.isPending && deleteRoomMutation.variables?.roomId === room.id}
-                    className="p-2 text-gray-400 hover:text-red-600 transition-colors opacity-0 group-hover:opacity-100 disabled:opacity-50"
-                    title="Delete room"
-                  >
-                    {deleteRoomMutation.isPending && deleteRoomMutation.variables?.roomId === room.id ? (
-                      <Loader2 size={16} className="animate-spin" />
-                    ) : (
-                      <Trash2 size={16} />
-                    )}
-                  </button>
+                  {room.projectId ? (
+                    <span
+                      className="p-2 text-green-600"
+                      title="Already in cart"
+                      aria-label="Already in cart"
+                    >
+                      <CircleCheckBig size={16} />
+                    </span>
+                  ) : (
+                    <button
+                      onClick={(e) => handleDelete(e, room.id)}
+                      disabled={deleteRoomMutation.isPending && deleteRoomMutation.variables?.roomId === room.id}
+                      className="p-2 text-gray-400 hover:text-red-600 transition-colors disabled:opacity-50"
+                      title="Delete room"
+                    >
+                      {deleteRoomMutation.isPending && deleteRoomMutation.variables?.roomId === room.id ? (
+                        <Loader2 size={16} className="animate-spin" />
+                      ) : (
+                        <Trash2 size={16} />
+                      )}
+                    </button>
+                  )}
                 </div>
               ))}
             </div>

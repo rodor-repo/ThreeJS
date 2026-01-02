@@ -168,12 +168,17 @@ export function useAllCabinetPrices(
             productData.defaultMaterialSelections,
             productData.materialOptions
           )
+        const materialColor =
+          persisted?.materialColor ??
+          cabinet.carcass?.config?.material?.getColour?.() ??
+          "#ffffff"
 
         return {
           cabinetId: cabinet.cabinetId,
           productId: cabinet.productId!,
           dims,
           materialSelections,
+          materialColor,
         }
       })
       .filter((x): x is NonNullable<typeof x> => x !== null)
@@ -193,6 +198,21 @@ export function useAllCabinetPrices(
       )
       .join("||")
   }, [priceQueryInputs])
+
+  // Without this, the AddToCartModal would skip some of the cabinets that (presumably) hadn't been opened via the ProductPanel;
+  useEffect(() => {
+    if (!enabled || priceQueryInputs.length === 0) return
+
+    priceQueryInputs.forEach((input) => {
+      if (getPersistedState(input.cabinetId)) return
+
+      cabinetPanelState.set(input.cabinetId, {
+        values: input.dims,
+        materialColor: input.materialColor,
+        materialSelections: input.materialSelections,
+      })
+    })
+  }, [enabled, priceQueryInputs])
 
   useEffect(() => {
     const activeCabinetIds = new Set(cabinets.map((c) => c.cabinetId))

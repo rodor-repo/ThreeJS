@@ -18,6 +18,7 @@ interface CartSectionProps {
   appMode?: AppMode
   userEmail?: string | null
   userRole?: "user" | "admin" | null
+  hasProjectId?: boolean
 }
 
 export const CartSection: React.FC<CartSectionProps> = (props) => {
@@ -33,6 +34,7 @@ export const CartSection: React.FC<CartSectionProps> = (props) => {
     appMode,
     userEmail,
     userRole,
+    hasProjectId = false,
   } = props
 
   const [isResyncingEmail, setIsResyncingEmail] = React.useState(false)
@@ -41,6 +43,8 @@ export const CartSection: React.FC<CartSectionProps> = (props) => {
   const isUserMode = appMode === "user"
   const displayEmail = userEmail || "Guest user"
   const showRoleBadge = userRole === "admin"
+  const addToCartLabel = hasProjectId ? "Update Cart Project" : "Add Project to Cart"
+  const addToCartLoadingLabel = hasProjectId ? "Updating cart project..." : "Adding to cart..."
 
   const getResyncConfirmMessage = () => {
     if (showRoleBadge) {
@@ -174,20 +178,24 @@ export const CartSection: React.FC<CartSectionProps> = (props) => {
             className={cx(
               "w-full py-3 px-4 rounded-xl shadow-lg transition-all duration-200 flex items-center justify-center gap-2 font-bold text-sm",
               isLoading
-                ? "bg-emerald-50 text-emerald-400 cursor-not-allowed border border-emerald-100"
-                : "bg-emerald-500 hover:bg-emerald-600 text-white shadow-emerald-500/20 hover:shadow-emerald-500/30 border border-transparent"
+                ? hasProjectId
+                  ? "bg-blue-50 text-blue-400 cursor-not-allowed border border-blue-100"
+                  : "bg-emerald-50 text-emerald-400 cursor-not-allowed border border-emerald-100"
+                : hasProjectId
+                  ? "bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20 hover:shadow-blue-500/30 border border-transparent"
+                  : "bg-emerald-500 hover:bg-emerald-600 text-white shadow-emerald-500/20 hover:shadow-emerald-500/30 border border-transparent"
             )}
-            title={isLoading ? "Adding to cart..." : "Add to Cart"}
+            title={isLoading ? addToCartLoadingLabel : addToCartLabel}
           >
             {isLoading ? (
               <>
                 <Loader2 size={18} className="animate-spin" />
-                <span>Processing...</span>
+                <span>{hasProjectId ? "Updating..." : "Adding..."}</span>
               </>
             ) : (
               <>
                 <ShoppingCart size={18} />
-                <span>Add to Cart</span>
+                <span>{addToCartLabel}</span>
               </>
             )}
           </button>

@@ -4,7 +4,7 @@ import {
   type SavedRoom,
   type SavedCabinet,
   type SavedView,
-} from "@/data/savedRooms"
+} from "@/types/roomTypes"
 import { cabinetPanelState } from "@/features/cabinets/ui/ProductPanel"
 import { priceQueryKeys } from "@/features/cabinets/ui/productPanel/utils/queryKeys"
 import type { WsProducts } from "@/types/erpTypes"

@@ -5,7 +5,7 @@ import {
   type Dispatch,
   type SetStateAction,
 } from "react"
-import type { SavedRoom } from "@/data/savedRooms"
+import type { SavedRoom } from "@/types/roomTypes"
 import type { WsProducts, WsRooms } from "@/types/erpTypes"
 import type { CabinetData, WallDimensions as WallDims } from "../types"
 import type { View, ViewId, ViewManager } from "@/features/cabinets/ViewManager"

@@ -2,7 +2,7 @@
 
 import { getAdminDb, getCompanyId } from "@/server/firebase"
 import { resolveRoomIdByUrl } from "@/server/rooms/resolveRoomId"
-import type { SavedRoom } from "@/data/savedRooms"
+import type { SavedRoom } from "@/types/roomTypes"
 
 /**
  * Save a room design to Firestore.

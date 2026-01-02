@@ -5,7 +5,7 @@ import { getUserRoomsList } from "@/server/rooms/getUserRoomsList"
 import { getUserRoom } from "@/server/rooms/getUserRoom"
 import { saveUserRoom, SaveUserRoomData } from "@/server/rooms/saveUserRoom"
 import { deleteUserRoom } from "@/server/rooms/deleteUserRoom"
-import type { UserRoomListItem, UserSavedRoom } from "@/data/savedRooms"
+import type { UserRoomListItem, UserSavedRoom } from "@/types/roomTypes"
 
 /**
  * React Query keys for user rooms data

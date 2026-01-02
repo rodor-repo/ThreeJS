@@ -16,7 +16,7 @@
 
 import fs from 'fs/promises'
 import path from 'path'
-import type { SavedRoom } from '@/data/savedRooms'
+import type { SavedRoom } from '@/types/roomTypes'
 
 const ROOMS_DIR = path.join(process.cwd(), 'data', 'saved-rooms')
 

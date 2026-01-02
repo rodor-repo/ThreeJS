@@ -1,7 +1,7 @@
 "use server"
 
 import { getAdminDb, getCompanyId } from "@/server/firebase"
-import type { UserSavedRoom } from "@/data/savedRooms"
+import type { UserSavedRoom } from "@/types/roomTypes"
 
 /**
  * Data required to save a user room.

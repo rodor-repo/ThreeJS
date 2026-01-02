@@ -31,7 +31,6 @@ import { AddToCartModal } from './ui/AddToCartModal'
 import { NestingModal } from './ui/NestingModal'
 import { WsProducts, WsRooms } from '@/types/erpTypes'
 import type { ViewId } from '../cabinets/ViewManager'
-import type { SavedRoom } from '@/data/savedRooms'
 import { exportPartsToCSV } from '@/nesting/ExportPartExcel'
 import { usePartData } from '@/nesting/usePartData'
 import { handleViewDimensionChange } from './utils/handlers/viewDimensionHandler'
@@ -74,7 +73,7 @@ import { UserWidthSlider } from './ui/UserWidthSlider'
 import { UserRoomsModal } from './ui/UserRoomsModal'
 import { SaveRoomModal } from './ui/SaveRoomModal'
 import { serializeRoom } from './utils/roomPersistenceUtils'
-import type { UserSavedRoom, RoomCategory } from '@/data/savedRooms'
+import type { UserSavedRoom, RoomCategory, SavedRoom } from '@/types/roomTypes'
 
 interface ThreeSceneProps {
   wallDimensions: WallDims

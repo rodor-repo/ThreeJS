@@ -10,15 +10,27 @@ import {
   updatePersistedPrice,
   onPriceNeedsInvalidation,
 } from "@/features/cabinets/ui/productPanel/hooks/usePersistence"
-import {
-  buildDefaultValues,
-  syncCabinetDimensionsToValues,
-} from "@/features/cabinets/ui/productPanel/utils/dimensionUtils"
+import { buildSyncedDimensionValues } from "@/features/cabinets/ui/productPanel/utils/dimensionUtils"
 import { buildApiDefaults } from "@/features/cabinets/ui/productPanel/utils/materialUtils"
 import { priceQueryKeys } from "@/features/cabinets/ui/productPanel/utils/queryKeys"
 import { getGDMapping } from "@/features/cabinets/ui/productPanel/hooks/useGDMapping"
 
 const MAX_CONCURRENT_PRICE_REQUESTS = 4
+
+const areValueMapsEqual = (
+  a?: Record<string, number | string>,
+  b?: Record<string, number | string>
+): boolean => {
+  if (a === b) return true
+  if (!a || !b) return false
+  const aKeys = Object.keys(a)
+  const bKeys = Object.keys(b)
+  if (aKeys.length !== bKeys.length) return false
+  for (const key of aKeys) {
+    if (a[key] !== b[key]) return false
+  }
+  return true
+}
 
 const pruneMap = <T,>(
   map: Map<string, T>,
@@ -149,17 +161,12 @@ export function useAllCabinetPrices(
         if (!productData) return null
 
         const persisted = getPersistedState(cabinet.cabinetId)
-        const defaultDims = buildDefaultValues(productData.product.dims)
-        let dims = persisted?.values
-          ? { ...defaultDims, ...persisted.values }
-          : defaultDims
-
         const gdMapping = getGDMapping(productData.threeJsGDs)
-        dims = syncCabinetDimensionsToValues(
-          dims,
+        const dims = buildSyncedDimensionValues(
           productData.product.dims,
           gdMapping,
-          cabinet.carcass.dimensions
+          cabinet.carcass.dimensions,
+          persisted?.values
         )
 
         const materialSelections =
@@ -204,12 +211,34 @@ export function useAllCabinetPrices(
     if (!enabled || priceQueryInputs.length === 0) return
 
     priceQueryInputs.forEach((input) => {
-      if (getPersistedState(input.cabinetId)) return
+      const current = getPersistedState(input.cabinetId)
+      if (!current) {
+        cabinetPanelState.set(input.cabinetId, {
+          values: input.dims,
+          materialColor: input.materialColor,
+          materialSelections: input.materialSelections,
+        })
+        return
+      }
+
+      const valuesChanged = !areValueMapsEqual(current.values, input.dims)
+      const needsSelections =
+        current.materialSelections === undefined &&
+        input.materialSelections !== undefined
+      const needsColor =
+        (current.materialColor === undefined ||
+          current.materialColor === "") &&
+        input.materialColor !== ""
+
+      if (!valuesChanged && !needsSelections && !needsColor) return
 
       cabinetPanelState.set(input.cabinetId, {
-        values: input.dims,
-        materialColor: input.materialColor,
-        materialSelections: input.materialSelections,
+        ...current,
+        values: valuesChanged ? input.dims : current.values,
+        materialSelections: needsSelections
+          ? input.materialSelections
+          : current.materialSelections,
+        materialColor: needsColor ? input.materialColor : current.materialColor,
       })
     })
   }, [enabled, priceQueryInputs])

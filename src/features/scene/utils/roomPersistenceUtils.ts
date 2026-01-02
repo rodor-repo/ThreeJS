@@ -17,6 +17,8 @@ import {
   type MaterialOptionsResponse,
   type DefaultMaterialSelections,
 } from "@/server/getProductData"
+import { buildSyncedDimensionValues } from "@/features/cabinets/ui/productPanel/utils/dimensionUtils"
+import { getGDMapping } from "@/features/cabinets/ui/productPanel/hooks/useGDMapping"
 import _ from "lodash"
 import toast from "react-hot-toast"
 
@@ -542,8 +544,25 @@ export async function restoreRoom({
           savedCabinet.materialColor ||
           savedCabinet.dimensionValues
         ) {
+          let nextValues = savedCabinet.dimensionValues || {}
+          if (savedCabinet.productId) {
+            const cached = queryClient.getQueryData(
+              priceQueryKeys.productData(savedCabinet.productId)
+            ) as Awaited<ReturnType<typeof getProductData>> | undefined
+
+            if (cached?.product?.dims && cached?.threeJsGDs) {
+              const gdMapping = getGDMapping(cached.threeJsGDs)
+              nextValues = buildSyncedDimensionValues(
+                cached.product.dims,
+                gdMapping,
+                cabinetData.carcass.dimensions,
+                savedCabinet.dimensionValues
+              )
+            }
+          }
+
           cabinetPanelState.set(cabinetData.cabinetId, {
-            values: savedCabinet.dimensionValues || {},
+            values: nextValues,
             materialColor: savedCabinet.materialColor || "#ffffff",
             materialSelections: savedCabinet.materialSelections,
           })

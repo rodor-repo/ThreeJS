@@ -65,6 +65,8 @@ export default function MainPage({ userEmail, userRole }: MainPageProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [wsProducts, setWsProducts] = useState<WsProducts | null>(null)
   const loadRoomRef = useRef<((savedRoom: SavedRoom) => Promise<void>) | null>(null)
+  const [isLoadRoomReady, setIsLoadRoomReady] = useState(false)
+  const loadingRoomUrlRef = useRef<string | null>(null)
   const [selectedApplianceType, setSelectedApplianceType] = useState<'dishwasher' | 'washingMachine' | 'sideBySideFridge' | null>(null)
 
   // Track the last loaded room URL to prevent duplicate loads (e.g. when setting URL + manually loading)
@@ -74,9 +76,11 @@ export default function MainPage({ userEmail, userRole }: MainPageProps) {
   useEffect(() => {
     // Skip if no room URL, no load function, or if this room is already loaded
     if (!roomUrl || !loadRoomRef.current || roomUrl === lastLoadedRoomUrlRef.current) return
+    if (loadingRoomUrlRef.current === roomUrl) return
     if (!currentRoomId) return
 
     const loadRoomFromId = async () => {
+      loadingRoomUrlRef.current = roomUrl
       try {
         const design = await getRoomDesign(roomUrl)
         if (design && loadRoomRef.current) {
@@ -100,6 +104,10 @@ export default function MainPage({ userEmail, userRole }: MainPageProps) {
         }
       } catch (error) {
         console.error('Failed to load room design:', error)
+      } finally {
+        if (loadingRoomUrlRef.current === roomUrl) {
+          loadingRoomUrlRef.current = null
+        }
       }
     }
 
@@ -107,7 +115,7 @@ export default function MainPage({ userEmail, userRole }: MainPageProps) {
     if (wsRooms) {
       loadRoomFromId()
     }
-  }, [currentRoomId, roomUrl, wsRooms])
+  }, [currentRoomId, isLoadRoomReady, roomUrl, wsRooms])
 
   // Handler for when a room is selected from the menu
   const handleRoomSelect = useCallback(async (selectedRoomUrl: string, design?: RoomDesignData | null) => {
@@ -205,6 +213,7 @@ export default function MainPage({ userEmail, userRole }: MainPageProps) {
         onApplianceCreated={() => setSelectedApplianceType(null)}
         onLoadRoomReady={(loadRoom) => {
           loadRoomRef.current = loadRoom
+          setIsLoadRoomReady((prev) => prev || true)
         }}
         currentRoomUrl={roomUrl}
         currentRoomId={currentRoomId}

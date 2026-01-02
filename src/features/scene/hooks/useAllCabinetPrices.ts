@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useRef } from "react"
-import { useQueries } from "@tanstack/react-query"
+import { useQueries, useQueryClient } from "@tanstack/react-query"
 import debounce from "lodash/debounce"
 import type { CabinetData } from "../types"
 import { getProductData } from "@/server/getProductData"
@@ -17,6 +17,23 @@ import {
 import { buildApiDefaults } from "@/features/cabinets/ui/productPanel/utils/materialUtils"
 import { priceQueryKeys } from "@/features/cabinets/ui/productPanel/utils/queryKeys"
 import { getGDMapping } from "@/features/cabinets/ui/productPanel/hooks/useGDMapping"
+
+const MAX_CONCURRENT_PRICE_REQUESTS = 4
+
+const pruneMap = <T,>(
+  map: Map<string, T>,
+  allowed: Set<string>
+): Map<string, T> => {
+  let changed = false
+  const next = new Map(map)
+  for (const key of Array.from(next.keys())) {
+    if (!allowed.has(key)) {
+      next.delete(key)
+      changed = true
+    }
+  }
+  return changed ? next : map
+}
 
 /**
  * Options for the useAllCabinetPrices hook
@@ -59,6 +76,19 @@ export function useAllCabinetPrices(
   const [internalVersion, setInternalVersion] = useState(0)
   // Debounced version that actually triggers re-calculation
   const [debouncedVersion, setDebouncedVersion] = useState(0)
+  const queryClient = useQueryClient()
+  const runIdRef = useRef(0)
+
+  const [cabinetPrices, setCabinetPrices] = useState<Map<string, number>>(
+    new Map()
+  )
+  const [isCabinetCalculating, setIsCabinetCalculating] = useState<
+    Map<string, boolean>
+  >(new Map())
+  const [cabinetErrors, setCabinetErrors] = useState<Map<string, boolean>>(
+    new Map()
+  )
+  const [isCalculating, setIsCalculating] = useState(false)
 
   // Debounce the version update to 1000ms as requested
   const debouncedSetVersion = useRef(
@@ -151,38 +181,126 @@ export function useAllCabinetPrices(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, priceableCabinets, productDataMap, debouncedVersion])
 
-  // Fetch all prices
-  const priceQueries = useQueries({
-    queries: priceQueryInputs.map((input) => ({
-      queryKey: priceQueryKeys.wsProductPrice(
-        input.productId,
-        input.dims,
-        input.materialSelections
-      ),
-      queryFn: async () => {
-        const res = await calculateWsProductPrice({
-          productId: input.productId,
-          dims: input.dims,
-          materialSelections: input.materialSelections,
-        })
-        return { cabinetId: input.cabinetId, amount: res.price }
-      },
-      enabled: enabled,
-      staleTime: 10 * 60 * 1000,
-      refetchOnWindowFocus: false,
-    })),
-  })
+  const priceQueryInputsKey = useMemo(() => {
+    return priceQueryInputs
+      .map((input) =>
+        [
+          input.cabinetId,
+          input.productId,
+          JSON.stringify(input.dims),
+          JSON.stringify(input.materialSelections),
+        ].join("|")
+      )
+      .join("||")
+  }, [priceQueryInputs])
 
-  // Collect results from queries
-  const cabinetPrices = useMemo(() => {
-    const prices = new Map<string, number>()
-    priceQueries.forEach((query) => {
-      if (query.data) {
-        prices.set(query.data.cabinetId, query.data.amount)
+  useEffect(() => {
+    const activeCabinetIds = new Set(cabinets.map((c) => c.cabinetId))
+    setCabinetPrices((prev) => pruneMap(prev, activeCabinetIds))
+    setIsCabinetCalculating((prev) => pruneMap(prev, activeCabinetIds))
+    setCabinetErrors((prev) => pruneMap(prev, activeCabinetIds))
+  }, [cabinets])
+
+  useEffect(() => {
+    if (!enabled) {
+      setIsCalculating(false)
+      return
+    }
+
+    if (priceQueryInputs.length === 0) {
+      setIsCalculating(false)
+      return
+    }
+
+    let cancelled = false
+    const runId = ++runIdRef.current
+    const pending = [...priceQueryInputs]
+    const workerCount = Math.min(
+      MAX_CONCURRENT_PRICE_REQUESTS,
+      pending.length
+    )
+
+    const worker = async () => {
+      while (pending.length > 0) {
+        const nextInput = pending.shift()
+        if (!nextInput || cancelled || runIdRef.current !== runId) {
+          return
+        }
+
+        const { cabinetId, productId, dims, materialSelections } = nextInput
+
+        setIsCabinetCalculating((prev) => {
+          const next = new Map(prev)
+          next.set(cabinetId, true)
+          return next
+        })
+        setCabinetErrors((prev) => {
+          const next = new Map(prev)
+          next.set(cabinetId, false)
+          return next
+        })
+
+        try {
+          const data = await queryClient.fetchQuery({
+            queryKey: priceQueryKeys.wsProductPrice(
+              productId,
+              dims,
+              materialSelections
+            ),
+            queryFn: async () => {
+              const res = await calculateWsProductPrice({
+                productId,
+                dims,
+                materialSelections,
+              })
+              return { amount: res.price }
+            },
+            staleTime: 10 * 60 * 1000,
+            gcTime: 10 * 60 * 1000,
+          })
+
+          if (cancelled || runIdRef.current !== runId) return
+
+          setCabinetPrices((prev) => {
+            const next = new Map(prev)
+            next.set(cabinetId, data.amount)
+            return next
+          })
+        } catch {
+          if (cancelled || runIdRef.current !== runId) return
+
+          setCabinetErrors((prev) => {
+            const next = new Map(prev)
+            next.set(cabinetId, true)
+            return next
+          })
+        } finally {
+          if (cancelled || runIdRef.current !== runId) return
+
+          setIsCabinetCalculating((prev) => {
+            const next = new Map(prev)
+            next.set(cabinetId, false)
+            return next
+          })
+        }
       }
-    })
-    return prices
-  }, [priceQueries])
+    }
+
+    const run = async () => {
+      setIsCalculating(true)
+      await Promise.all(Array.from({ length: workerCount }, () => worker()))
+      if (!cancelled && runIdRef.current === runId) {
+        setIsCalculating(false)
+      }
+    }
+
+    run()
+
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, priceQueryInputsKey, queryClient])
 
   // Sync back to cabinetPanelState for consistency
   useEffect(() => {
@@ -193,29 +311,6 @@ export function useAllCabinetPrices(
       }
     })
   }, [cabinetPrices])
-
-  // Collect loading and error states
-  const isCabinetCalculating = useMemo(() => {
-    const map = new Map<string, boolean>()
-    priceQueries.forEach((query, index) => {
-      const input = priceQueryInputs[index]
-      if (input) {
-        map.set(input.cabinetId, query.isFetching)
-      }
-    })
-    return map
-  }, [priceQueries, priceQueryInputs])
-
-  const cabinetErrors = useMemo(() => {
-    const map = new Map<string, boolean>()
-    priceQueries.forEach((query, index) => {
-      const input = priceQueryInputs[index]
-      if (input) {
-        map.set(input.cabinetId, query.isError)
-      }
-    })
-    return map
-  }, [priceQueries, priceQueryInputs])
 
   // Calculate total price
   const totalPrice = useMemo(() => {
@@ -230,8 +325,6 @@ export function useAllCabinetPrices(
     })
     return total
   }, [cabinets, cabinetPrices])
-
-  const isCalculating = priceQueries.some((q) => q.isFetching)
 
   return {
     priceVersion: debouncedVersion,

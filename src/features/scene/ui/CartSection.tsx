@@ -233,6 +233,19 @@ export const CartSection: React.FC<CartSectionProps> = (props) => {
           </div>
         </div>
       )}
+
+      {userRole === "admin" && (
+        <a
+          href="/admin/refresh"
+          target="_blank"
+          rel="noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-gray-900 px-4 py-2 text-[11px] font-bold uppercase tracking-widest text-white shadow-lg shadow-gray-900/20 transition hover:bg-gray-800"
+        >
+          <RefreshCcw size={14} />
+          Remove cache
+        </a>
+      )}
     </div>
   )
 }

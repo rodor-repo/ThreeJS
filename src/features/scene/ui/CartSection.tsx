@@ -1,8 +1,10 @@
 import React from "react"
 import { ShoppingCart, ChevronDown, Loader2, FolderOpen, Save, User, ShieldCheck, RefreshCcw } from "lucide-react"
+import { useQueryClient } from "@tanstack/react-query"
 import type { AppMode } from "../context/ModeContext"
 import _ from "lodash"
 import { clearAuthSessionCookies } from "@/server/logout"
+import { priceQueryKeys } from "@/features/cabinets/ui/productPanel/utils/queryKeys"
 
 interface CartSectionProps {
   totalPrice: number
@@ -34,6 +36,7 @@ export const CartSection: React.FC<CartSectionProps> = (props) => {
   } = props
 
   const [isResyncingEmail, setIsResyncingEmail] = React.useState(false)
+  const queryClient = useQueryClient()
 
   const isUserMode = appMode === "user"
   const displayEmail = userEmail || "Guest user"
@@ -62,6 +65,11 @@ export const CartSection: React.FC<CartSectionProps> = (props) => {
       setIsResyncingEmail(false)
       window.alert("Couldn’t resync your email right now. Please try again.")
     }
+  }
+
+  const onRecalculatePrices = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    queryClient.invalidateQueries({ queryKey: priceQueryKeys.all() })
   }
 
   const cx = (...classes: Array<string | false | null | undefined>) => _.join(_.compact(classes), ' ')
@@ -123,12 +131,24 @@ export const CartSection: React.FC<CartSectionProps> = (props) => {
       >
         <div className="flex items-center justify-between mb-1">
           <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Total Estimate</span>
-          {isPriceCalculating && (
+          {isPriceCalculating ? (
             <Loader2 size={14} className="animate-spin text-indigo-500" />
+          ) : (
+            <button
+              type="button"
+              onClick={onRecalculatePrices}
+              className="p-1 rounded-md text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+              title="Recalculate prices"
+            >
+              <RefreshCcw size={14} />
+            </button>
           )}
         </div>
         <div className="flex items-end justify-between">
-          <div className="text-3xl font-black text-gray-900 tracking-tight tabular-nums">
+          <div className={cx(
+            "text-3xl font-black tracking-tight tabular-nums",
+            isPriceCalculating ? "text-gray-300 animate-pulse" : "text-gray-900"
+          )}>
             ${totalPrice.toFixed(2)}
           </div>
           <div className="p-1.5 rounded-lg bg-gray-50 text-gray-400 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-colors">

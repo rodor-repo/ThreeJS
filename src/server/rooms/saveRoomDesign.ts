@@ -1,6 +1,7 @@
 "use server"
 
 import { getAdminDb, getCompanyId } from "@/server/firebase"
+import { resolveRoomIdByUrl } from "@/server/rooms/resolveRoomId"
 import type { SavedRoom } from "@/data/savedRooms"
 
 /**
@@ -12,19 +13,20 @@ import type { SavedRoom } from "@/data/savedRooms"
  * This allows saving to a room that was created in the control panel
  * but doesn't have a design document yet.
  *
- * @param roomId - The room ID (matches an entry in wsRooms.rooms)
+ * @param roomUrl - The room URL slug (matches wsRooms.rooms.*.url)
  * @param design - The serialized room design data
  */
 export async function saveRoomDesign(
-  roomId: string,
+  roomUrl: string,
   design: Omit<SavedRoom, "id" | "name" | "category">
 ): Promise<void> {
-  if (!roomId) {
-    throw new Error("roomId is required to save a design")
+  if (!roomUrl) {
+    throw new Error("roomUrl is required to save a design")
   }
 
   const db = getAdminDb()
   const companyId = getCompanyId()
+  const roomId = await resolveRoomIdByUrl(roomUrl)
 
   const docRef = db
     .collection("companies")

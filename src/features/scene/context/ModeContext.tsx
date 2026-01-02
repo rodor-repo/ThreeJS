@@ -10,6 +10,12 @@ export const useAppMode = () => {
   const searchParams = useSearchParams()
   const router = useRouter()
   const isAdminRoute = pathname?.startsWith("/admin")
+  const userPath = (() => {
+    const path = pathname || "/"
+    if (path === "/admin") return "/"
+    if (path.startsWith("/admin/")) return `/${path.slice("/admin/".length)}`
+    return path
+  })()
   const showUserView = searchParams?.get("showUserView") === "true"
   const mode: AppMode = isAdminRoute
     ? showUserView
@@ -39,14 +45,15 @@ export const useAppMode = () => {
       return
     }
 
-    const nextPath = nextMode === "admin" ? "/admin" : "/"
+    const adminPath = userPath === "/" ? "/admin" : `/admin${userPath.startsWith("/") ? userPath : `/${userPath}`}`
+    const nextPath = nextMode === "admin" ? adminPath : userPath
     params.delete("showUserView")
     const query = params.toString()
     const nextUrl = query ? `${nextPath}?${query}` : nextPath
 
     if (nextUrl === currentUrl) return
     router.push(nextUrl)
-  }, [isAdminRoute, pathname, router, searchParams])
+  }, [isAdminRoute, pathname, router, searchParams, userPath])
 
   return [mode, setMode] as const
 }

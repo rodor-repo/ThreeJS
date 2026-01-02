@@ -91,7 +91,9 @@ interface ThreeSceneProps {
   selectedApplianceType?: 'dishwasher' | 'washingMachine' | 'sideBySideFridge' | null
   /** Callback when appliance is created */
   onApplianceCreated?: () => void
-  /** Currently selected room ID (from URL query param) */
+  /** Currently selected room URL slug */
+  currentRoomUrl?: string | null
+  /** Currently selected room ID (resolved from room url) */
   currentRoomId?: string | null
   /** WsRooms config from Firestore - contains room categories and entries */
   wsRooms?: WsRooms | null
@@ -105,7 +107,7 @@ interface ThreeSceneProps {
   userRole?: AppMode | null
 }
 
-const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChange, selectedCategory, selectedSubcategory, isMenuOpen = false, selectedProductId, wsProducts, onLoadRoomReady, selectedApplianceType, onApplianceCreated, currentRoomId, wsRooms, selectedMode, setSelectedMode, userEmail, userRole }) => {
+const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChange, selectedCategory, selectedSubcategory, isMenuOpen = false, selectedProductId, wsProducts, onLoadRoomReady, selectedApplianceType, onApplianceCreated, currentRoomUrl, currentRoomId, wsRooms, selectedMode, setSelectedMode, userEmail, userRole }) => {
   const mountRef = useRef<HTMLDivElement>(null);
   const [cameraMode, setCameraMode] = useState<'constrained' | 'free'>('constrained')
   const [dimensionsVisible, setDimensionsVisible] = useState(true)
@@ -385,6 +387,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     updateCabinetViewId,
     updateCabinetLock,
     onLoadRoomReady: undefined, // We handle this manually below to reset history
+    currentRoomUrl,
     currentRoomId,
     wsRooms,
   })

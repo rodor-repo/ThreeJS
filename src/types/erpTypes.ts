@@ -431,6 +431,7 @@ export type WsRooms = {
       indexPhotoAlt?: string
       status: "Active" | "Hidden"
       sortNum: string
+      url: string
 
       shapes: {
         [shapeId: string]: {

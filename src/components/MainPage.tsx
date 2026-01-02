@@ -1,8 +1,8 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { useState, useRef, useEffect, useCallback } from 'react'
-import { useQueryState } from 'nuqs'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import { useParams } from 'next/navigation'
 import MainMenu from '@/components/MainMenu'
 import { Category, Subcategory } from '@/components/categoriesData'
 import { useAppMode, type AppMode } from '@/features/scene/context/ModeContext'
@@ -31,13 +31,22 @@ type MainPageProps = {
 }
 
 export default function MainPage({ userEmail, userRole }: MainPageProps) {
-  // URL query state for room selection
-  const [roomId, setRoomId] = useQueryState('roomId')
+  const params = useParams()
+  const roomUrlParam = params?.roomUrl
+  const roomUrl = typeof roomUrlParam === 'string' ? roomUrlParam : roomUrlParam?.[0] ?? null
   const [selectedMode, setSelectedMode] = useAppMode()
   const effectiveUserRole = selectedMode === 'user' ? 'user' : userRole ?? null
 
   // Fetch wsRooms config via React Query
   const { data: wsRooms, isLoading: wsRoomsLoading } = useWsRoomsQuery()
+
+  const findRoomEntryByUrl = useCallback((url: string | null) => {
+    if (!url || !wsRooms?.rooms) return null
+    return Object.entries(wsRooms.rooms).find(([, room]) => room.url === url) ?? null
+  }, [wsRooms?.rooms])
+
+  const currentRoomEntry = useMemo(() => findRoomEntryByUrl(roomUrl), [findRoomEntryByUrl, roomUrl])
+  const currentRoomId = currentRoomEntry?.[0] ?? null
 
   const [wallDimensions, setWallDimensions] = useState<WallDimensions>({
     length: 4000, // Backward compatibility
@@ -58,24 +67,25 @@ export default function MainPage({ userEmail, userRole }: MainPageProps) {
   const loadRoomRef = useRef<((savedRoom: SavedRoom) => Promise<void>) | null>(null)
   const [selectedApplianceType, setSelectedApplianceType] = useState<'dishwasher' | 'washingMachine' | 'sideBySideFridge' | null>(null)
 
-  // Track the last loaded room ID to prevent duplicate loads (e.g. when setting URL + manually loading)
-  const lastLoadedRoomIdRef = useRef<string | null>(null)
+  // Track the last loaded room URL to prevent duplicate loads (e.g. when setting URL + manually loading)
+  const lastLoadedRoomUrlRef = useRef<string | null>(null)
 
-  // Load room design when roomId changes or on initial load
+  // Load room design when roomUrl changes or on initial load
   useEffect(() => {
-    // Skip if no room ID, no load function, or if this room is already loaded
-    if (!roomId || !loadRoomRef.current || roomId === lastLoadedRoomIdRef.current) return
+    // Skip if no room URL, no load function, or if this room is already loaded
+    if (!roomUrl || !loadRoomRef.current || roomUrl === lastLoadedRoomUrlRef.current) return
+    if (!currentRoomId) return
 
     const loadRoomFromId = async () => {
       try {
-        const design = await getRoomDesign(roomId)
+        const design = await getRoomDesign(roomUrl)
         if (design && loadRoomRef.current) {
           // Construct a SavedRoom object from the design and wsRooms metadata
-          const roomMeta = wsRooms?.rooms?.[roomId]
+          const roomMeta = wsRooms?.rooms?.[currentRoomId]
           const categoryMeta = roomMeta?.categoryId ? wsRooms?.categories?.[roomMeta.categoryId] : null
 
           const savedRoom: SavedRoom = {
-            id: roomId,
+            id: currentRoomId,
             name: roomMeta?.room || 'Untitled Room',
             category: (categoryMeta?.category as SavedRoom['category']) || 'Kitchen',
             savedAt: design.updatedAt || design.savedAt || new Date().toISOString(),
@@ -86,7 +96,7 @@ export default function MainPage({ userEmail, userRole }: MainPageProps) {
           }
 
           await loadRoomRef.current(savedRoom)
-          lastLoadedRoomIdRef.current = roomId
+          lastLoadedRoomUrlRef.current = roomUrl
         }
       } catch (error) {
         console.error('Failed to load room design:', error)
@@ -97,20 +107,20 @@ export default function MainPage({ userEmail, userRole }: MainPageProps) {
     if (wsRooms) {
       loadRoomFromId()
     }
-  }, [roomId, wsRooms])
+  }, [currentRoomId, roomUrl, wsRooms])
 
   // Handler for when a room is selected from the menu
-  const handleRoomSelect = useCallback(async (selectedRoomId: string, design?: RoomDesignData | null) => {
+  const handleRoomSelect = useCallback(async (selectedRoomUrl: string, design?: RoomDesignData | null) => {
     // Update ref first to prevent useEffect from loading again when URL changes
     if (design) {
-      lastLoadedRoomIdRef.current = selectedRoomId
+      lastLoadedRoomUrlRef.current = selectedRoomUrl
     }
 
-    // Update URL
-    await setRoomId(selectedRoomId)
-
     if (loadRoomRef.current && design) {
-      const roomMeta = wsRooms?.rooms?.[selectedRoomId]
+      const roomEntry = findRoomEntryByUrl(selectedRoomUrl)
+      const selectedRoomId = roomEntry?.[0] ?? null
+      if (!selectedRoomId) return
+      const roomMeta = selectedRoomId ? wsRooms?.rooms?.[selectedRoomId] : null
       const categoryMeta = roomMeta?.categoryId ? wsRooms?.categories?.[roomMeta.categoryId] : null
 
       const savedRoom: SavedRoom = {
@@ -126,7 +136,7 @@ export default function MainPage({ userEmail, userRole }: MainPageProps) {
 
       await loadRoomRef.current(savedRoom)
     }
-  }, [setRoomId, wsRooms])
+  }, [findRoomEntryByUrl, wsRooms])
 
   const handleCategorySelect = (category: Category) => {
     setSelectedCategory(category)
@@ -172,7 +182,7 @@ export default function MainPage({ userEmail, userRole }: MainPageProps) {
         setWsProducts={setWsProducts}
         wsRooms={wsRooms ?? null}
         wsRoomsLoading={wsRoomsLoading}
-        currentRoomId={roomId}
+        currentRoomUrl={roomUrl}
         onRoomSelect={handleRoomSelect}
         onLoadRoom={async (savedRoom) => {
           if (loadRoomRef.current) {
@@ -196,7 +206,8 @@ export default function MainPage({ userEmail, userRole }: MainPageProps) {
         onLoadRoomReady={(loadRoom) => {
           loadRoomRef.current = loadRoom
         }}
-        currentRoomId={roomId}
+        currentRoomUrl={roomUrl}
+        currentRoomId={currentRoomId}
         wsRooms={wsRooms ?? null}
         selectedMode={selectedMode}
         setSelectedMode={handleModeChange}

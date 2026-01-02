@@ -1,6 +1,7 @@
 "use server"
 
 import { getAdminDb, getCompanyId } from "@/server/firebase"
+import { resolveRoomIdByUrl } from "@/server/rooms/resolveRoomId"
 import type { SavedRoom } from "@/data/savedRooms"
 
 /**
@@ -19,18 +20,19 @@ export type RoomDesignData = Omit<SavedRoom, "id" | "name" | "category"> & {
  * Returns null if the design document doesn't exist yet.
  * This is expected for newly created rooms that haven't been edited.
  *
- * @param roomId - The room ID (matches an entry in wsRooms.rooms)
+ * @param roomUrl - The room URL slug (matches wsRooms.rooms.*.url)
  * @returns The room design data or null if not found
  */
 export async function getRoomDesign(
-  roomId: string
+  roomUrl: string
 ): Promise<RoomDesignData | null> {
-  if (!roomId) {
-    throw new Error("roomId is required to get a design")
+  if (!roomUrl) {
+    throw new Error("roomUrl is required to get a design")
   }
 
   const db = getAdminDb()
   const companyId = getCompanyId()
+  const roomId = await resolveRoomIdByUrl(roomUrl)
 
   const docRef = db
     .collection("companies")

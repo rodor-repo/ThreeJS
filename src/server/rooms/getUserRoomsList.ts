@@ -1,5 +1,8 @@
 "use server"
 
+import { cookies } from "next/headers"
+import { USER_SESSION_COOKIE_NAME } from "@/lib/auth/constants"
+import { verifyRoomSessionToken } from "@/lib/auth/session"
 import { getAdminDb, getCompanyId } from "@/server/firebase"
 import type { UserRoomListItem, RoomCategory } from "@/types/roomTypes"
 
@@ -11,15 +14,21 @@ import type { UserRoomListItem, RoomCategory } from "@/types/roomTypes"
  * Returns minimal data for list display, sorted by updatedAt desc (client-side).
  * Uses .select() for better performance by only fetching needed fields.
  *
- * @param userEmail - The user's email to query
  * @returns Array of user room list items
  */
-export async function getUserRoomsList(
-  userEmail: string
-): Promise<UserRoomListItem[]> {
-  if (!userEmail) {
-    throw new Error("userEmail is required to get user rooms list")
+export async function getUserRoomsList(): Promise<UserRoomListItem[]> {
+  const cookieStore = cookies()
+  const sessionToken = cookieStore.get(USER_SESSION_COOKIE_NAME)?.value
+  if (!sessionToken) {
+    throw new Error("AUTH_REQUIRED")
   }
+
+  const session = await verifyRoomSessionToken(sessionToken)
+  if (!session) {
+    throw new Error("AUTH_REQUIRED")
+  }
+
+  const normalizedEmail = session.email.toLowerCase().trim()
 
   const db = getAdminDb()
   const companyId = getCompanyId()
@@ -32,7 +41,7 @@ export async function getUserRoomsList(
   // Query by email only (no orderBy to avoid needing a composite index)
   // Uses .select() to only fetch the fields we need for the list view
   const querySnapshot = await collectionRef
-    .where("userEmail", "==", userEmail.toLowerCase().trim())
+    .where("userEmail", "==", normalizedEmail)
     .select(
       "name",
       "originalRoomName",

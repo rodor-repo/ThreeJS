@@ -1,50 +1,33 @@
-import React, { useState, useEffect } from "react"
+import React from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { X, FolderOpen, Trash2, Calendar, Package, Search, Loader2 } from "lucide-react"
+import { X, FolderOpen, Trash2, Calendar, Package, Loader2 } from "lucide-react"
 import { useUserRoomsList, useDeleteUserRoom } from "@/hooks/useUserRoomsQuery"
 
 interface UserRoomsModalProps {
   isOpen: boolean
   onClose: () => void
   onSelectRoom: (roomId: string) => void
+  userEmail?: string | null
 }
 
 export const UserRoomsModal: React.FC<UserRoomsModalProps> = ({
   isOpen,
   onClose,
   onSelectRoom,
+  userEmail,
 }) => {
-  const [email, setEmail] = useState("")
-  const [searchEmail, setSearchEmail] = useState("") // Email to search for (triggers query)
-
-  // Load email from localStorage when modal opens
-  useEffect(() => {
-    if (isOpen) {
-      const savedEmail = localStorage.getItem("userEmail")
-      if (savedEmail) {
-        setEmail(savedEmail)
-        setSearchEmail(savedEmail)
-      }
-    }
-  }, [isOpen])
+  const normalizedEmail = userEmail?.toLowerCase().trim() || ""
 
   // React Query hooks
   const {
     data: rooms = [],
     isLoading,
     isError,
-    refetch,
-  } = useUserRoomsList(searchEmail, {
-    enabled: isOpen && searchEmail.includes("@"),
+  } = useUserRoomsList(normalizedEmail, {
+    enabled: isOpen && !!normalizedEmail,
   })
 
-  const deleteRoomMutation = useDeleteUserRoom()
-
-  const handleSearch = () => {
-    if (!email.includes("@")) return
-    localStorage.setItem("userEmail", email)
-    setSearchEmail(email)
-  }
+  const deleteRoomMutation = useDeleteUserRoom(normalizedEmail)
 
   const handleDelete = async (e: React.MouseEvent, roomId: string) => {
     e.stopPropagation()
@@ -52,7 +35,7 @@ export const UserRoomsModal: React.FC<UserRoomsModalProps> = ({
     if (!confirm("Are you sure you want to delete this saved room?")) return
 
     deleteRoomMutation.mutate(
-      { roomId, email: searchEmail },
+      { roomId },
       {
         onError: (error) => {
           console.error("Failed to delete room:", error)
@@ -63,9 +46,6 @@ export const UserRoomsModal: React.FC<UserRoomsModalProps> = ({
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && email.includes("@") && !isLoading) {
-      handleSearch()
-    }
     if (e.key === "Escape") {
       onClose()
     }
@@ -122,35 +102,6 @@ export const UserRoomsModal: React.FC<UserRoomsModalProps> = ({
               </button>
             </div>
 
-            {/* Email Input */}
-            <div className="p-4 border-b border-gray-200">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Your Email
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Enter your email..."
-                  autoFocus={!email}
-                />
-                <button
-                  onClick={handleSearch}
-                  disabled={isLoading || !email.includes("@")}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                >
-                  {isLoading ? (
-                    <Loader2 size={16} className="animate-spin" />
-                  ) : (
-                    <Search size={16} />
-                  )}
-                  {isLoading ? "Loading..." : "Search"}
-                </button>
-              </div>
-            </div>
-
             {/* Room List */}
             <div className="max-h-96 overflow-y-auto">
               {isError && (
@@ -166,19 +117,19 @@ export const UserRoomsModal: React.FC<UserRoomsModalProps> = ({
                 </div>
               )}
 
-              {!isLoading && !isError && rooms.length === 0 && searchEmail && (
+              {!isLoading && !isError && rooms.length === 0 && normalizedEmail && (
                 <div className="p-8 text-center text-gray-500">
                   <FolderOpen size={48} className="mx-auto mb-2 opacity-50" />
-                  <p>No saved rooms found for this email.</p>
+                  <p>No saved rooms found for your account.</p>
                   <p className="text-sm mt-1">
                     Rooms are saved automatically when you add items to cart.
                   </p>
                 </div>
               )}
 
-              {!isLoading && !isError && !searchEmail && (
+              {!isLoading && !isError && !normalizedEmail && (
                 <div className="p-8 text-center text-gray-500">
-                  <p>Enter your email to view saved rooms.</p>
+                  <p>Sign in to view your saved rooms.</p>
                 </div>
               )}
 

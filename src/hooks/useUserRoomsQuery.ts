@@ -12,32 +12,31 @@ import type { UserRoomListItem, UserSavedRoom } from "@/types/roomTypes"
  */
 export const userRoomsQueryKeys = {
   all: ["userRooms"] as const,
-  list: (email: string) =>
-    ["userRooms", "list", email.toLowerCase().trim()] as const,
+  list: (email?: string | null) =>
+    ["userRooms", "list", email?.toLowerCase().trim() || "self"] as const,
   detail: (id: string) => ["userRooms", "detail", id] as const,
 }
 
 /**
  * Hook for fetching a user's saved rooms list.
  *
- * @param email - User email to query rooms for
+ * @param email - Optional email used for cache key separation
  * @param options - Optional query options
  * @returns React Query result with rooms list
  */
 export function useUserRoomsList(
-  email: string,
+  email?: string | null,
   options?: { enabled?: boolean }
 ) {
-  const normalizedEmail = email?.toLowerCase().trim() || ""
-  const isValidEmail = normalizedEmail.includes("@")
+  const normalizedEmail = email?.toLowerCase().trim()
 
   return useQuery<UserRoomListItem[], Error>({
     queryKey: userRoomsQueryKeys.list(normalizedEmail),
     queryFn: async () => {
-      const data = await getUserRoomsList(normalizedEmail)
+      const data = await getUserRoomsList()
       return data
     },
-    enabled: isValidEmail && (options?.enabled ?? true),
+    enabled: (options?.enabled ?? true),
     staleTime: 2 * 60 * 1000, // 2 minutes - user rooms change more frequently
     gcTime: 10 * 60 * 1000, // 10 minutes garbage collection
   })
@@ -46,22 +45,23 @@ export function useUserRoomsList(
 /**
  * Mutation hook for saving a user room.
  *
- * On success, invalidates the rooms list for the user's email.
+ * On success, invalidates the rooms list for the signed-in user.
  *
  * @returns Mutation result with save function
  */
-export function useSaveUserRoom() {
+export function useSaveUserRoom(cacheKeyEmail?: string | null) {
   const queryClient = useQueryClient()
+  const listKey = userRoomsQueryKeys.list(cacheKeyEmail)
 
   return useMutation({
     mutationFn: async (input: SaveUserRoomData) => {
       const result = await saveUserRoom(input)
       return result
     },
-    onSuccess: (_, variables) => {
+    onSuccess: () => {
       // Invalidate the rooms list for this user
       queryClient.invalidateQueries({
-        queryKey: userRoomsQueryKeys.list(variables.userEmail),
+        queryKey: listKey,
       })
     },
   })
@@ -74,33 +74,35 @@ export function useSaveUserRoom() {
  *
  * @returns Mutation result with delete function
  */
-export function useDeleteUserRoom() {
+export function useDeleteUserRoom(cacheKeyEmail?: string | null) {
   const queryClient = useQueryClient()
 
-  type DeleteVariables = { roomId: string; email: string }
+  type DeleteVariables = { roomId: string }
   type DeleteContext = { previousRooms?: UserRoomListItem[] }
   type DeleteResult = { success: boolean }
 
+  const listKey = userRoomsQueryKeys.list(cacheKeyEmail)
+
   return useMutation<DeleteResult, Error, DeleteVariables, DeleteContext>({
-    mutationFn: async ({ roomId, email }) => {
-      const result = await deleteUserRoom(roomId, email)
+    mutationFn: async ({ roomId }) => {
+      const result = await deleteUserRoom(roomId)
       return result
     },
-    onMutate: async ({ roomId, email }) => {
+    onMutate: async ({ roomId }) => {
       // Cancel outgoing refetches
       await queryClient.cancelQueries({
-        queryKey: userRoomsQueryKeys.list(email),
+        queryKey: listKey,
       })
 
       // Snapshot previous value
       const previousRooms = queryClient.getQueryData<UserRoomListItem[]>(
-        userRoomsQueryKeys.list(email)
+        listKey
       )
 
       // Optimistically update cache
       if (previousRooms) {
         queryClient.setQueryData<UserRoomListItem[]>(
-          userRoomsQueryKeys.list(email),
+          listKey,
           previousRooms.filter((room) => room.id !== roomId)
         )
       }
@@ -111,7 +113,7 @@ export function useDeleteUserRoom() {
       // Rollback on error
       if (context?.previousRooms) {
         queryClient.setQueryData(
-          userRoomsQueryKeys.list(variables.email),
+          listKey,
           context.previousRooms
         )
       }
@@ -120,7 +122,7 @@ export function useDeleteUserRoom() {
       // Refetch after error or success
       if (variables) {
         queryClient.invalidateQueries({
-          queryKey: userRoomsQueryKeys.list(variables.email),
+          queryKey: listKey,
         })
       }
     },

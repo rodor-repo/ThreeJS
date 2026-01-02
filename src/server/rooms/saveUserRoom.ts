@@ -1,5 +1,8 @@
 "use server"
 
+import { cookies } from "next/headers"
+import { USER_SESSION_COOKIE_NAME } from "@/lib/auth/constants"
+import { verifyRoomSessionToken } from "@/lib/auth/session"
 import { getAdminDb, getCompanyId } from "@/server/firebase"
 import type { UserSavedRoom } from "@/types/roomTypes"
 
@@ -7,7 +10,10 @@ import type { UserSavedRoom } from "@/types/roomTypes"
  * Data required to save a user room.
  * Omits 'id' since Firestore generates it for new documents.
  */
-export type SaveUserRoomData = Omit<UserSavedRoom, "id" | "createdAt"> & {
+export type SaveUserRoomData = Omit<
+  UserSavedRoom,
+  "id" | "createdAt" | "userEmail"
+> & {
   /** Optional: existing user room ID for updates */
   userRoomId?: string
 }
@@ -18,7 +24,7 @@ export interface SaveUserRoomResult {
 }
 
 /**
- * Save a user room configuration to Firestore.
+ * Save a user room configuration to Firestore using the session email.
  *
  * Path: companies/{companyId}/wsUserRooms/{userRoomId}
  *
@@ -31,11 +37,19 @@ export interface SaveUserRoomResult {
 export async function saveUserRoom(
   data: SaveUserRoomData
 ): Promise<SaveUserRoomResult> {
-  if (!data.userEmail) {
-    throw new Error("userEmail is required to save a user room")
-  }
   if (!data.originalRoomId) {
     throw new Error("originalRoomId is required to save a user room")
+  }
+
+  const cookieStore = cookies()
+  const sessionToken = cookieStore.get(USER_SESSION_COOKIE_NAME)?.value
+  if (!sessionToken) {
+    throw new Error("AUTH_REQUIRED")
+  }
+
+  const session = await verifyRoomSessionToken(sessionToken)
+  if (!session) {
+    throw new Error("AUTH_REQUIRED")
   }
 
   const db = getAdminDb()
@@ -49,10 +63,9 @@ export async function saveUserRoom(
   const now = new Date().toISOString()
   const { userRoomId, ...roomData } = data
 
-  // Normalize email to lowercase for consistent querying
   const normalizedData = {
     ...roomData,
-    userEmail: roomData.userEmail.toLowerCase().trim(),
+    userEmail: session.email.toLowerCase().trim(),
   }
 
   if (userRoomId) {

@@ -1,5 +1,8 @@
 "use server"
 
+import { cookies } from "next/headers"
+import { USER_SESSION_COOKIE_NAME } from "@/lib/auth/constants"
+import { verifyRoomSessionToken } from "@/lib/auth/session"
 import { getAdminDb, getCompanyId } from "@/server/firebase"
 
 /**
@@ -7,18 +10,26 @@ import { getAdminDb, getCompanyId } from "@/server/firebase"
  *
  * Path: companies/{companyId}/wsUserRooms/{userRoomId}
  *
- * Verifies ownership by checking email before deletion.
+ * Verifies ownership by checking session email before deletion.
  *
- * @param userRoomId - The user room document ID
- * @param userEmail - The user's email (for verification)
  * @returns Success status
  */
 export async function deleteUserRoom(
-  userRoomId: string,
-  userEmail: string
+  userRoomId: string
 ): Promise<{ success: boolean }> {
-  if (!userRoomId || !userEmail) {
-    throw new Error("userRoomId and userEmail are required")
+  if (!userRoomId) {
+    throw new Error("userRoomId is required")
+  }
+
+  const cookieStore = cookies()
+  const sessionToken = cookieStore.get(USER_SESSION_COOKIE_NAME)?.value
+  if (!sessionToken) {
+    throw new Error("AUTH_REQUIRED")
+  }
+
+  const session = await verifyRoomSessionToken(sessionToken)
+  if (!session) {
+    throw new Error("AUTH_REQUIRED")
   }
 
   const db = getAdminDb()
@@ -37,7 +48,10 @@ export async function deleteUserRoom(
   }
 
   const data = doc.data()
-  if (data?.userEmail?.toLowerCase() !== userEmail.toLowerCase().trim()) {
+  if (
+    typeof data?.userEmail !== "string" ||
+    data.userEmail.toLowerCase().trim() !== session.email.toLowerCase().trim()
+  ) {
     throw new Error("Unauthorized: email mismatch")
   }
 

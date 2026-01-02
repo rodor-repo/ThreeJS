@@ -1,5 +1,8 @@
 "use server"
 
+import { cookies } from "next/headers"
+import { USER_SESSION_COOKIE_NAME } from "@/lib/auth/constants"
+import { verifyRoomSessionToken } from "@/lib/auth/session"
 import { getAdminDb, getCompanyId } from "@/server/firebase"
 import type { UserSavedRoom } from "@/types/roomTypes"
 
@@ -18,6 +21,17 @@ export async function getUserRoom(
     throw new Error("userRoomId is required to get user room")
   }
 
+  const cookieStore = cookies()
+  const sessionToken = cookieStore.get(USER_SESSION_COOKIE_NAME)?.value
+  if (!sessionToken) {
+    throw new Error("AUTH_REQUIRED")
+  }
+
+  const session = await verifyRoomSessionToken(sessionToken)
+  if (!session) {
+    throw new Error("AUTH_REQUIRED")
+  }
+
   const db = getAdminDb()
   const companyId = getCompanyId()
 
@@ -33,8 +47,17 @@ export async function getUserRoom(
     return null
   }
 
+  const data = docSnap.data()
+  const ownerEmail = data?.userEmail
+  if (
+    typeof ownerEmail !== "string" ||
+    ownerEmail.toLowerCase().trim() !== session.email.toLowerCase().trim()
+  ) {
+    throw new Error("UNAUTHORIZED")
+  }
+
   return {
     id: docSnap.id,
-    ...docSnap.data(),
+    ...data,
   } as UserSavedRoom
 }

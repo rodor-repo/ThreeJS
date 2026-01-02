@@ -31,7 +31,6 @@ import { AddToCartModal } from './ui/AddToCartModal'
 import { NestingModal } from './ui/NestingModal'
 import { WsProducts, WsRooms } from '@/types/erpTypes'
 import type { ViewId } from '../cabinets/ViewManager'
-import type { SavedRoom } from '@/data/savedRooms'
 import { exportPartsToCSV } from '@/nesting/ExportPartExcel'
 import { usePartData } from '@/nesting/usePartData'
 import { handleViewDimensionChange } from './utils/handlers/viewDimensionHandler'
@@ -74,7 +73,7 @@ import { UserWidthSlider } from './ui/UserWidthSlider'
 import { UserRoomsModal } from './ui/UserRoomsModal'
 import { SaveRoomModal } from './ui/SaveRoomModal'
 import { serializeRoom } from './utils/roomPersistenceUtils'
-import type { UserSavedRoom, RoomCategory } from '@/data/savedRooms'
+import type { UserSavedRoom, RoomCategory, SavedRoom } from '@/types/roomTypes'
 
 interface ThreeSceneProps {
   wallDimensions: WallDims
@@ -91,7 +90,9 @@ interface ThreeSceneProps {
   selectedApplianceType?: 'dishwasher' | 'washingMachine' | 'sideBySideFridge' | null
   /** Callback when appliance is created */
   onApplianceCreated?: () => void
-  /** Currently selected room ID (from URL query param) */
+  /** Currently selected room URL slug */
+  currentRoomUrl?: string | null
+  /** Currently selected room ID (resolved from room url) */
   currentRoomId?: string | null
   /** WsRooms config from Firestore - contains room categories and entries */
   wsRooms?: WsRooms | null
@@ -105,7 +106,7 @@ interface ThreeSceneProps {
   userRole?: AppMode | null
 }
 
-const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChange, selectedCategory, selectedSubcategory, isMenuOpen = false, selectedProductId, wsProducts, onLoadRoomReady, selectedApplianceType, onApplianceCreated, currentRoomId, wsRooms, selectedMode, setSelectedMode, userEmail, userRole }) => {
+const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChange, selectedCategory, selectedSubcategory, isMenuOpen = false, selectedProductId, wsProducts, onLoadRoomReady, selectedApplianceType, onApplianceCreated, currentRoomUrl, currentRoomId, wsRooms, selectedMode, setSelectedMode, userEmail, userRole }) => {
   const mountRef = useRef<HTMLDivElement>(null);
   const [cameraMode, setCameraMode] = useState<'constrained' | 'free'>('constrained')
   const [dimensionsVisible, setDimensionsVisible] = useState(true)
@@ -189,7 +190,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
   })
 
   // User room mutations (React Query)
-  const saveUserRoomMutation = useSaveUserRoom()
+  const saveUserRoomMutation = useSaveUserRoom(userEmail)
   const loadUserRoomMutation = useLoadUserRoom()
 
   // Snap guides for visual feedback during cabinet dragging
@@ -385,6 +386,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     updateCabinetViewId,
     updateCabinetLock,
     onLoadRoomReady: undefined, // We handle this manually below to reset history
+    currentRoomUrl,
     currentRoomId,
     wsRooms,
   })
@@ -686,7 +688,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     setShowAddToCartModal(true)
   }, [cabinets])
 
-  const handleConfirmAddToCart = useCallback(async (projectName: string, userEmail: string) => {
+  const handleConfirmAddToCart = useCallback(async (projectName: string) => {
     if (!cartItemsToAdd) return
 
     setIsAddingToCart(true)
@@ -728,7 +730,6 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
             const saveResult = await saveUserRoomMutation.mutateAsync({
               ...roomData,
               userRoomId: currentUserRoom?.id,
-              userEmail: userEmail.toLowerCase().trim(),
               originalRoomId: currentRoomId,
               originalRoomName: currentRoomName || "",
               projectName,
@@ -740,7 +741,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
             setCurrentUserRoom((prev) => ({
               ...roomData,
               id: saveResult.userRoomId,
-              userEmail: userEmail.toLowerCase().trim(),
+              userEmail: userEmail?.toLowerCase().trim() || prev?.userEmail || "",
               originalRoomId: currentRoomId,
               originalRoomName: currentRoomName || "",
               projectName,
@@ -785,7 +786,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     } finally {
       setIsAddingToCart(false)
     }
-  }, [cartItemsToAdd, currentUserRoom, currentRoomId, currentRoomName, wsRooms, cabinets, cabinetGroups, wallDimensions, wallColor, viewManager, wsProducts, cabinetSyncs, saveUserRoomMutation])
+  }, [cartItemsToAdd, currentUserRoom, currentRoomId, currentRoomName, userEmail, wsRooms, cabinets, cabinetGroups, wallDimensions, wallColor, viewManager, wsProducts, cabinetSyncs, saveUserRoomMutation])
 
   const handleCloseAddToCartModal = useCallback(() => {
     if (!isAddingToCart) {
@@ -831,7 +832,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
   }, [currentRoomId])
 
   // Handler to confirm save room (without adding to cart)
-  const handleConfirmSaveRoom = useCallback(async (projectName: string, userEmail: string) => {
+  const handleConfirmSaveRoom = useCallback(async (projectName: string) => {
     if (!currentRoomId) return
 
     setIsSavingRoom(true)
@@ -862,7 +863,6 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
       const saveResult = await saveUserRoomMutation.mutateAsync({
         ...roomData,
         userRoomId: currentUserRoom?.id,
-        userEmail: userEmail.toLowerCase().trim(),
         originalRoomId: currentRoomId,
         originalRoomName: currentRoomName || "",
         projectName,
@@ -874,7 +874,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
       setCurrentUserRoom((prev) => ({
         ...roomData,
         id: saveResult.userRoomId,
-        userEmail: userEmail.toLowerCase().trim(),
+        userEmail: userEmail?.toLowerCase().trim() || prev?.userEmail || "",
         originalRoomId: currentRoomId,
         originalRoomName: currentRoomName || "",
         projectName,
@@ -891,7 +891,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     } finally {
       setIsSavingRoom(false)
     }
-  }, [currentRoomId, currentRoomName, currentUserRoom, wsRooms, cabinets, cabinetGroups, wallDimensions, wallColor, viewManager, wsProducts, cabinetSyncs, saveUserRoomMutation])
+  }, [currentRoomId, currentRoomName, currentUserRoom, userEmail, wsRooms, cabinets, cabinetGroups, wallDimensions, wallColor, viewManager, wsProducts, cabinetSyncs, saveUserRoomMutation])
 
   const handleShowProducts = useCallback(() => {
     setShowProductsDrawer(true)
@@ -995,6 +995,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         appMode={selectedMode}
         userEmail={userEmail || null}
         userRole={userRole || null}
+        hasProjectId={!!currentUserRoom?.projectId}
       />
 
       {selectedMode === 'admin' && (
@@ -1608,10 +1609,11 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         onConfirm={handleConfirmAddToCart}
         itemCount={cartItemsToAdd?.items.length ?? 0}
         skippedCount={cartItemsToAdd?.skipped.length ?? 0}
+        skippedItems={cartItemsToAdd?.skipped ?? []}
         isLoading={isAddingToCart}
-        initialEmail={currentUserRoom?.userEmail}
         initialProjectName={currentUserRoom?.projectName}
         isUserRoomMode={!!currentUserRoom}
+        hasProjectId={!!currentUserRoom?.projectId}
       />
 
       {/* User Rooms Modal */}
@@ -1619,6 +1621,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         isOpen={showUserRoomsModal}
         onClose={() => setShowUserRoomsModal(false)}
         onSelectRoom={handleLoadUserRoom}
+        userEmail={userEmail ?? null}
       />
 
       {/* Save Room Modal */}
@@ -1627,7 +1630,6 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         onClose={() => setShowSaveRoomModal(false)}
         onConfirm={handleConfirmSaveRoom}
         isLoading={isSavingRoom}
-        initialEmail={currentUserRoom?.userEmail}
         initialProjectName={currentUserRoom?.projectName}
       />
 
@@ -1651,7 +1653,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         cabinetErrors={cabinetErrors}
       />
 
-      <HistoryControls
+      {selectedMode === 'admin' &&<HistoryControls
         past={past}
         future={future}
         undo={undo}
@@ -1661,7 +1663,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         createCheckpoint={createCheckpoint}
         deleteCheckpoint={deleteCheckpoint}
         jumpTo={jumpTo}
-      />
+      />}
 
       {selectedMode === 'admin' && <SaveButton onSave={openSaveModal} />}
 

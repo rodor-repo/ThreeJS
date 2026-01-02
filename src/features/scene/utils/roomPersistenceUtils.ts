@@ -4,7 +4,7 @@ import {
   type SavedRoom,
   type SavedCabinet,
   type SavedView,
-} from "@/data/savedRooms"
+} from "@/types/roomTypes"
 import { cabinetPanelState } from "@/features/cabinets/ui/ProductPanel"
 import { priceQueryKeys } from "@/features/cabinets/ui/productPanel/utils/queryKeys"
 import type { WsProducts } from "@/types/erpTypes"
@@ -17,6 +17,8 @@ import {
   type MaterialOptionsResponse,
   type DefaultMaterialSelections,
 } from "@/server/getProductData"
+import { buildSyncedDimensionValues } from "@/features/cabinets/ui/productPanel/utils/dimensionUtils"
+import { getGDMapping } from "@/features/cabinets/ui/productPanel/hooks/useGDMapping"
 import _ from "lodash"
 import toast from "react-hot-toast"
 
@@ -26,6 +28,36 @@ type CabinetGroupsMap = Map<
 >
 type CabinetSyncsMap = Map<string, string[]>
 
+const PRODUCT_PREFETCH_CONCURRENCY = 4
+let productPrefetchInFlight: Promise<void> | null = null
+
+async function runWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  handler: (item: T) => Promise<R>
+): Promise<PromiseSettledResult<R>[]> {
+  const results: PromiseSettledResult<R>[] = new Array(items.length)
+  let nextIndex = 0
+
+  const worker = async () => {
+    while (true) {
+      const currentIndex = nextIndex++
+      if (currentIndex >= items.length) return
+
+      try {
+        const value = await handler(items[currentIndex])
+        results[currentIndex] = { status: "fulfilled", value }
+      } catch (error) {
+        results[currentIndex] = { status: "rejected", reason: error }
+      }
+    }
+  }
+
+  const workerCount = Math.min(concurrency, items.length)
+  await Promise.all(Array.from({ length: workerCount }, () => worker()))
+  return results
+}
+
 /**
  * Prefetch product data for a list of product IDs and add to React Query cache.
  * This ensures product data is available before cabinet operations that need it.
@@ -33,18 +65,29 @@ type CabinetSyncsMap = Map<string, string[]>
 async function prefetchProductData(productIds: string[]): Promise<void> {
   const queryClient = getClient()
 
-  // Filter out products that are already in the cache or invalid
-  const missingProductIds = _.uniq(
-    productIds.filter((productId) => {
-      if (!productId) return false
-      const cached = queryClient.getQueryData(priceQueryKeys.productData(productId))
-      return !cached
-    })
-  )
+  const getMissingProductIds = () =>
+    _.uniq(
+      productIds.filter((productId) => {
+        if (!productId) return false
+        const cached = queryClient.getQueryData(priceQueryKeys.productData(productId))
+        return !cached
+      })
+    )
+
+  let missingProductIds = getMissingProductIds()
 
   if (missingProductIds.length === 0) {
     console.log("[roomPersistence] All product data already cached")
     return
+  }
+
+  if (productPrefetchInFlight) {
+    await productPrefetchInFlight
+    missingProductIds = getMissingProductIds()
+    if (missingProductIds.length === 0) {
+      console.log("[roomPersistence] All product data already cached")
+      return
+    }
   }
 
   console.log(
@@ -54,43 +97,55 @@ async function prefetchProductData(productIds: string[]): Promise<void> {
   // Show loading toast
   const toastId = toast.loading("Loading products...")
 
-  // Fetch all missing products in parallel
-  const results = await Promise.allSettled(
-    missingProductIds.map(async (productId) => {
-      const data = await getProductData(productId)
-      // Add to cache with infinite gcTime to match ProductPanel behavior
-      queryClient.setQueryData(priceQueryKeys.productData(productId), data)
-      return productId
-    })
-  )
+  const prefetchPromise = (async () => {
+    const results = await runWithConcurrency(
+      missingProductIds,
+      PRODUCT_PREFETCH_CONCURRENCY,
+      async (productId) => {
+        const data = await getProductData(productId)
+        // Add to cache with infinite gcTime to match ProductPanel behavior
+        queryClient.setQueryData(priceQueryKeys.productData(productId), data)
+        return productId
+      }
+    )
 
-  const successful = results.filter((r) => r.status === "fulfilled").length
-  const failed = results.filter((r) => r.status === "rejected").length
+    const successful = results.filter((r) => r.status === "fulfilled").length
+    const failed = results.filter((r) => r.status === "rejected").length
 
-  console.log(
-    `[roomPersistence] Prefetch complete: ${successful} succeeded, ${failed} failed`
-  )
+    console.log(
+      `[roomPersistence] Prefetch complete: ${successful} succeeded, ${failed} failed`
+    )
 
-  // Update toast based on results
-  if (failed === 0) {
-    toast.success(`Loaded ${successful} products`, { id: toastId })
-  } else if (successful === 0) {
-    toast.error("Failed to load products", { id: toastId })
-  } else {
-    toast.success(`Loaded ${successful} products (${failed} failed)`, {
-      id: toastId,
-    })
-  }
-
-  // Log any failures for debugging
-  results.forEach((result, index) => {
-    if (result.status === "rejected") {
-      console.error(
-        `[roomPersistence] Failed to prefetch product ${missingProductIds[index]}:`,
-        result.reason
-      )
+    // Update toast based on results
+    if (failed === 0) {
+      toast.success(`Loaded ${successful} products`, { id: toastId })
+    } else if (successful === 0) {
+      toast.error("Failed to load products", { id: toastId })
+    } else {
+      toast.success(`Loaded ${successful} products (${failed} failed)`, {
+        id: toastId,
+      })
     }
-  })
+
+    // Log any failures for debugging
+    results.forEach((result, index) => {
+      if (result.status === "rejected") {
+        console.error(
+          `[roomPersistence] Failed to prefetch product ${missingProductIds[index]}:`,
+          result.reason
+        )
+      }
+    })
+  })()
+
+  productPrefetchInFlight = prefetchPromise
+  try {
+    await prefetchPromise
+  } finally {
+    if (productPrefetchInFlight === prefetchPromise) {
+      productPrefetchInFlight = null
+    }
+  }
 }
 
 export type CreateCabinetFn = (
@@ -489,8 +544,25 @@ export async function restoreRoom({
           savedCabinet.materialColor ||
           savedCabinet.dimensionValues
         ) {
+          let nextValues = savedCabinet.dimensionValues || {}
+          if (savedCabinet.productId) {
+            const cached = queryClient.getQueryData(
+              priceQueryKeys.productData(savedCabinet.productId)
+            ) as Awaited<ReturnType<typeof getProductData>> | undefined
+
+            if (cached?.product?.dims && cached?.threeJsGDs) {
+              const gdMapping = getGDMapping(cached.threeJsGDs)
+              nextValues = buildSyncedDimensionValues(
+                cached.product.dims,
+                gdMapping,
+                cabinetData.carcass.dimensions,
+                savedCabinet.dimensionValues
+              )
+            }
+          }
+
           cabinetPanelState.set(cabinetData.cabinetId, {
-            values: savedCabinet.dimensionValues || {},
+            values: nextValues,
             materialColor: savedCabinet.materialColor || "#ffffff",
             materialSelections: savedCabinet.materialSelections,
           })

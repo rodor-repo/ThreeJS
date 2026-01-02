@@ -1,7 +1,7 @@
 "use client"
 
 import { createContext, useContext, useState, useCallback, type ReactNode } from "react"
-import type { UserSavedRoom } from "@/data/savedRooms"
+import type { UserSavedRoom } from "@/types/roomTypes"
 
 interface UserRoomContextType {
   /** Currently loaded user room (null if loading admin template) */

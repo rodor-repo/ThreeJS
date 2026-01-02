@@ -6,10 +6,8 @@ import { X, Save, Loader2 } from "lucide-react"
 interface SaveRoomModalProps {
   isOpen: boolean
   onClose: () => void
-  onConfirm: (projectName: string, userEmail: string) => void
+  onConfirm: (projectName: string) => void
   isLoading?: boolean
-  /** Pre-fill email (for user room mode) */
-  initialEmail?: string
   /** Pre-fill project name (for user room mode) */
   initialProjectName?: string
 }
@@ -19,7 +17,6 @@ export const SaveRoomModal: React.FC<SaveRoomModalProps> = ({
   onClose,
   onConfirm,
   isLoading = false,
-  initialEmail,
   initialProjectName,
 }) => {
   const defaultProjectName = `Kitchen Design - ${new Date().toLocaleDateString("en-AU", {
@@ -29,32 +26,22 @@ export const SaveRoomModal: React.FC<SaveRoomModalProps> = ({
   })}`
 
   const [projectName, setProjectName] = useState(defaultProjectName)
-  const [userEmail, setUserEmail] = useState("")
 
-  // Load email from initialEmail prop or localStorage on mount
+  // Reset project name when modal opens
   useEffect(() => {
     if (isOpen) {
-      if (initialEmail) {
-        setUserEmail(initialEmail)
-      } else {
-        const savedEmail = localStorage.getItem("userEmail")
-        if (savedEmail) {
-          setUserEmail(savedEmail)
-        }
-      }
       setProjectName(initialProjectName || defaultProjectName)
     }
-  }, [isOpen, initialEmail, initialProjectName, defaultProjectName])
+  }, [isOpen, initialProjectName, defaultProjectName])
 
   const handleConfirm = () => {
-    if (projectName.trim() && userEmail.trim()) {
-      localStorage.setItem("userEmail", userEmail.trim())
-      onConfirm(projectName.trim(), userEmail.trim())
+    if (projectName.trim()) {
+      onConfirm(projectName.trim())
     }
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !isLoading && projectName.trim() && userEmail.trim()) {
+    if (e.key === "Enter" && !isLoading && projectName.trim()) {
       handleConfirm()
     }
     if (e.key === "Escape" && !isLoading) {
@@ -62,7 +49,7 @@ export const SaveRoomModal: React.FC<SaveRoomModalProps> = ({
     }
   }
 
-  const isFormValid = projectName.trim() && userEmail.trim() && userEmail.includes("@")
+  const isFormValid = projectName.trim()
 
   return (
     <AnimatePresence>
@@ -106,23 +93,8 @@ export const SaveRoomModal: React.FC<SaveRoomModalProps> = ({
             <div className="p-6 space-y-4">
               <p className="text-sm text-gray-600">
                 Save your room design to continue editing later. You can access
-                it from "My Rooms".
+                it from "My Rooms" under your signed-in account.
               </p>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Your Email <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="email"
-                  value={userEmail}
-                  onChange={(e) => setUserEmail(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="your@email.com"
-                  disabled={isLoading}
-                  autoFocus={!userEmail}
-                />
-              </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -135,7 +107,7 @@ export const SaveRoomModal: React.FC<SaveRoomModalProps> = ({
                   className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="My Kitchen Design"
                   disabled={isLoading}
-                  autoFocus={!!userEmail}
+                  autoFocus
                 />
               </div>
             </div>

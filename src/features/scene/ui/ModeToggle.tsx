@@ -19,13 +19,32 @@ export const ModeToggle: React.FC<ModeToggleProps> = ({ selectedMode, onModeChan
 
   const cx = (...classes: Array<string | false | null | undefined>) => _.join(_.compact(classes), ' ')
 
-  const adminHref = useMemo(() => {
+  const userPath = useMemo(() => {
+    const path = pathname || '/'
+    if (path === '/admin') return '/'
+    if (path.startsWith('/admin/')) return `/${path.slice('/admin/'.length)}`
+    return path
+  }, [pathname])
+
+  const adminPath = useMemo(() => {
+    if (userPath === '/') return '/admin'
+    return `/admin${userPath.startsWith('/') ? userPath : `/${userPath}`}`
+  }, [userPath])
+
+  const cleanedParams = useMemo(() => {
     const params = new URLSearchParams(searchParams?.toString())
     params.delete('mode')
     params.delete('showUserView')
-    const query = params.toString()
-    return query ? `/admin?${query}` : '/admin'
+    return params.toString()
   }, [searchParams])
+
+  const adminHref = useMemo(() => {
+    return cleanedParams ? `${adminPath}?${cleanedParams}` : adminPath
+  }, [adminPath, cleanedParams])
+
+  const userHref = useMemo(() => {
+    return cleanedParams ? `${userPath}?${cleanedParams}` : userPath
+  }, [cleanedParams, userPath])
 
   if (!isAdminRoute) {
     if (!showAdminPageButton) return null
@@ -106,7 +125,7 @@ export const ModeToggle: React.FC<ModeToggleProps> = ({ selectedMode, onModeChan
           </div>
         </label>
         <Link
-          href={getUserModeUrl()}
+          href={userHref}
           target="_blank"
           onClick={(e) => {
             if (selectedMode !== 'user') e.preventDefault()
@@ -126,11 +145,4 @@ export const ModeToggle: React.FC<ModeToggleProps> = ({ selectedMode, onModeChan
       </div>
     </div>
   )
-}
-
-function getUserModeUrl() {
-  const params = new URLSearchParams(window.location.search)
-  params.delete('showUserView')
-  const query = params.toString()
-  return query ? `/?${query}` : '/'
 }

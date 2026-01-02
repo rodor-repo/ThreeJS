@@ -1,8 +1,10 @@
 import React from "react"
 import { ShoppingCart, ChevronDown, Loader2, FolderOpen, Save, User, ShieldCheck, RefreshCcw } from "lucide-react"
+import { useQueryClient } from "@tanstack/react-query"
 import type { AppMode } from "../context/ModeContext"
 import _ from "lodash"
 import { clearAuthSessionCookies } from "@/server/logout"
+import { priceQueryKeys } from "@/features/cabinets/ui/productPanel/utils/queryKeys"
 
 interface CartSectionProps {
   totalPrice: number
@@ -16,6 +18,7 @@ interface CartSectionProps {
   appMode?: AppMode
   userEmail?: string | null
   userRole?: "user" | "admin" | null
+  hasProjectId?: boolean
 }
 
 export const CartSection: React.FC<CartSectionProps> = (props) => {
@@ -31,13 +34,17 @@ export const CartSection: React.FC<CartSectionProps> = (props) => {
     appMode,
     userEmail,
     userRole,
+    hasProjectId = false,
   } = props
 
   const [isResyncingEmail, setIsResyncingEmail] = React.useState(false)
+  const queryClient = useQueryClient()
 
   const isUserMode = appMode === "user"
   const displayEmail = userEmail || "Guest user"
   const showRoleBadge = userRole === "admin"
+  const addToCartLabel = hasProjectId ? "Update Cart Project" : "Add Project to Cart"
+  const addToCartLoadingLabel = hasProjectId ? "Updating cart project..." : "Adding to cart..."
 
   const getResyncConfirmMessage = () => {
     if (showRoleBadge) {
@@ -62,6 +69,11 @@ export const CartSection: React.FC<CartSectionProps> = (props) => {
       setIsResyncingEmail(false)
       window.alert("Couldn’t resync your email right now. Please try again.")
     }
+  }
+
+  const onRecalculatePrices = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    queryClient.invalidateQueries({ queryKey: priceQueryKeys.all() })
   }
 
   const cx = (...classes: Array<string | false | null | undefined>) => _.join(_.compact(classes), ' ')
@@ -123,12 +135,24 @@ export const CartSection: React.FC<CartSectionProps> = (props) => {
       >
         <div className="flex items-center justify-between mb-1">
           <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Total Estimate</span>
-          {isPriceCalculating && (
+          {isPriceCalculating ? (
             <Loader2 size={14} className="animate-spin text-indigo-500" />
+          ) : (
+            <button
+              type="button"
+              onClick={onRecalculatePrices}
+              className="p-1 rounded-md text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+              title="Recalculate prices"
+            >
+              <RefreshCcw size={14} />
+            </button>
           )}
         </div>
         <div className="flex items-end justify-between">
-          <div className="text-3xl font-black text-gray-900 tracking-tight tabular-nums">
+          <div className={cx(
+            "text-3xl font-black tracking-tight tabular-nums",
+            isPriceCalculating ? "text-gray-300 animate-pulse" : "text-gray-900"
+          )}>
             ${totalPrice.toFixed(2)}
           </div>
           <div className="p-1.5 rounded-lg bg-gray-50 text-gray-400 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-colors">
@@ -154,20 +178,24 @@ export const CartSection: React.FC<CartSectionProps> = (props) => {
             className={cx(
               "w-full py-3 px-4 rounded-xl shadow-lg transition-all duration-200 flex items-center justify-center gap-2 font-bold text-sm",
               isLoading
-                ? "bg-emerald-50 text-emerald-400 cursor-not-allowed border border-emerald-100"
-                : "bg-emerald-500 hover:bg-emerald-600 text-white shadow-emerald-500/20 hover:shadow-emerald-500/30 border border-transparent"
+                ? hasProjectId
+                  ? "bg-blue-50 text-blue-400 cursor-not-allowed border border-blue-100"
+                  : "bg-emerald-50 text-emerald-400 cursor-not-allowed border border-emerald-100"
+                : hasProjectId
+                  ? "bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20 hover:shadow-blue-500/30 border border-transparent"
+                  : "bg-emerald-500 hover:bg-emerald-600 text-white shadow-emerald-500/20 hover:shadow-emerald-500/30 border border-transparent"
             )}
-            title={isLoading ? "Adding to cart..." : "Add to Cart"}
+            title={isLoading ? addToCartLoadingLabel : addToCartLabel}
           >
             {isLoading ? (
               <>
                 <Loader2 size={18} className="animate-spin" />
-                <span>Processing...</span>
+                <span>{hasProjectId ? "Updating..." : "Adding..."}</span>
               </>
             ) : (
               <>
                 <ShoppingCart size={18} />
-                <span>Add to Cart</span>
+                <span>{addToCartLabel}</span>
               </>
             )}
           </button>
@@ -212,6 +240,19 @@ export const CartSection: React.FC<CartSectionProps> = (props) => {
             )}
           </div>
         </div>
+      )}
+
+      {userRole === "admin" && (
+        <a
+          href="/admin/refresh"
+          target="_blank"
+          rel="noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-gray-900 px-4 py-2 text-[11px] font-bold uppercase tracking-widest text-white shadow-lg shadow-gray-900/20 transition hover:bg-gray-800"
+        >
+          <RefreshCcw size={14} />
+          Remove cache
+        </a>
       )}
     </div>
   )

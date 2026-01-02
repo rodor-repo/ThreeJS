@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import { SavedRoom } from "@/data/savedRooms"
+import { SavedRoom } from "@/types/roomTypes"
 import type { WsProducts } from "@/types/erpTypes"
 import type { CabinetData, WallDimensions as WallDims } from "../types"
 import type { View, ViewId, ViewManager } from "@/features/cabinets/ViewManager"

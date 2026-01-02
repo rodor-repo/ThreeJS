@@ -5,7 +5,7 @@ import {
   type Dispatch,
   type SetStateAction,
 } from "react"
-import type { SavedRoom } from "@/data/savedRooms"
+import type { SavedRoom } from "@/types/roomTypes"
 import type { WsProducts, WsRooms } from "@/types/erpTypes"
 import type { CabinetData, WallDimensions as WallDims } from "../types"
 import type { View, ViewId, ViewManager } from "@/features/cabinets/ViewManager"
@@ -55,7 +55,9 @@ type UseRoomPersistenceOptions = {
   onLoadRoomReady?: (loadRoom: (room: SavedRoom) => Promise<void>) => void
   cabinetSyncs?: CabinetSyncsMap
   setCabinetSyncs?: Dispatch<SetStateAction<CabinetSyncsMap>>
-  /** Current room ID from URL (via nuqs) */
+  /** Current room URL slug */
+  currentRoomUrl?: string | null
+  /** Current room ID resolved from room url */
   currentRoomId?: string | null
   /** WsRooms config for room metadata */
   wsRooms?: WsRooms | null
@@ -79,6 +81,7 @@ export const useRoomPersistence = ({
   onLoadRoomReady,
   cabinetSyncs,
   setCabinetSyncs,
+  currentRoomUrl,
   currentRoomId,
   wsRooms,
 }: UseRoomPersistenceOptions) => {
@@ -101,9 +104,9 @@ export const useRoomPersistence = ({
    * Uses set() with merge:true so it works for both new and existing designs.
    */
   const handleSaveRoom = useCallback(async () => {
-    if (!currentRoomId) {
+    if (!currentRoomUrl) {
       throw new Error(
-        "No room ID selected. Please select a room from the menu first."
+        "No room selected. Please select a room from the menu first."
       )
     }
 
@@ -111,7 +114,7 @@ export const useRoomPersistence = ({
 
     try {
       // Get room metadata from wsRooms
-      const roomMeta = wsRooms?.rooms?.[currentRoomId]
+      const roomMeta = currentRoomId ? wsRooms?.rooms?.[currentRoomId] : undefined
       const categoryId = roomMeta?.categoryId
       const categoryName = categoryId
         ? wsRooms?.categories?.[categoryId]?.category
@@ -141,7 +144,7 @@ export const useRoomPersistence = ({
         ...designData
       } = serializedRoom
 
-      await saveRoomDesign(currentRoomId, designData)
+      await saveRoomDesign(currentRoomUrl, designData)
 
       // Update local state
       setCurrentRoom(serializedRoom)
@@ -155,6 +158,7 @@ export const useRoomPersistence = ({
     }
   }, [
     currentRoomId,
+    currentRoomUrl,
     wsRooms,
     activeViews,
     cabinets,

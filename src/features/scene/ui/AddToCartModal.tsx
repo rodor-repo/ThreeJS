@@ -5,16 +5,17 @@ import { X, ShoppingCart, RefreshCw } from 'lucide-react'
 interface AddToCartModalProps {
   isOpen: boolean
   onClose: () => void
-  onConfirm: (projectName: string, userEmail: string) => void
+  onConfirm: (projectName: string) => void
   itemCount: number
   skippedCount: number
+  skippedItems?: Array<{ cabinetId: string; reason: string }>
   isLoading?: boolean
-  /** Pre-fill email (for user room mode) */
-  initialEmail?: string
   /** Pre-fill project name (for user room mode) */
   initialProjectName?: string
   /** Whether updating an existing project */
   isUserRoomMode?: boolean
+  /** Whether the room already has a cart project ID */
+  hasProjectId?: boolean
 }
 
 export const AddToCartModal: React.FC<AddToCartModalProps> = ({
@@ -23,10 +24,11 @@ export const AddToCartModal: React.FC<AddToCartModalProps> = ({
   onConfirm,
   itemCount,
   skippedCount,
+  skippedItems = [],
   isLoading = false,
-  initialEmail,
   initialProjectName,
   isUserRoomMode = false,
+  hasProjectId = false,
 }) => {
   const defaultProjectName = `Kitchen Design - ${new Date().toLocaleDateString("en-AU", {
     day: "2-digit",
@@ -35,20 +37,7 @@ export const AddToCartModal: React.FC<AddToCartModalProps> = ({
   })}`
 
   const [projectName, setProjectName] = useState(defaultProjectName)
-  const [userEmail, setUserEmail] = useState('')
   const hasInitialized = useRef(false)
-
-  // Load email from initialEmail prop or localStorage on mount
-  useEffect(() => {
-    if (initialEmail) {
-      setUserEmail(initialEmail)
-    } else {
-      const savedEmail = localStorage.getItem('userEmail')
-      if (savedEmail) {
-        setUserEmail(savedEmail)
-      }
-    }
-  }, [initialEmail])
 
   // Set project name when modal opens
   useEffect(() => {
@@ -66,14 +55,14 @@ export const AddToCartModal: React.FC<AddToCartModalProps> = ({
   }, [isOpen, initialProjectName, defaultProjectName])
 
   const handleConfirm = () => {
-    if (projectName.trim() && userEmail.trim()) {
-      localStorage.setItem('userEmail', userEmail.trim())
-      onConfirm(projectName.trim(), userEmail.trim())
+    const trimmedProjectName = projectName.trim()
+    if (trimmedProjectName || hasProjectId) {
+      onConfirm(trimmedProjectName)
     }
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !isLoading && projectName.trim() && userEmail.trim()) {
+    if (e.key === 'Enter' && !isLoading && (projectName.trim() || hasProjectId)) {
       handleConfirm()
     }
     if (e.key === 'Escape' && !isLoading) {
@@ -81,7 +70,16 @@ export const AddToCartModal: React.FC<AddToCartModalProps> = ({
     }
   }
 
-  const isConfirmDisabled = isLoading || !projectName.trim() || !userEmail.trim() || !userEmail.includes('@')
+  useEffect(() => {
+    if (isOpen && skippedItems.length > 0) {
+      console.warn("Skipped cart items:", skippedItems)
+    }
+  }, [isOpen, skippedItems])
+
+  const isConfirmDisabled = isLoading || (!projectName.trim() && !hasProjectId)
+  const cartActionLabel = hasProjectId ? "Update Cart Project" : "Add Project to Cart"
+  const cartActionLoadingLabel = hasProjectId ? "Updating..." : "Adding..."
+  const accentColor = hasProjectId ? "blue" : "emerald"
 
   return (
     <AnimatePresence>
@@ -109,8 +107,8 @@ export const AddToCartModal: React.FC<AddToCartModalProps> = ({
             {/* Header */}
             <div className="p-6 border-b border-gray-200 flex items-center justify-between">
               <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-                <ShoppingCart className="text-green-600" size={24} />
-                Add to Cart
+                <ShoppingCart className={accentColor === "blue" ? "text-blue-600" : "text-emerald-600"} size={24} />
+                {cartActionLabel}
               </h2>
               <button
                 onClick={onClose}
@@ -132,49 +130,60 @@ export const AddToCartModal: React.FC<AddToCartModalProps> = ({
                     ({skippedCount} item{skippedCount !== 1 ? 's' : ''} will be skipped - not configured)
                   </p>
                 )}
-                {isUserRoomMode && (
+                {skippedItems.length > 0 && (
+                  <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-left">
+                    <p className="text-xs font-semibold text-amber-700">
+                      Skipped items
+                    </p>
+                    <ul className="mt-2 space-y-1 text-xs text-amber-700">
+                      {skippedItems.map((item, index) => (
+                        <li key={`${item.cabinetId}-${index}`} className="flex gap-2">
+                          <span className="font-mono text-amber-800">
+                            {item.cabinetId.slice(-6)}
+                          </span>
+                          <span>{item.reason}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {isUserRoomMode && hasProjectId && (
                   <p className="text-blue-600 text-sm mt-2 flex items-center justify-center gap-1">
                     <RefreshCw size={14} />
-                    Updating existing project
+                    Updating an existing cart project
                   </p>
                 )}
               </div>
 
               <div className="space-y-4">
-                <div className="space-y-2">
-                  <label htmlFor="userEmail" className="block text-sm font-medium text-gray-700">
-                    Your Email
-                  </label>
-                  <input
-                    id="userEmail"
-                    type="email"
-                    value={userEmail}
-                    onChange={(e) => setUserEmail(e.target.value)}
-                    disabled={isLoading}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                    placeholder="Enter your email..."
-                    autoFocus={!userEmail}
-                  />
-                  <p className="text-xs text-gray-500">
-                    The email associated with your webshop account.
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <label htmlFor="projectName" className="block text-sm font-medium text-gray-700">
-                    Project Name
-                  </label>
-                  <input
-                    id="projectName"
-                    type="text"
-                    value={projectName}
-                    onChange={(e) => setProjectName(e.target.value)}
-                    disabled={isLoading}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                    placeholder="Enter project name..."
-                    autoFocus={!!userEmail}
-                  />
-                </div>
+                {hasProjectId ? (
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium text-gray-700">Project Name</p>
+                    <p className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+                      {projectName || "Untitled Project"}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <label htmlFor="projectName" className="block text-sm font-medium text-gray-700">
+                      Project Name
+                    </label>
+                    <input
+                      id="projectName"
+                      type="text"
+                      value={projectName}
+                      onChange={(e) => setProjectName(e.target.value)}
+                      disabled={isLoading}
+                      className={`w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 ${
+                        accentColor === "blue"
+                          ? "focus:ring-blue-500 focus:border-blue-500"
+                          : "focus:ring-emerald-500 focus:border-emerald-500"
+                      } disabled:bg-gray-100 disabled:cursor-not-allowed`}
+                      placeholder="Enter project name..."
+                      autoFocus
+                    />
+                  </div>
+                )}
               </div>
             </div>
 
@@ -190,15 +199,19 @@ export const AddToCartModal: React.FC<AddToCartModalProps> = ({
               <button
                 onClick={handleConfirm}
                 disabled={isConfirmDisabled}
-                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className={`flex-1 px-4 py-2 text-white rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 ${
+                  accentColor === "blue"
+                    ? "bg-blue-600 hover:bg-blue-700"
+                    : "bg-emerald-600 hover:bg-emerald-700"
+                }`}
               >
                 {isLoading ? (
                   <>
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    Adding...
+                    {cartActionLoadingLabel}
                   </>
                 ) : (
-                  'Add to Cart'
+                  cartActionLabel
                 )}
               </button>
             </div>

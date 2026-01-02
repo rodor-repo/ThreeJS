@@ -1,11 +1,12 @@
 'use client'
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
+import { usePathname, useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Menu, X, ChevronRight } from 'lucide-react'
 import type { Category, Subcategory } from './categoriesData'
 import type { WsProducts, WsRooms } from '@/types/erpTypes'
-import type { SavedRoom } from '@/data/savedRooms'
+import type { SavedRoom } from '@/types/roomTypes'
 import { getRoomDesign, type RoomDesignData } from '@/server/rooms/getRoomDesign'
 import _ from 'lodash'
 import { getClient } from '@/app/QueryProvider'
@@ -25,15 +26,17 @@ interface MainMenuProps {
   wsRooms?: WsRooms | null
   /** Whether wsRooms is still loading */
   wsRoomsLoading?: boolean
-  /** Currently selected room ID (from URL) */
-  currentRoomId?: string | null
-  /** Handler for when a room is selected. Receives roomId and optional design data */
-  onRoomSelect?: (roomId: string, design?: RoomDesignData | null) => Promise<void>
+  /** Currently selected room URL slug */
+  currentRoomUrl?: string | null
+  /** Handler for when a room is selected. Receives roomUrl and optional design data */
+  onRoomSelect?: (roomUrl: string, design?: RoomDesignData | null) => Promise<void>
   onLoadRoom?: (savedRoom: SavedRoom) => Promise<void>
   onApplianceSelect?: (applianceType: 'dishwasher' | 'washingMachine' | 'sideBySideFridge') => void
 }
 
-const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect: _onCategorySelect, onSubcategorySelect, selectedCategory: _selectedCategory, onMenuStateChange, wsProducts: wsProductsProp, setWsProducts, wsRooms, wsRoomsLoading, currentRoomId, onRoomSelect, onLoadRoom: _onLoadRoom, onApplianceSelect }) => {
+const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect: _onCategorySelect, onSubcategorySelect, selectedCategory: _selectedCategory, onMenuStateChange, wsProducts: wsProductsProp, setWsProducts, wsRooms, wsRoomsLoading, currentRoomUrl, onRoomSelect, onLoadRoom: _onLoadRoom, onApplianceSelect }) => {
+  const router = useRouter()
+  const pathname = usePathname()
   const [isOpen, setIsOpen] = useState(false)
   const [selectedTopLevelMenu, setSelectedTopLevelMenu] = useState<'cabinets' | 'appliances' | 'rooms' | null>(null) // New state for top-level menu
   const [selectedRoomCategoryId, setSelectedRoomCategoryId] = useState<string | null>(null) // Selected room category ID from wsRooms
@@ -167,6 +170,13 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect: _onCategorySelect
     }))
   }
 
+  const roomPathPrefix = pathname?.startsWith('/admin') ? '/admin' : ''
+  const buildRoomPath = useCallback((roomUrl: string) => {
+    if (!roomUrl) return null
+    const slug = encodeURIComponent(roomUrl.replace(/^\/+/, ''))
+    return `${roomPathPrefix}/${slug}`
+  }, [roomPathPrefix])
+
   // When a product is clicked, we want to add a DEMO 3D object.
   // We leverage existing ThreeScene flows by invoking onSubcategorySelect with a demo base config.
   const handleProductClick = useCallback(async (category: Category, subcategory: Subcategory, productId: string) => {
@@ -273,13 +283,18 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect: _onCategorySelect
   }
 
   // Handle clicking a room entry - fetch design and notify parent
-  const handleRoomEntryClick = useCallback(async (roomId: string) => {
+  const handleRoomEntryClick = useCallback(async (roomUrl: string) => {
     if (!onRoomSelect) return
+    if (!roomUrl) return
 
     setLoadingRoomDesign(true)
     try {
-      const design = await getRoomDesign(roomId)
-      await onRoomSelect(roomId, design)
+      const design = await getRoomDesign(roomUrl)
+      const nextPath = buildRoomPath(roomUrl)
+      if (nextPath && nextPath !== pathname) {
+        router.push(nextPath)
+      }
+      await onRoomSelect(roomUrl, design)
       // Close menu after selection
       setIsOpen(false)
       setSelectedTopLevelMenu(null)
@@ -291,7 +306,7 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect: _onCategorySelect
     } finally {
       setLoadingRoomDesign(false)
     }
-  }, [onRoomSelect, onMenuStateChange])
+  }, [buildRoomPath, onRoomSelect, onMenuStateChange, pathname, router])
 
   // Get rooms for the selected category from wsRooms
   const roomsInCategory = useMemo(() => {
@@ -577,8 +592,8 @@ const MainMenu: React.FC<MainMenuProps> = ({ onCategorySelect: _onCategorySelect
                       {roomsInCategory.map((room) => (
                         <motion.button
                           key={room.id}
-                          onClick={() => handleRoomEntryClick(room.id)}
-                          className={`w-full p-4 rounded-lg border-2 transition-all duration-150 ${currentRoomId === room.id
+                          onClick={() => handleRoomEntryClick(room.url)}
+                          className={`w-full p-4 rounded-lg border-2 transition-all duration-150 ${currentRoomUrl === room.url
                             ? 'border-blue-500 bg-blue-50'
                             : 'border-gray-200 hover:border-blue-500 hover:shadow-md'
                             }`}

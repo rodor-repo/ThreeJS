@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ChevronUp,
@@ -11,9 +11,12 @@ import {
   ShoppingCart,
   AlertCircle
 } from 'lucide-react'
+import { useQueries } from '@tanstack/react-query'
 import type { CabinetData } from '../types'
 import type { WsProducts } from '@/types/erpTypes'
 import { cabinetPanelState } from '@/features/cabinets/ui/productPanel/hooks/usePersistence'
+import { getProductData } from '@/server/getProductData'
+import { priceQueryKeys } from '@/features/cabinets/ui/productPanel/utils/queryKeys'
 import _ from 'lodash'
 
 type Props = {
@@ -42,6 +45,32 @@ export const ProductsListDrawer: React.FC<Props> = ({
   cabinetErrors,
 }) => {
   const [topPosition, setTopPosition] = useState(88) // Default fallback position
+  const uniqueProductIds = useMemo(() => {
+    return Array.from(
+      new Set(
+        cabinets
+          .map((c) => c.productId)
+          .filter((id): id is string => !!id && !id.startsWith('appliance-'))
+      )
+    ).sort()
+  }, [cabinets])
+
+  const productDataQueries = useQueries({
+    queries: uniqueProductIds.map((productId) => ({
+      queryKey: priceQueryKeys.productData(productId),
+      queryFn: () => getProductData(productId),
+      enabled: false,
+      staleTime: 5 * 60 * 1000,
+    })),
+  })
+
+  const productDataMap = useMemo(() => {
+    const map = new Map<string, any>()
+    productDataQueries.forEach((query, index) => {
+      if (query.data) map.set(uniqueProductIds[index], query.data)
+    })
+    return map
+  }, [productDataQueries, uniqueProductIds])
 
   // Handle drawer positioning logic 
   useEffect(() => {
@@ -60,6 +89,14 @@ export const ProductsListDrawer: React.FC<Props> = ({
   const getProductName = (cabinet: CabinetData): string => {
     if (cabinet.productId && wsProducts?.products[cabinet.productId]) {
       return wsProducts.products[cabinet.productId].product
+    }
+
+    const cachedProduct = cabinet.productId
+      ? productDataMap.get(cabinet.productId)
+      : undefined
+    const cachedName = cachedProduct?.product?.product
+    if (cachedName) {
+      return cachedName
     }
 
     // Fallback names based on cabinet type

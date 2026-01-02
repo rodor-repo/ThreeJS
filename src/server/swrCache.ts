@@ -80,6 +80,11 @@ export class SwrCache<T> {
     this.evictIfNeeded()
   }
 
+  clear() {
+    this.cache.clear()
+    this.inflight.clear()
+  }
+
   private touch(key: string, entry: CacheEntry<T>) {
     this.cache.delete(key)
     this.cache.set(key, entry)
@@ -132,8 +137,18 @@ export class SwrCache<T> {
   }
 }
 
+const swrCaches = new Set<SwrCache<unknown>>()
+
 export function createSwrCache<T>(options: SwrCacheOptions) {
-  return new SwrCache<T>(options)
+  const cache = new SwrCache<T>(options)
+  swrCaches.add(cache as SwrCache<unknown>)
+  return cache
+}
+
+export function clearAllSwrCaches() {
+  for (const cache of Array.from(swrCaches)) {
+    cache.clear()
+  }
 }
 
 export function stableStringify(value: unknown): string {

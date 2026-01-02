@@ -389,6 +389,28 @@ export function buildDefaultValues(
 }
 
 /**
+ * Build values from defaults + saved values, then sync width/height/depth
+ * to the current cabinet dimensions.
+ */
+export function buildSyncedDimensionValues(
+  dims: WsProduct["dims"] | undefined,
+  gdMapping: GDMapping,
+  cabinetDimensions: CarcassDimensions,
+  savedValues?: Record<string, number | string>
+): Record<string, number | string> {
+  if (!dims) return savedValues || {}
+
+  const defaults = buildDefaultValues(dims)
+  const merged = savedValues ? { ...defaults, ...savedValues } : defaults
+  return syncCabinetDimensionsToValues(
+    merged,
+    dims,
+    gdMapping,
+    cabinetDimensions
+  )
+}
+
+/**
  * Sync width/height/depth from actual cabinet dimensions to values object
  */
 export function syncCabinetDimensionsToValues(

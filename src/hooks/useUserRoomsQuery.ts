@@ -45,7 +45,9 @@ export function useUserRoomsList(
 /**
  * Mutation hook for saving a user room.
  *
- * On success, invalidates the rooms list for the signed-in user.
+ * On success:
+ * - Optimistically updates the list cache with new projectId/projectName when updating existing room
+ * - Invalidates the rooms list for refetch
  *
  * @returns Mutation result with save function
  */
@@ -56,10 +58,29 @@ export function useSaveUserRoom(cacheKeyEmail?: string | null) {
   return useMutation({
     mutationFn: async (input: SaveUserRoomData) => {
       const result = await saveUserRoom(input)
-      return result
+      return { ...result, input }
     },
-    onSuccess: () => {
-      // Invalidate the rooms list for this user
+    onSuccess: (data) => {
+      // Optimistically update the list cache item with new projectId if updating existing room
+      if (data.input.userRoomId && data.input.projectId) {
+        const previousRooms = queryClient.getQueryData<UserRoomListItem[]>(listKey)
+        if (previousRooms) {
+          queryClient.setQueryData<UserRoomListItem[]>(
+            listKey,
+            previousRooms.map((room) =>
+              room.id === data.input.userRoomId
+                ? {
+                    ...room,
+                    projectId: data.input.projectId,
+                    projectName: data.input.projectName || room.projectName,
+                    updatedAt: data.input.updatedAt || room.updatedAt,
+                  }
+                : room
+            )
+          )
+        }
+      }
+      // Invalidate the rooms list for this user to ensure fresh data
       queryClient.invalidateQueries({
         queryKey: listKey,
       })

@@ -703,10 +703,14 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
 
       if (response.success) {
         // Save or update the user room after successful add to cart
-        if (currentRoomId) {
+        // Use originalRoomId from loaded user room if available, otherwise from URL
+        const effectiveRoomId = currentUserRoom?.originalRoomId || currentRoomId
+        const effectiveRoomName = currentUserRoom?.originalRoomName || currentRoomName
+
+        if (effectiveRoomId || currentUserRoom?.id) {
           try {
-            // Get room category from wsRooms
-            const roomMeta = wsRooms?.rooms?.[currentRoomId]
+            // Get room category from wsRooms (use effectiveRoomId for lookup)
+            const roomMeta = effectiveRoomId ? wsRooms?.rooms?.[effectiveRoomId] : null
             const categoryId = roomMeta?.categoryId
             const categoryName = categoryId
               ? wsRooms?.categories?.[categoryId]?.category
@@ -721,8 +725,8 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
               activeViews: viewManager.activeViews,
               getCabinetView: viewManager.getCabinetView,
               wsProducts,
-              roomName: currentRoomName || projectName,
-              roomCategory: (categoryName as RoomCategory) || "Kitchen",
+              roomName: effectiveRoomName || projectName,
+              roomCategory: (categoryName as RoomCategory) || currentUserRoom?.category || "Kitchen",
               cabinetSyncs,
             })
 
@@ -730,8 +734,8 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
             const saveResult = await saveUserRoomMutation.mutateAsync({
               ...roomData,
               userRoomId: currentUserRoom?.id,
-              originalRoomId: currentRoomId,
-              originalRoomName: currentRoomName || "",
+              originalRoomId: effectiveRoomId || "",
+              originalRoomName: effectiveRoomName || "",
               projectName,
               projectId: response.projectId,
               updatedAt: new Date().toISOString(),
@@ -742,8 +746,8 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
               ...roomData,
               id: saveResult.userRoomId,
               userEmail: userEmail?.toLowerCase().trim() || prev?.userEmail || "",
-              originalRoomId: currentRoomId,
-              originalRoomName: currentRoomName || "",
+              originalRoomId: effectiveRoomId || prev?.originalRoomId || "",
+              originalRoomName: effectiveRoomName || prev?.originalRoomName || "",
               projectName,
               projectId: response.projectId,
               createdAt: prev?.createdAt || new Date().toISOString(),

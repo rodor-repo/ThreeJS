@@ -2,6 +2,7 @@ import type { CabinetData, WallDimensions } from "../../types"
 import { ViewId } from "../../../cabinets/ViewManager"
 import { toastThrottled } from "@/features/cabinets/ui/ProductPanel"
 import { APPLIANCE_GAP_LIMITS } from "@/features/cabinets/factory/cabinetFactory"
+import { clamp } from "@/features/carcass/utils/carcass-math-utils"
 import { updateAllDependentComponents } from "./dependentComponentsHandler"
 import { applyWidthChangeWithLock } from "./lockBehaviorHandler"
 import { checkLeftWallOverflow, repositionViewCabinets } from "./viewRepositionHandler"
@@ -44,6 +45,48 @@ export const getApplianceWidthConstraints = (cabinet: CabinetData) => {
     min: visualWidth + APPLIANCE_GAP_LIMITS.side.min * 2,
     max: visualWidth + APPLIANCE_GAP_LIMITS.side.max * 2,
   }
+}
+
+export const resolveApplianceGapsForWidth = (
+  cabinet: CabinetData,
+  targetShellWidth: number
+): { left: number; right: number } | null => {
+  const { leftGap, rightGap } = getApplianceGapValues(cabinet)
+  const visualWidth = getApplianceVisualDimensions(cabinet).width
+  const minGap = APPLIANCE_GAP_LIMITS.side.min
+  const maxGap = APPLIANCE_GAP_LIMITS.side.max
+  const totalGap = targetShellWidth - visualWidth
+  const minTotal = minGap * 2
+  const maxTotal = maxGap * 2
+
+  if (totalGap < minTotal || totalGap > maxTotal) {
+    return null
+  }
+
+  const gapDiff = leftGap - rightGap
+  let nextLeft = (totalGap + gapDiff) / 2
+  let nextRight = totalGap - nextLeft
+
+  if (
+    nextLeft < minGap ||
+    nextLeft > maxGap ||
+    nextRight < minGap ||
+    nextRight > maxGap
+  ) {
+    nextLeft = clamp(nextLeft, minGap, maxGap)
+    nextRight = totalGap - nextLeft
+
+    if (nextRight < minGap || nextRight > maxGap) {
+      nextRight = clamp(nextRight, minGap, maxGap)
+      nextLeft = totalGap - nextRight
+
+      if (nextLeft < minGap || nextLeft > maxGap) {
+        return null
+      }
+    }
+  }
+
+  return { left: nextLeft, right: nextRight }
 }
 
 export const applyApplianceGapChange = (params: {

@@ -12,8 +12,11 @@ import {
 import { updateAllDependentComponents } from "./dependentComponentsHandler"
 import {
   applyWidthChangeWithLock,
-  processGroupedCabinets,
 } from "./lockBehaviorHandler"
+import {
+  getApplianceWidthConstraints,
+  resolveApplianceGapsForWidth,
+} from "./applianceGapHandler"
 import {
   repositionViewCabinets,
   checkLeftWallOverflow,
@@ -47,6 +50,82 @@ export const getWidthConstraints = (
   }
 
   return null
+}
+
+const getCabinetWidthConstraints = (
+  cabinet: CabinetData
+): { min: number; max: number } | null => {
+  if (cabinet.cabinetType === "appliance") {
+    return getApplianceWidthConstraints(cabinet)
+  }
+
+  return getWidthConstraints(cabinet.productId)
+}
+
+const applyGroupedWidthChanges = (
+  sourceCabinet: CabinetData,
+  widthDelta: number,
+  cabinets: CabinetData[],
+  cabinetGroups: Map<string, Array<{ cabinetId: string; percentage: number }>>,
+  wallDimensions: WallDimensions,
+  applianceGapTargets?: Map<string, { left: number; right: number }>
+): void => {
+  const groupData = cabinetGroups.get(sourceCabinet.cabinetId)
+  if (!groupData || groupData.length === 0) return
+
+  groupData.forEach((groupCabinet) => {
+    const groupedCabinet = cabinets.find(
+      (c) => c.cabinetId === groupCabinet.cabinetId
+    )
+    if (!groupedCabinet) return
+
+    const proportionalDelta = (widthDelta * groupCabinet.percentage) / 100
+    const newGroupedWidth =
+      groupedCabinet.carcass.dimensions.width + proportionalDelta
+
+    const result = applyWidthChangeWithLock(
+      groupedCabinet,
+      newGroupedWidth,
+      groupedCabinet.carcass.dimensions.width,
+      groupedCabinet.group.position.x
+    )
+
+    if (!result) return
+
+    const { newX, positionChanged } = result
+
+    if (groupedCabinet.cabinetType === "appliance") {
+      const gapTargets =
+        applianceGapTargets?.get(groupedCabinet.cabinetId) ||
+        resolveApplianceGapsForWidth(groupedCabinet, newGroupedWidth)
+
+      if (!gapTargets) {
+        return
+      }
+
+      groupedCabinet.carcass.updateConfig({
+        applianceLeftGap: gapTargets.left,
+        applianceRightGap: gapTargets.right,
+      })
+    }
+
+    groupedCabinet.carcass.updateDimensions({
+      width: newGroupedWidth,
+      height: groupedCabinet.carcass.dimensions.height,
+      depth: groupedCabinet.carcass.dimensions.depth,
+    })
+
+    groupedCabinet.group.position.set(
+      newX,
+      groupedCabinet.group.position.y,
+      groupedCabinet.group.position.z
+    )
+
+    updateAllDependentComponents(groupedCabinet, cabinets, wallDimensions, {
+      widthChanged: true,
+      positionChanged,
+    })
+  })
 }
 
 // Helper to dispatch dimension rejected event
@@ -125,6 +204,7 @@ export const handleProductDimensionChange = (
 
     // Validate pair constraints BEFORE applying changes
     const groupData = cabinetGroups.get(selectedCabinet.cabinetId)
+    const applianceGapTargets = new Map<string, { left: number; right: number }>()
     if (groupData && groupData.length > 0) {
       for (const groupCabinet of groupData) {
         const groupedCabinet = cabinets.find(
@@ -136,7 +216,7 @@ export const handleProductDimensionChange = (
         const newGroupedWidth =
           groupedCabinet.carcass.dimensions.width + proportionalDelta
 
-        const constraints = getWidthConstraints(groupedCabinet.productId)
+        const constraints = getCabinetWidthConstraints(groupedCabinet)
         if (constraints) {
           if (newGroupedWidth < constraints.min) {
             toastThrottled(
@@ -152,6 +232,21 @@ export const handleProductDimensionChange = (
             dispatchDimensionRejected()
             return
           }
+        }
+
+        if (groupedCabinet.cabinetType === "appliance") {
+          const gapTargets = resolveApplianceGapsForWidth(
+            groupedCabinet,
+            newGroupedWidth
+          )
+          if (!gapTargets) {
+            toastThrottled(
+              "Cannot resize: paired appliance gaps exceed limits"
+            )
+            dispatchDimensionRejected()
+            return
+          }
+          applianceGapTargets.set(groupedCabinet.cabinetId, gapTargets)
         }
       }
     }
@@ -235,12 +330,13 @@ export const handleProductDimensionChange = (
     })
 
     // Handle grouped cabinets
-    processGroupedCabinets(
+    applyGroupedWidthChanges(
       selectedCabinet,
       widthDelta,
       cabinets,
       cabinetGroups,
-      wallDimensions
+      wallDimensions,
+      applianceGapTargets
     )
 
     // Reposition other cabinets in the view
@@ -286,11 +382,12 @@ function handleSyncResize(
     (c) => c.cabinetId !== selectedCabinet.cabinetId
   )
   const deltaPerCabinet = -widthDelta / otherSyncCabinets.length
+  const applianceGapTargets = new Map<string, { left: number; right: number }>()
 
   // Validate width constraints for all synced cabinets BEFORE applying changes
   for (const cab of otherSyncCabinets) {
     const newWidth = cab.carcass.dimensions.width + deltaPerCabinet
-    const constraints = getWidthConstraints(cab.productId)
+    const constraints = getCabinetWidthConstraints(cab)
     if (constraints) {
       if (newWidth < constraints.min) {
         toastThrottled(
@@ -306,6 +403,16 @@ function handleSyncResize(
         dispatchDimensionRejected()
         return
       }
+    }
+
+    if (cab.cabinetType === "appliance") {
+      const gapTargets = resolveApplianceGapsForWidth(cab, newWidth)
+      if (!gapTargets) {
+        toastThrottled("Cannot resize: synced appliance gaps exceed limits")
+        dispatchDimensionRejected()
+        return
+      }
+      applianceGapTargets.set(cab.cabinetId, gapTargets)
     }
   }
 
@@ -373,6 +480,14 @@ function handleSyncResize(
 
   sortedOtherSyncCabinets.forEach((cab) => {
     const newWidth = cab.carcass.dimensions.width + deltaPerCabinet
+    if (cab.cabinetType === "appliance") {
+      const gapTargets = applianceGapTargets.get(cab.cabinetId)
+      if (!gapTargets) return
+      cab.carcass.updateConfig({
+        applianceLeftGap: gapTargets.left,
+        applianceRightGap: gapTargets.right,
+      })
+    }
     cab.carcass.updateDimensions({
       width: newWidth,
       height: cab.carcass.dimensions.height,

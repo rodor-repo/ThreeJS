@@ -1,17 +1,16 @@
 'use client'
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
-import { X, Maximize, Move, Eye, Settings } from 'lucide-react'
+import { X, Maximize, Move, Settings } from 'lucide-react'
 import type { CabinetData, WallDimensions } from '@/features/scene/types'
 import { View, ViewId } from '@/features/cabinets/ViewManager'
-import { repositionViewCabinets, checkLeftWallOverflow } from '@/features/scene/utils/handlers/viewRepositionHandler'
-import { applyWidthChangeWithLock } from '@/features/scene/utils/handlers/lockBehaviorHandler'
 import { updateAllDependentComponents } from '@/features/scene/utils/handlers/dependentComponentsHandler'
 import { applyApplianceGapChange } from '@/features/scene/utils/handlers/applianceGapHandler'
+import { handleApplianceHorizontalGapChange, handleApplianceWidthChange } from '@/features/scene/utils/handlers/applianceDimensionHandler'
 import { APPLIANCE_GAP_LIMITS } from '@/features/cabinets/factory/cabinetFactory'
-import { toastThrottled } from './ProductPanel'
 import { CollapsibleSection } from './productPanel/components/CollapsibleSection'
-import { ViewSelector } from './ViewSelector'
+import { GroupingSection } from './productPanel/components/GroupingSection'
+import { useCabinetGroups } from './productPanel/hooks/useCabinetGroups'
 
 // Appliance type labels and icons
 const APPLIANCE_INFO: Record<string, { label: string; icon: string }> = {
@@ -27,6 +26,7 @@ interface ViewManagerResult {
 interface AppliancePanelProps {
   isVisible: boolean
   selectedCabinet: CabinetData | null
+  selectedCabinets: CabinetData[]
   onClose: () => void
   viewManager: {
     activeViews: View[]
@@ -35,9 +35,12 @@ interface AppliancePanelProps {
     createView: () => View
   }
   onViewChange: (cabinetId: string, viewId: string) => void
+  onGroupChange?: (cabinetId: string, groupCabinets: Array<{ cabinetId: string; percentage: number }>) => void
+  onSyncChange?: (cabinetId: string, syncCabinets: string[]) => void
   // New props for view integration
   cabinets: CabinetData[]
   cabinetGroups: Map<string, Array<{ cabinetId: string; percentage: number }>>
+  cabinetSyncs: Map<string, string[]>
   wallDimensions: WallDimensions
 }
 
@@ -123,18 +126,18 @@ const FridgeIcon = () => (
   <Settings size={20} />
 )
 
-const ViewIcon = () => (
-  <Eye size={20} />
-)
-
 export const AppliancePanel: React.FC<AppliancePanelProps> = ({
   isVisible,
   selectedCabinet,
+  selectedCabinets,
   onClose,
   viewManager,
   onViewChange,
+  onGroupChange,
+  onSyncChange,
   cabinets,
   cabinetGroups,
+  cabinetSyncs,
   wallDimensions,
 }) => {
   // Local state for VISUAL dimensions and gaps
@@ -192,140 +195,97 @@ export const AppliancePanel: React.FC<AppliancePanelProps> = ({
     forceUpdate({})
   }, [selectedCabinet])
 
-  // Helper to trigger view cabinet repositioning
-  const triggerViewReposition = useCallback((
-    widthDelta: number,
-    oldX: number,
-    oldWidth: number
-  ) => {
-    if (!selectedCabinet || !selectedCabinet.viewId || selectedCabinet.viewId === 'none') {
-      return
-    }
+  const selectedCabinetId = selectedCabinet?.cabinetId
+  const initialGroupData = useMemo(
+    () => (selectedCabinetId ? cabinetGroups.get(selectedCabinetId) || [] : []),
+    [cabinetGroups, selectedCabinetId]
+  )
 
-    repositionViewCabinets(
-      selectedCabinet,
-      widthDelta,
-      oldX,
-      oldWidth,
-      cabinets,
-      cabinetGroups,
-      viewManager as ViewManagerResult,
-      wallDimensions
-    )
-  }, [selectedCabinet, cabinets, cabinetGroups, viewManager, wallDimensions])
+  const initialSyncData = useMemo(
+    () => (selectedCabinetId ? cabinetSyncs.get(selectedCabinetId) || [] : []),
+    [cabinetSyncs, selectedCabinetId]
+  )
+
+  const groups = useCabinetGroups({
+    cabinetId: selectedCabinetId,
+    initialGroupData,
+    initialSyncData,
+    onGroupChange,
+    onSyncChange,
+  })
 
   // Update VISUAL dimensions when changed
   // This changes the appliance size, which also changes the shell size (visual + gaps)
   const handleDimensionChange = useCallback((dimension: 'width' | 'height' | 'depth', value: number) => {
     if (!selectedCabinet?.carcass) return
 
-    // Store old shell dimensions and position for view repositioning
-    const oldShellWidth = selectedCabinet.carcass.dimensions.width
-    const oldX = selectedCabinet.group.position.x
+    if (dimension === 'width') {
+      const applied = handleApplianceWidthChange(value, {
+        selectedCabinet,
+        selectedCabinets,
+        cabinets,
+        cabinetSyncs,
+        cabinetGroups,
+        viewManager: viewManager as ViewManagerResult,
+        wallDimensions,
+      })
 
-    // Calculate new shell dimensions (visual + gaps + kicker)
-    const newShellWidth = dimension === 'width' ? value + leftGap + rightGap : visualWidth + leftGap + rightGap
+      if (applied) {
+        setVisualWidth(value)
+      }
+      return
+    }
+
+    const newShellWidth = visualWidth + leftGap + rightGap
     const newShellHeight = dimension === 'height' ? value + topGap + kickerHeight : visualHeight + topGap + kickerHeight
     const newShellDepth = dimension === 'depth' ? value : visualDepth
 
-    const newShellDims = {
+    selectedCabinet.carcass.updateDimensions({
       width: newShellWidth,
       height: newShellHeight,
       depth: newShellDepth,
-    }
+    })
 
-    // Apply lock behavior if width changed
-    if (dimension === 'width' && newShellWidth !== oldShellWidth) {
-      if (selectedCabinet.viewId && selectedCabinet.viewId !== 'none') {
-        const leftLock = selectedCabinet.leftLock ?? false
-        const rightLock = selectedCabinet.rightLock ?? false
-        const widthDelta = newShellWidth - oldShellWidth
-
-        // Check for left wall overflow
-        if (widthDelta > 0) {
-          const pushAmount = rightLock ? widthDelta : (!leftLock && !rightLock) ? widthDelta / 2 : 0
-
-          if (pushAmount > 0) {
-            // Check if THIS cabinet hits the wall
-            if (oldX - pushAmount < -0.1) {
-              toastThrottled('Cannot expand: cabinet would hit the left wall')
-              return
-            }
-
-            const rightEdge = oldX + oldShellWidth
-            const overflow = checkLeftWallOverflow(
-              pushAmount,
-              selectedCabinet.cabinetId,
-              rightEdge,
-              selectedCabinet.viewId as ViewId,
-              cabinets,
-              cabinetGroups,
-              viewManager as ViewManagerResult
-            )
-
-            if (overflow !== null) {
-              toastThrottled(
-                `Cannot expand width: a cabinet would be pushed ${overflow.toFixed(
-                  0
-                )}mm past the left wall. Please reduce the width or move cabinets first.`
-              )
-              return
-            }
-          }
-        }
-      }
-
-      const lockResult = applyWidthChangeWithLock(
-        selectedCabinet,
-        newShellWidth,
-        oldShellWidth,
-        oldX
-      )
-
-      if (!lockResult) {
-        toastThrottled('Cannot resize width when both left and right edges are locked')
-        return
-      }
-
-      const { newX } = lockResult
-      selectedCabinet.group.position.x = newX
-    }
-
-    // Update carcass dimensions (this is the shell)
-    selectedCabinet.carcass.updateDimensions(newShellDims)
-
-    // Update all dependent components (benchtop, kicker, etc.)
     updateAllDependentComponents(selectedCabinet, cabinets, wallDimensions, {
-      widthChanged: dimension === 'width',
+      widthChanged: false,
       heightChanged: dimension === 'height',
       depthChanged: dimension === 'depth',
     })
 
-    // Update local visual state
-    if (dimension === 'width') setVisualWidth(value)
     if (dimension === 'height') setVisualHeight(value)
     if (dimension === 'depth') setVisualDepth(value)
-
-    // Trigger view repositioning if width changed and cabinet is in a view
-    if (dimension === 'width') {
-      const widthDelta = newShellWidth - oldShellWidth
-      if (Math.abs(widthDelta) > 0.1) {
-        triggerViewReposition(widthDelta, oldX, oldShellWidth)
-      }
-    }
-  }, [selectedCabinet, visualWidth, visualHeight, visualDepth, topGap, leftGap, rightGap, triggerViewReposition, cabinets, cabinetGroups, viewManager])
+  }, [selectedCabinet, selectedCabinets, visualWidth, visualHeight, visualDepth, topGap, leftGap, rightGap, kickerHeight, cabinets, cabinetGroups, cabinetSyncs, viewManager, wallDimensions])
 
   // Update gaps when changed
   // This changes the shell size while keeping visual size the same
   const handleGapChange = useCallback((gap: 'top' | 'left' | 'right', value: number) => {
     if (!selectedCabinet?.carcass) return
 
+    if (gap === 'left' || gap === 'right') {
+      const result = handleApplianceHorizontalGapChange(
+        { [gap]: value },
+        {
+          selectedCabinet,
+          selectedCabinets,
+          cabinets,
+          cabinetSyncs,
+          cabinetGroups,
+          viewManager: viewManager as ViewManagerResult,
+          wallDimensions,
+        }
+      )
+
+      if (!result.applied) return
+
+      setLeftGap(result.newGaps.left)
+      setRightGap(result.newGaps.right)
+      return
+    }
+
     const result = applyApplianceGapChange({
       cabinet: selectedCabinet,
       gaps: {
-        top: gap === 'top' ? value : undefined,
-        left: gap === 'left' ? value : undefined,
-        right: gap === 'right' ? value : undefined,
+        top: value,
       },
       cabinets,
       cabinetGroups,
@@ -336,9 +296,7 @@ export const AppliancePanel: React.FC<AppliancePanelProps> = ({
     if (!result.applied) return
 
     setTopGap(result.newGaps.top)
-    setLeftGap(result.newGaps.left)
-    setRightGap(result.newGaps.right)
-  }, [selectedCabinet, cabinets, cabinetGroups, viewManager, wallDimensions])
+  }, [selectedCabinet, selectedCabinets, cabinets, cabinetGroups, cabinetSyncs, viewManager, wallDimensions])
 
   // Update kicker height - this also changes shell height
   const handleKickerChange = useCallback((value: number) => {
@@ -423,28 +381,17 @@ export const AppliancePanel: React.FC<AppliancePanelProps> = ({
         {/* Content with collapsible sections */}
         <div className="p-4 space-y-4">
           {/* View Assignment Section */}
-          <CollapsibleSection
-            id="applianceView"
-            title="View Assignment"
-            icon={<ViewIcon />}
-          >
-            <ViewSelector
-              selectedViewId={selectedCabinet.viewId as ViewId | undefined}
-              activeViews={viewManager.activeViews}
-              onViewChange={(viewId) => {
-                viewManager.assignCabinetToView(selectedCabinet.cabinetId, viewId)
-                onViewChange(selectedCabinet.cabinetId, viewId)
-              }}
-              onCreateView={() => {
-                const newView = viewManager.createView()
-                viewManager.assignCabinetToView(selectedCabinet.cabinetId, newView.id)
-                onViewChange(selectedCabinet.cabinetId, newView.id)
-              }}
-              cabinetId={selectedCabinet.cabinetId}
-              allCabinets={cabinets}
-              noWrapper
-            />
-          </CollapsibleSection>
+          <GroupingSection
+            viewManager={viewManager}
+            selectedCabinet={{
+              cabinetId: selectedCabinet.cabinetId,
+              sortNumber: selectedCabinet.sortNumber,
+              viewId: selectedCabinet.viewId as ViewId,
+            }}
+            allCabinets={cabinets}
+            groups={groups}
+            onViewChange={onViewChange}
+          />
 
           {/* Appliance Size Section */}
           <CollapsibleSection

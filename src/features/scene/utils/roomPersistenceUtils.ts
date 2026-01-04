@@ -256,6 +256,7 @@ export function serializeRoom({
       benchtopThickness: cabinet.benchtopThickness,
       benchtopHeightFromFloor: cabinet.benchtopHeightFromFloor,
       parentYOffset: cabinet.parentYOffset,
+      manuallyEditedDelta: cabinet.manuallyEditedDelta,
     }
   })
 
@@ -612,6 +613,10 @@ export async function restoreRoom({
         // Restore parentYOffset (doesn't need ID mapping)
         if (savedCabinet.parentYOffset !== undefined) {
           cabinetData.parentYOffset = savedCabinet.parentYOffset
+        }
+
+        if (savedCabinet.manuallyEditedDelta) {
+          cabinetData.manuallyEditedDelta = { ...savedCabinet.manuallyEditedDelta }
         }
       })
 

@@ -37,8 +37,13 @@ import { handleViewDimensionChange } from './utils/handlers/viewDimensionHandler
 import { handleSplashbackHeightChange } from './utils/handlers/splashbackHandler'
 import { handleKickerHeightChange } from './utils/handlers/kickerHeightHandler'
 import { handleProductDimensionChange, getWidthConstraints } from './utils/handlers/productDimensionHandler'
+import {
+  getApplianceGapValues,
+  getApplianceWidthConstraints,
+} from './utils/handlers/applianceGapHandler'
+import { handleApplianceHorizontalGapChange } from './utils/handlers/applianceDimensionHandler'
 import { handleDeleteCabinet } from './utils/handlers/deleteCabinetHandler'
-import { updateAllDependentComponents } from './utils/handlers/dependentComponentsHandler'
+import { updateAllDependentComponents, updateChildCabinets } from './utils/handlers/dependentComponentsHandler'
 import { handleFillerSelect as handleFillerSelectHandler, handleFillerToggle as handleFillerToggleHandler } from './utils/handlers/fillerHandler'
 import {
   handleKickerSelect as handleKickerSelectHandler,
@@ -56,6 +61,7 @@ import {
   handleBenchtopSelect as handleBenchtopSelectHandler,
   handleBenchtopToggle as handleBenchtopToggleHandler
 } from './utils/handlers/benchtopHandler'
+import { updateBenchtopPosition } from './utils/handlers/benchtopPositionHandler'
 import { collectCartItems } from './utils/cartUtils'
 import { addToCart } from '@/server/addToCart'
 import { useSaveUserRoom, useLoadUserRoom } from '@/hooks/useUserRoomsQuery'
@@ -74,6 +80,8 @@ import { UserRoomsModal } from './ui/UserRoomsModal'
 import { SaveRoomModal } from './ui/SaveRoomModal'
 import { serializeRoom } from './utils/roomPersistenceUtils'
 import type { UserSavedRoom, RoomCategory, SavedRoom } from '@/types/roomTypes'
+import { clamp } from '@/features/carcass/utils/carcass-math-utils'
+import { APPLIANCE_GAP_LIMITS } from '@/features/cabinets/factory/cabinetFactory'
 
 interface ThreeSceneProps {
   wallDimensions: WallDims
@@ -620,21 +628,79 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     const benchtopCabinet = cabinets.find(c => c.cabinetId === cabinetId)
     if (!benchtopCabinet || benchtopCabinet.cabinetType !== 'benchtop') return
 
-    // Only for independent benchtops (no parent)
-    if (benchtopCabinet.benchtopParentCabinetId) return
-
     // Clamp value between 0 and 1200
     const clampedValue = Math.max(0, Math.min(1200, value))
 
-    // Update the height from floor value on CabinetData
-    benchtopCabinet.benchtopHeightFromFloor = clampedValue
+    if (benchtopCabinet.benchtopParentCabinetId) {
+      const parentCabinet = cabinets.find(
+        (c) => c.cabinetId === benchtopCabinet.benchtopParentCabinetId
+      )
+      if (!parentCabinet) return
 
-    // Update the Y position of the benchtop group
-    benchtopCabinet.group.position.setY(clampedValue)
+      const baseY =
+        parentCabinet.group.position.y +
+        parentCabinet.carcass.dimensions.height
+      const heightDelta = clampedValue - baseY
+
+      benchtopCabinet.manuallyEditedDelta = {
+        ...benchtopCabinet.manuallyEditedDelta,
+        height: heightDelta,
+      }
+
+      updateBenchtopPosition(parentCabinet, cabinets, {
+        positionChanged: true,
+      })
+    } else {
+      // Update the height from floor value on CabinetData
+      benchtopCabinet.benchtopHeightFromFloor = clampedValue
+
+      // Update the Y position of the benchtop group
+      benchtopCabinet.group.position.setY(clampedValue)
+    }
 
     // Trigger re-render to update UI snapshots
     setSelectedCabinets(prev => prev.map(cab => ({ ...cab })))
   }, [cabinets, setSelectedCabinets])
+
+  const handleManualDimensionDeltaChange = useCallback((
+    cabinetId: string,
+    dimension: "width" | "height" | "depth",
+    delta: number
+  ) => {
+    const cabinet = cabinets.find((c) => c.cabinetId === cabinetId)
+    if (!cabinet) return
+
+    cabinet.manuallyEditedDelta = {
+      ...cabinet.manuallyEditedDelta,
+      [dimension]: delta,
+    }
+
+    if (cabinet.cabinetType === "benchtop" && cabinet.benchtopParentCabinetId) {
+      const parentCabinet = cabinets.find(
+        (c) => c.cabinetId === cabinet.benchtopParentCabinetId
+      )
+      if (parentCabinet) {
+        updateBenchtopPosition(parentCabinet, cabinets, {
+          dimensionsChanged: true,
+        })
+      }
+    }
+
+    if (cabinet.cabinetType === "panel" && cabinet.parentCabinetId) {
+      const parentCabinet = cabinets.find(
+        (c) => c.cabinetId === cabinet.parentCabinetId
+      )
+      if (parentCabinet) {
+        updateChildCabinets(parentCabinet, cabinets, {
+          heightChanged: dimension === "height",
+          depthChanged: dimension === "depth",
+        })
+      }
+    }
+
+    partData.updateCabinet(cabinet)
+    setSelectedCabinets(prev => prev.map(cab => ({ ...cab })))
+  }, [cabinets, partData, setSelectedCabinets])
 
   // Handle bulkhead selection from modal - creates bulkhead with proper product association
   const handleBulkheadSelect = useCallback((cabinetId: string, productId: string) => {
@@ -703,10 +769,14 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
 
       if (response.success) {
         // Save or update the user room after successful add to cart
-        if (currentRoomId) {
+        // Use originalRoomId from loaded user room if available, otherwise from URL
+        const effectiveRoomId = currentUserRoom?.originalRoomId || currentRoomId
+        const effectiveRoomName = currentUserRoom?.originalRoomName || currentRoomName
+
+        if (effectiveRoomId || currentUserRoom?.id) {
           try {
-            // Get room category from wsRooms
-            const roomMeta = wsRooms?.rooms?.[currentRoomId]
+            // Get room category from wsRooms (use effectiveRoomId for lookup)
+            const roomMeta = effectiveRoomId ? wsRooms?.rooms?.[effectiveRoomId] : null
             const categoryId = roomMeta?.categoryId
             const categoryName = categoryId
               ? wsRooms?.categories?.[categoryId]?.category
@@ -721,8 +791,8 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
               activeViews: viewManager.activeViews,
               getCabinetView: viewManager.getCabinetView,
               wsProducts,
-              roomName: currentRoomName || projectName,
-              roomCategory: (categoryName as RoomCategory) || "Kitchen",
+              roomName: effectiveRoomName || projectName,
+              roomCategory: (categoryName as RoomCategory) || currentUserRoom?.category || "Kitchen",
               cabinetSyncs,
             })
 
@@ -730,8 +800,8 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
             const saveResult = await saveUserRoomMutation.mutateAsync({
               ...roomData,
               userRoomId: currentUserRoom?.id,
-              originalRoomId: currentRoomId,
-              originalRoomName: currentRoomName || "",
+              originalRoomId: effectiveRoomId || "",
+              originalRoomName: effectiveRoomName || "",
               projectName,
               projectId: response.projectId,
               updatedAt: new Date().toISOString(),
@@ -742,8 +812,8 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
               ...roomData,
               id: saveResult.userRoomId,
               userEmail: userEmail?.toLowerCase().trim() || prev?.userEmail || "",
-              originalRoomId: currentRoomId,
-              originalRoomName: currentRoomName || "",
+              originalRoomId: effectiveRoomId || prev?.originalRoomId || "",
+              originalRoomName: effectiveRoomName || prev?.originalRoomName || "",
               projectName,
               projectId: response.projectId,
               createdAt: prev?.createdAt || new Date().toISOString(),
@@ -759,7 +829,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
 
         setShowAddToCartModal(false)
         setCartItemsToAdd(null)
-        
+
         if (response.itemErrors && response.itemErrors.length > 0) {
           toast.success(
             `Added ${response.itemsAdded} item(s) to cart! (${response.itemErrors.length} had errors)`,
@@ -948,22 +1018,51 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     const cabinet = cabinets.find(c => c.cabinetId === cabinetId)
     if (!cabinet) return
 
-    handleProductDimensionChange(
-      {
-        width: newWidth,
-        height: cabinet.carcass.dimensions.height,
-        depth: cabinet.carcass.dimensions.depth
-      },
-      {
-        selectedCabinet: cabinet,
-        cabinets,
-        cabinetSyncs,
-        selectedCabinets,
-        cabinetGroups,
-        viewManager,
-        wallDimensions
-      }
-    )
+    if (cabinet.cabinetType === 'appliance') {
+      const { leftGap, rightGap } = getApplianceGapValues(cabinet)
+      const widthDelta = newWidth - cabinet.carcass.dimensions.width
+      const gapDelta = widthDelta / 2
+      const newLeftGap = clamp(
+        leftGap + gapDelta,
+        APPLIANCE_GAP_LIMITS.side.min,
+        APPLIANCE_GAP_LIMITS.side.max
+      )
+      const newRightGap = clamp(
+        rightGap + gapDelta,
+        APPLIANCE_GAP_LIMITS.side.min,
+        APPLIANCE_GAP_LIMITS.side.max
+      )
+
+      handleApplianceHorizontalGapChange(
+        { left: newLeftGap, right: newRightGap },
+        {
+          selectedCabinet: cabinet,
+          selectedCabinets,
+          cabinets,
+          cabinetSyncs,
+          cabinetGroups,
+          viewManager,
+          wallDimensions,
+        }
+      )
+    } else {
+      handleProductDimensionChange(
+        {
+          width: newWidth,
+          height: cabinet.carcass.dimensions.height,
+          depth: cabinet.carcass.dimensions.depth
+        },
+        {
+          selectedCabinet: cabinet,
+          cabinets,
+          cabinetSyncs,
+          selectedCabinets,
+          cabinetGroups,
+          viewManager,
+          wallDimensions
+        }
+      )
+    }
 
     // Update part data for all affected cabinets
     partData.updateCabinet(cabinet)
@@ -975,6 +1074,132 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     })
     debouncedIncrementDimensionVersion()
   }, [cabinets, cabinetSyncs, cabinetGroups, viewManager, wallDimensions, partData, debouncedIncrementDimensionVersion, selectedCabinets])
+
+  const handlePanelSyncChange = useCallback((cabinetId: string, syncCabinets: string[]) => {
+    setCabinetSyncs(prev => {
+      const newMap = new Map(prev)
+      const oldSyncList = prev.get(cabinetId) || []
+
+      const addedCabinets = syncCabinets.filter(id => !oldSyncList.includes(id))
+      const removedCabinets = oldSyncList.filter(id => !syncCabinets.includes(id))
+
+      if (syncCabinets.length === 0) {
+        newMap.delete(cabinetId)
+      } else {
+        newMap.set(cabinetId, syncCabinets)
+      }
+
+      for (const addedId of addedCabinets) {
+        const otherSyncList = newMap.get(addedId) || []
+        if (!otherSyncList.includes(cabinetId)) {
+          newMap.set(addedId, [...otherSyncList, cabinetId])
+        }
+      }
+
+      for (const removedId of removedCabinets) {
+        const otherSyncList = newMap.get(removedId) || []
+        const updatedList = otherSyncList.filter(id => id !== cabinetId)
+        if (updatedList.length === 0) {
+          newMap.delete(removedId)
+        } else {
+          newMap.set(removedId, updatedList)
+        }
+      }
+
+      return newMap
+    })
+  }, [setCabinetSyncs])
+
+  const handlePanelViewChange = useCallback((cabinetId: string, viewId: string) => {
+    updateCabinetViewId(cabinetId, viewId === 'none' ? undefined : viewId)
+
+    if (viewId === 'none') {
+      setCabinetGroups(prev => {
+        const newMap = new Map(prev)
+
+        newMap.delete(cabinetId)
+
+        newMap.forEach((group, otherCabinetId) => {
+          const updatedGroup = group.filter(g => g.cabinetId !== cabinetId)
+          if (updatedGroup.length !== group.length) {
+            if (updatedGroup.length > 0) {
+              const total = updatedGroup.reduce((sum, g) => sum + g.percentage, 0)
+              if (total !== 100) {
+                updatedGroup.forEach(g => {
+                  g.percentage = Math.round((g.percentage / total) * 100)
+                })
+                const finalTotal = updatedGroup.reduce((sum, g) => sum + g.percentage, 0)
+                if (finalTotal !== 100) {
+                  updatedGroup[0].percentage += (100 - finalTotal)
+                }
+              }
+              newMap.set(otherCabinetId, updatedGroup)
+            } else {
+              newMap.delete(otherCabinetId)
+            }
+          }
+        })
+
+        return newMap
+      })
+    }
+  }, [setCabinetGroups, updateCabinetViewId])
+
+  const handlePanelGroupChange = useCallback((cabinetId: string, groupCabinets: Array<{ cabinetId: string; percentage: number }>) => {
+    setCabinetGroups(prev => {
+      const newMap = new Map(prev)
+      const oldGroupList = prev.get(cabinetId) || []
+
+      const oldCabinetIds = oldGroupList.map(g => g.cabinetId)
+      const newCabinetIds = groupCabinets.map(g => g.cabinetId)
+      const addedCabinets = newCabinetIds.filter(id => !oldCabinetIds.includes(id))
+      const removedCabinets = oldCabinetIds.filter(id => !newCabinetIds.includes(id))
+
+      if (groupCabinets.length === 0) {
+        newMap.delete(cabinetId)
+      } else {
+        newMap.set(cabinetId, groupCabinets)
+      }
+
+      const recalculatePercentages = (group: Array<{ cabinetId: string; percentage: number }>) => {
+        if (group.length === 0) return group
+        const equalPercentage = 100 / group.length
+        const adjusted = group.map(g => ({ ...g, percentage: Math.round(equalPercentage * 100) / 100 }))
+        const total = adjusted.reduce((sum, g) => sum + g.percentage, 0)
+        if (total !== 100 && adjusted.length > 0) {
+          adjusted[0].percentage += 100 - total
+        }
+        return adjusted
+      }
+
+      for (const addedId of addedCabinets) {
+        const otherGroupList = newMap.get(addedId) || []
+        if (!otherGroupList.find(g => g.cabinetId === cabinetId)) {
+          const updatedGroup = recalculatePercentages([...otherGroupList, { cabinetId, percentage: 0 }])
+          newMap.set(addedId, updatedGroup)
+        }
+
+        const sourceCabinet = cabinets.find(c => c.cabinetId === cabinetId)
+        if (sourceCabinet) {
+          const sourceLeftLock = !!sourceCabinet.leftLock
+          const sourceRightLock = !!sourceCabinet.rightLock
+          updateCabinetLock(addedId, sourceLeftLock, sourceRightLock)
+        }
+      }
+
+      for (const removedId of removedCabinets) {
+        const otherGroupList = newMap.get(removedId) || []
+        const updatedList = otherGroupList.filter(g => g.cabinetId !== cabinetId)
+        if (updatedList.length === 0) {
+          newMap.delete(removedId)
+        } else {
+          newMap.set(removedId, recalculatePercentages(updatedList))
+        }
+      }
+
+      return newMap
+    })
+  }, [cabinets, setCabinetGroups, updateCabinetLock])
 
   return (
     <div className="relative w-full h-screen overflow-hidden">
@@ -998,14 +1223,13 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         hasProjectId={!!currentUserRoom?.projectId}
       />
 
-      {selectedMode === 'admin' && (
-        <BottomRightActions
-          cabinetsCount={cabinets.length}
-          onExport={handleExport}
-          onNesting={handleNesting}
-          onSettings={handleSettingsClick}
-        />
-      )}
+      <BottomRightActions
+        cabinetsCount={cabinets.length}
+        onExport={handleExport}
+        onNesting={handleNesting}
+        onSettings={handleSettingsClick}
+        mode={selectedMode}
+      />
 
       {/* Settings Sidebar */}
       <SettingsSidebar
@@ -1176,7 +1400,9 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
 
       {/* User Width Slider - appears on right-click (User mode only) */}
       {selectedMode === 'user' && cabinetWithLockIcons && (() => {
-        const constraints = getWidthConstraints(cabinetWithLockIcons.productId)
+        const constraints = cabinetWithLockIcons.cabinetType === 'appliance'
+          ? getApplianceWidthConstraints(cabinetWithLockIcons)
+          : getWidthConstraints(cabinetWithLockIcons.productId)
         return (
           <UserWidthSlider
             cabinet={cabinetWithLockIcons}
@@ -1199,16 +1425,18 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         <AppliancePanel
           isVisible={true}
           selectedCabinet={selectedCabinet}
+          selectedCabinets={selectedCabinets}
           onClose={() => {
             setShowProductPanel(false)
             setSelectedCabinet(null)
           }}
           viewManager={viewManager}
-          onViewChange={(cabinetId, viewId) => {
-            updateCabinetViewId(cabinetId, viewId === 'none' ? undefined : viewId)
-          }}
+          onViewChange={handlePanelViewChange}
+          onGroupChange={handlePanelGroupChange}
+          onSyncChange={handlePanelSyncChange}
           cabinets={cabinets}
           cabinetGroups={cabinetGroups}
+          cabinetSyncs={cabinetSyncs}
           wallDimensions={wallDimensions}
         />
       )}
@@ -1245,158 +1473,21 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
             benchtopLeftOverhang: selectedCabinet.benchtopLeftOverhang,
             benchtopRightOverhang: selectedCabinet.benchtopRightOverhang,
             benchtopThickness: selectedCabinet.benchtopThickness,
-            benchtopHeightFromFloor: selectedCabinet.benchtopHeightFromFloor
+            benchtopHeightFromFloor: selectedCabinet.benchtopHeightFromFloor,
+            manuallyEditedDelta: selectedCabinet.manuallyEditedDelta
           } : null}
           viewManager={viewManager}
           allCabinets={cabinets}
           initialGroupData={selectedCabinet ? (cabinetGroups.get(selectedCabinet.cabinetId) || []) : []}
           initialSyncData={selectedCabinet ? (cabinetSyncs.get(selectedCabinet.cabinetId) || []) : []}
-          onSyncChange={(cabinetId, syncCabinets) => {
-            // Update cabinet syncs map with bidirectional sync
-            setCabinetSyncs(prev => {
-              const newMap = new Map(prev)
-              const oldSyncList = prev.get(cabinetId) || []
-
-              // Find added and removed cabinets
-              const addedCabinets = syncCabinets.filter(id => !oldSyncList.includes(id))
-              const removedCabinets = oldSyncList.filter(id => !syncCabinets.includes(id))
-
-              // Update the current cabinet's sync list
-              if (syncCabinets.length === 0) {
-                newMap.delete(cabinetId)
-              } else {
-                newMap.set(cabinetId, syncCabinets)
-              }
-
-              // Bidirectional: add current cabinet to newly synced cabinets' lists
-              for (const addedId of addedCabinets) {
-                const otherSyncList = newMap.get(addedId) || []
-                if (!otherSyncList.includes(cabinetId)) {
-                  newMap.set(addedId, [...otherSyncList, cabinetId])
-                }
-              }
-
-              // Bidirectional: remove current cabinet from unsynced cabinets' lists
-              for (const removedId of removedCabinets) {
-                const otherSyncList = newMap.get(removedId) || []
-                const updatedList = otherSyncList.filter(id => id !== cabinetId)
-                if (updatedList.length === 0) {
-                  newMap.delete(removedId)
-                } else {
-                  newMap.set(removedId, updatedList)
-                }
-              }
-
-              return newMap
-            })
-          }}
-          onViewChange={(cabinetId, viewId) => {
-            // Update the cabinet's viewId in the state
-            // If viewId is "none", set to undefined
-            updateCabinetViewId(cabinetId, viewId === 'none' ? undefined : viewId)
-
-            // If cabinet is removed from view (viewId is 'none'), remove all group relations
-            if (viewId === 'none') {
-              setCabinetGroups(prev => {
-                const newMap = new Map(prev)
-
-                // Remove this cabinet's own group
-                newMap.delete(cabinetId)
-
-                // Remove this cabinet from any other cabinets' groups
-                newMap.forEach((group, otherCabinetId) => {
-                  const updatedGroup = group.filter(g => g.cabinetId !== cabinetId)
-                  if (updatedGroup.length !== group.length) {
-                    // Cabinet was removed from this group
-                    if (updatedGroup.length > 0) {
-                      // Recalculate percentages if a cabinet was removed
-                      const total = updatedGroup.reduce((sum, g) => sum + g.percentage, 0)
-                      if (total !== 100) {
-                        updatedGroup.forEach(g => {
-                          g.percentage = Math.round((g.percentage / total) * 100)
-                        })
-                        const finalTotal = updatedGroup.reduce((sum, g) => sum + g.percentage, 0)
-                        if (finalTotal !== 100) {
-                          updatedGroup[0].percentage += (100 - finalTotal)
-                        }
-                      }
-                      newMap.set(otherCabinetId, updatedGroup)
-                    } else {
-                      // No more cabinets in group, remove the group
-                      newMap.delete(otherCabinetId)
-                    }
-                  }
-                })
-
-                return newMap
-              })
-            }
-          }}
-          onGroupChange={(cabinetId, groupCabinets) => {
-            // Update cabinet groups map with bidirectional pairing
-            setCabinetGroups(prev => {
-              const newMap = new Map(prev)
-              const oldGroupList = prev.get(cabinetId) || []
-
-              // Find added and removed cabinets
-              const oldCabinetIds = oldGroupList.map(g => g.cabinetId)
-              const newCabinetIds = groupCabinets.map(g => g.cabinetId)
-              const addedCabinets = newCabinetIds.filter(id => !oldCabinetIds.includes(id))
-              const removedCabinets = oldCabinetIds.filter(id => !newCabinetIds.includes(id))
-
-              // Update the current cabinet's group list
-              if (groupCabinets.length === 0) {
-                newMap.delete(cabinetId)
-              } else {
-                newMap.set(cabinetId, groupCabinets)
-              }
-
-              // Helper to recalculate percentages evenly
-              const recalculatePercentages = (group: Array<{ cabinetId: string; percentage: number }>) => {
-                if (group.length === 0) return group
-                const equalPercentage = 100 / group.length
-                const adjusted = group.map(g => ({ ...g, percentage: Math.round(equalPercentage * 100) / 100 }))
-                const total = adjusted.reduce((sum, g) => sum + g.percentage, 0)
-                if (total !== 100 && adjusted.length > 0) {
-                  adjusted[0].percentage += 100 - total
-                }
-                return adjusted
-              }
-
-              // Bidirectional: add current cabinet to newly paired cabinets' lists
-              for (const addedId of addedCabinets) {
-                const otherGroupList = newMap.get(addedId) || []
-                if (!otherGroupList.find(g => g.cabinetId === cabinetId)) {
-                  const updatedGroup = recalculatePercentages([...otherGroupList, { cabinetId, percentage: 0 }])
-                  newMap.set(addedId, updatedGroup)
-                }
-
-                const sourceCabinet = cabinets.find(c => c.cabinetId === cabinetId)
-                if (sourceCabinet) {
-                  const sourceLeftLock = !!sourceCabinet.leftLock
-                  const sourceRightLock = !!sourceCabinet.rightLock
-                  updateCabinetLock(addedId, sourceLeftLock, sourceRightLock)
-                }
-              }
-
-              // Bidirectional: remove current cabinet from unpaired cabinets' lists
-              for (const removedId of removedCabinets) {
-                const otherGroupList = newMap.get(removedId) || []
-                const updatedList = otherGroupList.filter(g => g.cabinetId !== cabinetId)
-                if (updatedList.length === 0) {
-                  newMap.delete(removedId)
-                } else {
-                  newMap.set(removedId, recalculatePercentages(updatedList))
-                }
-              }
-
-              return newMap
-            })
-          }}
+          onSyncChange={handlePanelSyncChange}
+          onViewChange={handlePanelViewChange}
+          onGroupChange={handlePanelGroupChange}
 
           onBenchtopOverhangChange={handleBenchtopOverhangChange}
           onBenchtopThicknessChange={handleBenchtopThicknessChange}
           onBenchtopHeightFromFloorChange={handleBenchtopHeightFromFloorChange}
+          onManualDimensionDeltaChange={handleManualDimensionDeltaChange}
 
           onShelfCountChange={(newCount: number) => {
             if (selectedCabinet) {
@@ -1653,7 +1744,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         cabinetErrors={cabinetErrors}
       />
 
-      {selectedMode === 'admin' &&<HistoryControls
+      {selectedMode === 'admin' && <HistoryControls
         past={past}
         future={future}
         undo={undo}

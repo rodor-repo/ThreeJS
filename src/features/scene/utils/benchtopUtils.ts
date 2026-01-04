@@ -59,3 +59,22 @@ export function calculateBenchtopDepth(
 ): number {
   return parentDepth + BENCHTOP_FIXED_DEPTH_EXTENSION + frontOverhang
 }
+
+/**
+ * Calculates base benchtop dimensions (without manual delta)
+ */
+export function getBenchtopBaseDimensions(
+  parentCabinet: CabinetData,
+  allCabinets: CabinetData[],
+  frontOverhang: number = DEFAULT_BENCHTOP_FRONT_OVERHANG
+): { width: number; depth: number } {
+  const { effectiveLength } = getEffectiveBenchtopDimensions(
+    parentCabinet,
+    allCabinets
+  )
+  const parentDepth = parentCabinet.carcass.dimensions.depth
+  return {
+    width: effectiveLength,
+    depth: calculateBenchtopDepth(parentDepth, frontOverhang),
+  }
+}

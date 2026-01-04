@@ -64,6 +64,10 @@ export const updateBenchtopPosition = (
   const leftOverhang = benchtopCabinet.benchtopLeftOverhang ?? 0
   const rightOverhang = benchtopCabinet.benchtopRightOverhang ?? 0
   const benchtopDepth = calculateBenchtopDepth(parentDepth, frontOverhang)
+  const widthDelta = benchtopCabinet.manuallyEditedDelta?.width ?? 0
+  const depthDelta = benchtopCabinet.manuallyEditedDelta?.depth ?? 0
+  const heightDelta = benchtopCabinet.manuallyEditedDelta?.height ?? 0
+  const baseY = parentY + parentHeight
 
   // Update benchtop dimensions if needed
   if (changes.dimensionsChanged || changes.childChanged) {
@@ -74,9 +78,9 @@ export const updateBenchtopPosition = (
 
     // Use CarcassAssembly.updateDimensions() - this calls BenchtopBuilder.updateDimensions()
     carcass.updateDimensions({
-      width: effectiveLength,
+      width: effectiveLength + widthDelta,
       height: benchtopThickness,
-      depth: benchtopDepth,
+      depth: benchtopDepth + depthDelta,
     })
   }
 
@@ -90,9 +94,11 @@ export const updateBenchtopPosition = (
     // X = effectiveLeftX (lowest X value - left edge of cabinet or child filler)
     // Y = parent cabinet top (parentY + parentHeight)
     // Z = parentZ (same as parent - starts from back wall)
+    const targetY = baseY + heightDelta
+    benchtopCabinet.benchtopHeightFromFloor = targetY
     benchtopCabinet.group.position.set(
       effectiveLeftX,
-      parentY + parentHeight,
+      targetY,
       parentZ
     )
   }

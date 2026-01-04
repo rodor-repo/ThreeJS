@@ -15,6 +15,7 @@ import {
   usePriceQuery,
   useDimensionEvents,
   useDimensionSync,
+  useFullDimensionSync,
   useInitialization,
   useMaterialSync,
   getPersistedState,
@@ -42,9 +43,12 @@ import {
   toNum,
   buildDimsList,
   applyPrimaryDimsTo3D,
+  getDefaultDimValue,
+  getDimensionTypeForEditing,
   validateDrawerHeightChange,
 } from "./utils/dimensionUtils"
 import { toastThrottled } from "./utils/toastUtils"
+import { getBenchtopBaseDimensions } from "@/features/scene/utils/benchtopUtils"
 
 /**
  * Props for the DynamicPanel component
@@ -105,6 +109,7 @@ export const DynamicPanel: React.FC<DynamicPanelProps> = ({
   onBenchtopOverhangChange,
   onBenchtopThicknessChange,
   onBenchtopHeightFromFloorChange,
+  onManualDimensionDeltaChange,
 }) => {
   const cabinetId = selectedCabinet?.cabinetId
 
@@ -160,6 +165,11 @@ export const DynamicPanel: React.FC<DynamicPanelProps> = ({
       selectedCabinet?.cabinetType === "panel") &&
     selectedCabinet?.hideLockIcons === true
 
+  const fullSelectedCabinet = useMemo(() => {
+    if (!allCabinets || !selectedCabinet?.cabinetId) return undefined
+    return allCabinets.find((c) => c.cabinetId === selectedCabinet.cabinetId)
+  }, [allCabinets, selectedCabinet?.cabinetId])
+
   // Calculate if off-the-floor should be shown
   // Hide for fillers/panels that are children of "top" cabinets
   const shouldShowOffTheFloor = useMemo(() => {
@@ -173,18 +183,55 @@ export const DynamicPanel: React.FC<DynamicPanelProps> = ({
     // If we can't check parent (no allCabinets), default to showing it
     if (!allCabinets || !selectedCabinet.cabinetId) return true
 
-    // Find the full cabinet data to access parentCabinetId
-    const fullCabinet = allCabinets.find(
-      (c) => c.cabinetId === selectedCabinet.cabinetId
-    )
-    if (!fullCabinet?.parentCabinetId) return true
+    if (!fullSelectedCabinet?.parentCabinetId) return true
 
     const parent = allCabinets.find(
-      (c) => c.cabinetId === fullCabinet.parentCabinetId
+      (c) => c.cabinetId === fullSelectedCabinet.parentCabinetId
     )
     // Hide if parent is a "top" cabinet
     return parent?.cabinetType !== "top"
-  }, [selectedCabinet?.cabinetType, selectedCabinet?.cabinetId, allCabinets])
+  }, [
+    selectedCabinet?.cabinetType,
+    fullSelectedCabinet?.parentCabinetId,
+    allCabinets,
+  ])
+
+  const childDeltaConfig = useMemo<{
+    type: string;
+    deltaDimensions: readonly ("width" | "height" | "depth")[];
+} | undefined
+>(() => {
+    if (!selectedCabinet) return undefined
+
+    if (
+      selectedCabinet.cabinetType === "benchtop" &&
+      selectedCabinet.benchtopParentCabinetId
+    ) {
+      return {
+        type: "benchtop",
+        deltaDimensions: ["width", "depth"] as const,
+      }
+    }
+
+    if (
+      fullSelectedCabinet?.cabinetType === "panel" &&
+      fullSelectedCabinet.parentCabinetId &&
+      fullSelectedCabinet.hideLockIcons === true
+    ) {
+      return {
+        type: "panel",
+        deltaDimensions: ["height", "depth"] as const,
+      }
+    }
+
+    return undefined
+  }, [
+    selectedCabinet?.cabinetType,
+    selectedCabinet?.benchtopParentCabinetId,
+    fullSelectedCabinet?.cabinetType,
+    fullSelectedCabinet?.parentCabinetId,
+    fullSelectedCabinet?.hideLockIcons,
+  ])
 
   // Apply dimensions to 3D callback
   const applyDimsTo3D = useCallback(
@@ -220,6 +267,87 @@ export const DynamicPanel: React.FC<DynamicPanelProps> = ({
       onDoorCountChange,
       onDrawerHeightChange,
     ]
+  )
+
+  const getDeltaBaseValue = useCallback(
+    (dimensionType: "width" | "height" | "depth"): number | null => {
+      if (!selectedCabinet) return null
+
+      if (childDeltaConfig?.type === "benchtop") {
+        const parentId = selectedCabinet.benchtopParentCabinetId
+        const parentCabinet = parentId
+          ? allCabinets?.find((cabinet) => cabinet.cabinetId === parentId)
+          : undefined
+
+        if (parentCabinet && allCabinets) {
+          const base = getBenchtopBaseDimensions(
+            parentCabinet,
+            allCabinets,
+            selectedCabinet.benchtopFrontOverhang
+          )
+          if (dimensionType === "width") return base.width
+          if (dimensionType === "depth") return base.depth
+        }
+      }
+
+      if (childDeltaConfig?.type === "panel") {
+        const childCabinet = fullSelectedCabinet
+        const parentCabinet = childCabinet?.parentCabinetId
+          ? allCabinets?.find(
+              (cabinet) => cabinet.cabinetId === childCabinet.parentCabinetId
+            )
+          : undefined
+
+        if (childCabinet && parentCabinet) {
+          const parentY = parentCabinet.group.position.y
+          const parentHeight = parentCabinet.carcass.dimensions.height
+          const parentDepth = parentCabinet.carcass.dimensions.depth
+          const isOverheadWithOverhang =
+            parentCabinet.cabinetType === "top" &&
+            parentCabinet.carcass.config.overhangDoor === true
+          const overhangAmount = 20
+
+          let newY = parentY
+          if (childCabinet.parentYOffset !== undefined) {
+            newY = parentY + childCabinet.parentYOffset
+          } else if (isOverheadWithOverhang) {
+            newY = parentY - overhangAmount
+          }
+
+          const baseHeight = parentY + parentHeight - newY
+          if (dimensionType === "height") return baseHeight
+          if (dimensionType === "depth") return parentDepth
+        }
+      }
+
+      const currentValue = selectedCabinet.dimensions[dimensionType]
+      const existingDelta =
+        selectedCabinet.manuallyEditedDelta?.[dimensionType] ?? 0
+      return currentValue - existingDelta
+    },
+    [
+      selectedCabinet,
+      childDeltaConfig?.type,
+      allCabinets,
+      fullSelectedCabinet,
+    ]
+  )
+
+  const getDeltaDimensionType = useCallback(
+    (id: string): "width" | "height" | "depth" | null => {
+      if (!childDeltaConfig || !wsProduct?.dims) return null
+
+      const dimObj = wsProduct.dims[id]
+      if (!dimObj) return null
+
+      const dimensionType = getDimensionTypeForEditing(dimObj, gdMapping)
+      if (!dimensionType) return null
+
+      return childDeltaConfig.deltaDimensions.includes(dimensionType)
+        ? dimensionType
+        : null
+    },
+    [childDeltaConfig, wsProduct?.dims, gdMapping]
   )
 
   // Initialization hook
@@ -277,8 +405,8 @@ export const DynamicPanel: React.FC<DynamicPanelProps> = ({
 
   // Dimension sync hook
   useDimensionSync({
-    cabinetId,
-    cabinetWidth: selectedCabinet?.dimensions.width,
+    cabinetId: childDeltaConfig ? undefined : cabinetId,
+    cabinetWidth: childDeltaConfig ? undefined : selectedCabinet?.dimensions.width,
     dims: wsProduct?.dims,
     gdMapping,
     onWidthSync: (widthDimId, newWidth) => {
@@ -286,6 +414,19 @@ export const DynamicPanel: React.FC<DynamicPanelProps> = ({
     },
     onPersistedWidthSync: (widthDimId, newWidth) => {
       persistence.updateSingleValue(widthDimId, newWidth)
+    },
+  })
+
+  useFullDimensionSync({
+    cabinetId: childDeltaConfig ? cabinetId : undefined,
+    cabinetDimensions: childDeltaConfig ? selectedCabinet?.dimensions : undefined,
+    dims: wsProduct?.dims,
+    gdMapping,
+    onDimensionsSync: (updates) => {
+      Object.entries(updates).forEach(([id, value]) => {
+        panelState.updateValue(id, value)
+        persistence.updateSingleValue(id, value)
+      })
     },
   })
 
@@ -354,26 +495,119 @@ export const DynamicPanel: React.FC<DynamicPanelProps> = ({
     (id: string, value: number | string) => {
       const next = { ...panelState.values, [id]: value }
       panelState.setValues(next)
+      const deltaDimensionType = getDeltaDimensionType(id)
+      if (
+        deltaDimensionType &&
+        selectedCabinet &&
+        onManualDimensionDeltaChange
+      ) {
+        const baseValue = getDeltaBaseValue(deltaDimensionType)
+        if (baseValue !== null) {
+          const nextDelta = toNum(value) - baseValue
+          onManualDimensionDeltaChange(
+            selectedCabinet.cabinetId,
+            deltaDimensionType,
+            nextDelta
+          )
+        }
+        return
+      }
+
       applyDimsTo3D(next, id)
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [panelState.values, applyDimsTo3D]
+    [
+      panelState.values,
+      applyDimsTo3D,
+      getDeltaDimensionType,
+      getDeltaBaseValue,
+      onManualDimensionDeltaChange,
+      selectedCabinet,
+    ]
   )
 
   const handleResetAll = useCallback(() => {
     if (!wsProduct?.dims) return
-    panelState.resetAllValues(wsProduct.dims)
-    applyDimsTo3D(panelState.values)
-  }, [wsProduct?.dims, panelState, applyDimsTo3D])
+    const nextValues: Record<string, number | string> = {}
+    Object.entries(wsProduct.dims).forEach(([id, dimObj]) => {
+      nextValues[id] = getDefaultDimValue(dimObj)
+    })
+
+    const deltaTypes = new Set<"width" | "height" | "depth">()
+    if (childDeltaConfig && selectedCabinet && onManualDimensionDeltaChange) {
+      dimsList.forEach(([id]) => {
+        const deltaDimensionType = getDeltaDimensionType(id)
+        if (!deltaDimensionType) return
+
+        const baseValue = getDeltaBaseValue(deltaDimensionType)
+        if (baseValue === null) return
+
+        nextValues[id] = baseValue
+        deltaTypes.add(deltaDimensionType)
+      })
+    }
+
+    panelState.setValues(nextValues)
+    panelState.setEditingValues({})
+
+    if (childDeltaConfig && selectedCabinet && onManualDimensionDeltaChange) {
+      deltaTypes.forEach((dimensionType) => {
+        onManualDimensionDeltaChange(
+          selectedCabinet.cabinetId,
+          dimensionType,
+          0
+        )
+      })
+    }
+
+    applyDimsTo3D(nextValues)
+  }, [
+    wsProduct?.dims,
+    panelState,
+    applyDimsTo3D,
+    childDeltaConfig,
+    selectedCabinet,
+    onManualDimensionDeltaChange,
+    dimsList,
+    getDeltaDimensionType,
+    getDeltaBaseValue,
+  ])
 
   const handleResetDimension = useCallback(
     (id: string) => {
       const dimObj = wsProduct?.dims?.[id]
       if (!dimObj) return
+      const deltaDimensionType = getDeltaDimensionType(id)
+      if (
+        deltaDimensionType &&
+        selectedCabinet &&
+        onManualDimensionDeltaChange
+      ) {
+        const baseValue = getDeltaBaseValue(deltaDimensionType)
+        if (baseValue !== null) {
+          panelState.setValues((prev) => ({ ...prev, [id]: baseValue }))
+          panelState.clearEditingValue(id)
+          onManualDimensionDeltaChange(
+            selectedCabinet.cabinetId,
+            deltaDimensionType,
+            0
+          )
+        }
+        return
+      }
+
       panelState.resetValue(id, dimObj)
       applyDimsTo3D({ ...panelState.values, [id]: panelState.values[id] }, id)
     },
-    [wsProduct?.dims, panelState, applyDimsTo3D]
+    [
+      wsProduct?.dims,
+      panelState,
+      applyDimsTo3D,
+      getDeltaDimensionType,
+      getDeltaBaseValue,
+      selectedCabinet,
+      onManualDimensionDeltaChange,
+    ]
   )
 
   const handleDimensionValidate = useCallback(
@@ -505,7 +739,7 @@ export const DynamicPanel: React.FC<DynamicPanelProps> = ({
                 gdMapping={gdMapping}
                 drawerQty={drawerQty}
                 isModalFillerOrPanel={isModalFillerOrPanel}
-                isChildBenchtop={selectedCabinet?.cabinetType === 'benchtop' && !!selectedCabinet?.benchtopParentCabinetId}
+                childDeltaConfig={childDeltaConfig}
                 onValueChange={handleValueChange}
                 onEditingChange={panelState.updateEditingValue}
                 onReset={handleResetDimension}
@@ -564,12 +798,20 @@ export const DynamicPanel: React.FC<DynamicPanelProps> = ({
                       : undefined
                   }
                   benchtopHeightFromFloor={
-                    !selectedCabinet.benchtopParentCabinetId
-                      ? selectedCabinet.benchtopHeightFromFloor ?? 740
-                      : undefined
+                    selectedCabinet.benchtopHeightFromFloor ??
+                    (selectedCabinet.benchtopParentCabinetId
+                      ? selectedCabinet.group.position.y
+                      : 740)
+                  }
+                  heightFromFloorDefault={
+                    selectedCabinet.benchtopParentCabinetId
+                      ? (selectedCabinet.benchtopHeightFromFloor ??
+                          selectedCabinet.group.position.y) -
+                        (selectedCabinet.manuallyEditedDelta?.height ?? 0)
+                      : 740
                   }
                   onHeightFromFloorChange={
-                    !selectedCabinet.benchtopParentCabinetId && onBenchtopHeightFromFloorChange
+                    onBenchtopHeightFromFloorChange
                       ? (value) => onBenchtopHeightFromFloorChange(selectedCabinet.cabinetId, value)
                       : undefined
                   }

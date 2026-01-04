@@ -90,6 +90,12 @@ export interface SavedCabinet {
   benchtopHeightFromFloor?: number
   /** Vertical offset from parent cabinet Y position - used for fillers/panels */
   parentYOffset?: number
+  /** Manual dimension adjustments for child cabinets (benchtops, panels) */
+  manuallyEditedDelta?: {
+    width?: number
+    height?: number
+    depth?: number
+  }
 }
 
 export interface SavedView {

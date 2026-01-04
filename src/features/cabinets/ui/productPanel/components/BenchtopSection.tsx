@@ -20,10 +20,12 @@ export interface BenchtopSectionProps {
   benchtopThickness?: number
   /** Thickness change callback */
   onThicknessChange?: (value: number) => void
-  /** Height from floor for independent benchtops */
+  /** Height from floor for benchtops */
   benchtopHeightFromFloor?: number
   /** Height from floor change callback */
   onHeightFromFloorChange?: (value: number) => void
+  /** Default height from floor value (used for reset) */
+  heightFromFloorDefault?: number
   /** If true, renders only inner content without card wrapper */
   noWrapper?: boolean
 }
@@ -121,7 +123,7 @@ const SliderInput: React.FC<SliderInputProps> = ({
 
 /**
  * Benchtop-specific section component.
- * Handles overhangs for child benchtops and height from floor for independent benchtops.
+ * Handles overhangs for child benchtops and height from floor adjustments.
  * 
  * This component follows SRP by separating benchtop-specific controls from the main DimensionsSection.
  */
@@ -133,6 +135,7 @@ export const BenchtopSection: React.FC<BenchtopSectionProps> = ({
   onThicknessChange,
   benchtopHeightFromFloor,
   onHeightFromFloorChange,
+  heightFromFloorDefault,
   noWrapper = false,
 }) => {
   // Local editing state
@@ -318,10 +321,11 @@ export const BenchtopSection: React.FC<BenchtopSectionProps> = ({
   }, [heightFromFloorEdit, benchtopHeightFromFloor, onHeightFromFloorChange])
 
   const handleHeightReset = useCallback(() => {
-    setHeightFromFloorEdit('740')
-    lastCommittedHeight.current = 740
-    onHeightFromFloorChange?.(740)
-  }, [onHeightFromFloorChange])
+    const defaultValue = heightFromFloorDefault ?? 740
+    setHeightFromFloorEdit(defaultValue.toString())
+    lastCommittedHeight.current = defaultValue
+    onHeightFromFloorChange?.(defaultValue)
+  }, [heightFromFloorDefault, onHeightFromFloorChange])
 
   const content = (
     <div className="space-y-4">
@@ -394,16 +398,19 @@ export const BenchtopSection: React.FC<BenchtopSectionProps> = ({
         </div>
       )}
 
-      {/* Height from Floor - Only for independent benchtops */}
-      {!isChildBenchtop && benchtopHeightFromFloor !== undefined && onHeightFromFloorChange && (
+      {/* Height from Floor */}
+      {benchtopHeightFromFloor !== undefined && onHeightFromFloorChange && (
         <SliderInput
           label="Height (Underneath)"
           value={heightFromFloorEdit}
           propValue={benchtopHeightFromFloor}
           min={0}
           max={1200}
-          defaultValue={740}
-          badge={{ text: 'Position', color: 'blue' }}
+          defaultValue={heightFromFloorDefault ?? 740}
+          badge={{
+            text: isChildBenchtop ? 'Base + Delta' : 'Position',
+            color: 'blue'
+          }}
           onChange={setHeightFromFloorEdit}
           onSliderChange={handleHeightSliderChange}
           onBlur={handleHeightBlur}

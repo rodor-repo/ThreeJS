@@ -36,8 +36,14 @@ export interface SelectedCabinetSnapshot {
   benchtopRightOverhang?: number
   /** Benchtop thickness - only for child benchtops */
   benchtopThickness?: number
-  /** Benchtop height from floor - only for independent benchtops */
+  /** Benchtop height from floor (Y position) */
   benchtopHeightFromFloor?: number
+  /** Manual dimension adjustments for child cabinets (benchtops, panels) */
+  manuallyEditedDelta?: {
+    width?: number
+    height?: number
+    depth?: number
+  }
 }
 
 export interface ProductPanelCallbacks {
@@ -74,8 +80,14 @@ export interface ProductPanelCallbacks {
   ) => void
   /** Benchtop thickness change callback - only for child benchtops */
   onBenchtopThicknessChange?: (cabinetId: string, value: number) => void
-  /** Benchtop height from floor change callback - only for independent benchtops */
+  /** Benchtop height from floor change callback */
   onBenchtopHeightFromFloorChange?: (cabinetId: string, value: number) => void
+  /** Manual dimension delta change callback - for child benchtops and panels */
+  onManualDimensionDeltaChange?: (
+    cabinetId: string,
+    dimension: "width" | "height" | "depth",
+    delta: number
+  ) => void
 }
 
 export interface ProductPanelProps extends ProductPanelCallbacks {

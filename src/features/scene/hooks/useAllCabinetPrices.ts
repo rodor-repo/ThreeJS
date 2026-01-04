@@ -82,7 +82,9 @@ export interface UseAllCabinetPricesReturn {
 export function useAllCabinetPrices(
   options: UseAllCabinetPricesOptions
 ): UseAllCabinetPricesReturn {
-  const { cabinets, enabled = true } = options
+  const { cabinets, enabled: enabledOption = true } = options
+  const enabled =
+    enabledOption && process.env.NEXT_PUBLIC_SKIP_PRICE_CALC !== "true"
 
   // Internal version counter to track when state changes
   const [internalVersion, setInternalVersion] = useState(0)

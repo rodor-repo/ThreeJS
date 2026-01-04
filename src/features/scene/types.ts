@@ -79,8 +79,14 @@ export type CabinetData = {
   benchtopRightOverhang?: number  // Extends from right edge toward +X, default 0
   /** Benchtop thickness - only for child benchtops */
   benchtopThickness?: number  // Default 38mm, min 20, max 60
-  /** Benchtop height from floor - only for independent benchtops (Y position) */
+  /** Benchtop height from floor (Y position) */
   benchtopHeightFromFloor?: number  // Default 740mm, min 0, max 1200mm
   /** Vertical offset from parent cabinet Y position - used for fillers/panels */
   parentYOffset?: number
+  /** Manual dimension adjustments for child cabinets (benchtops, panels) */
+  manuallyEditedDelta?: {
+    width?: number   // For benchtop length, panel width
+    height?: number  // For panel height, benchtop Y offset
+    depth?: number   // For benchtop depth, panel depth
+  }
 }

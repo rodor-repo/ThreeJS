@@ -106,6 +106,11 @@ export const handleBenchtopSelect = (
 
   const benchtopDepth = calculateBenchtopDepth(parentCabinet.carcass.dimensions.depth, frontOverhang)
 
+  const parentY = parentCabinet.group.position.y
+  const parentHeight = parentCabinet.carcass.dimensions.height
+  const parentZ = parentCabinet.group.position.z
+  const heightFromFloor = parentY + parentHeight
+
   // Use createCabinet (cabinetFactory) instead of manual creation
   const benchtopCabinet = createCabinet("benchtop", subcategoryId, {
     productId: finalProductId,
@@ -121,19 +126,16 @@ export const handleBenchtopSelect = (
       benchtopFrontOverhang: frontOverhang,
       benchtopLeftOverhang: leftOverhang,
       benchtopRightOverhang: rightOverhang,
+      benchtopHeightFromFloor: heightFromFloor,
     },
   })
 
   if (!benchtopCabinet) return
 
   // Position benchtop on top of parent cabinet
-  const parentY = parentCabinet.group.position.y
-  const parentHeight = parentCabinet.carcass.dimensions.height
-  const parentZ = parentCabinet.group.position.z
-
   benchtopCabinet.group.position.set(
     effectiveLeftX,
-    parentY + parentHeight,
+    heightFromFloor,
     parentZ
   )
   benchtopCabinet.group.name = `benchtop_${parentCabinet.cabinetId}`

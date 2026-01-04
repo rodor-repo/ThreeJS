@@ -798,12 +798,20 @@ export const DynamicPanel: React.FC<DynamicPanelProps> = ({
                       : undefined
                   }
                   benchtopHeightFromFloor={
-                    !selectedCabinet.benchtopParentCabinetId
-                      ? selectedCabinet.benchtopHeightFromFloor ?? 740
-                      : undefined
+                    selectedCabinet.benchtopHeightFromFloor ??
+                    (selectedCabinet.benchtopParentCabinetId
+                      ? selectedCabinet.group.position.y
+                      : 740)
+                  }
+                  heightFromFloorDefault={
+                    selectedCabinet.benchtopParentCabinetId
+                      ? (selectedCabinet.benchtopHeightFromFloor ??
+                          selectedCabinet.group.position.y) -
+                        (selectedCabinet.manuallyEditedDelta?.height ?? 0)
+                      : 740
                   }
                   onHeightFromFloorChange={
-                    !selectedCabinet.benchtopParentCabinetId && onBenchtopHeightFromFloorChange
+                    onBenchtopHeightFromFloorChange
                       ? (value) => onBenchtopHeightFromFloorChange(selectedCabinet.cabinetId, value)
                       : undefined
                   }

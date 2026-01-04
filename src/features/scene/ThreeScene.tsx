@@ -628,17 +628,35 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     const benchtopCabinet = cabinets.find(c => c.cabinetId === cabinetId)
     if (!benchtopCabinet || benchtopCabinet.cabinetType !== 'benchtop') return
 
-    // Only for independent benchtops (no parent)
-    if (benchtopCabinet.benchtopParentCabinetId) return
-
     // Clamp value between 0 and 1200
     const clampedValue = Math.max(0, Math.min(1200, value))
 
-    // Update the height from floor value on CabinetData
-    benchtopCabinet.benchtopHeightFromFloor = clampedValue
+    if (benchtopCabinet.benchtopParentCabinetId) {
+      const parentCabinet = cabinets.find(
+        (c) => c.cabinetId === benchtopCabinet.benchtopParentCabinetId
+      )
+      if (!parentCabinet) return
 
-    // Update the Y position of the benchtop group
-    benchtopCabinet.group.position.setY(clampedValue)
+      const baseY =
+        parentCabinet.group.position.y +
+        parentCabinet.carcass.dimensions.height
+      const heightDelta = clampedValue - baseY
+
+      benchtopCabinet.manuallyEditedDelta = {
+        ...benchtopCabinet.manuallyEditedDelta,
+        height: heightDelta,
+      }
+
+      updateBenchtopPosition(parentCabinet, cabinets, {
+        positionChanged: true,
+      })
+    } else {
+      // Update the height from floor value on CabinetData
+      benchtopCabinet.benchtopHeightFromFloor = clampedValue
+
+      // Update the Y position of the benchtop group
+      benchtopCabinet.group.position.setY(clampedValue)
+    }
 
     // Trigger re-render to update UI snapshots
     setSelectedCabinets(prev => prev.map(cab => ({ ...cab })))

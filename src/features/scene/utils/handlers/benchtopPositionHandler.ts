@@ -64,6 +64,8 @@ export const updateBenchtopPosition = (
   const leftOverhang = benchtopCabinet.benchtopLeftOverhang ?? 0
   const rightOverhang = benchtopCabinet.benchtopRightOverhang ?? 0
   const benchtopDepth = calculateBenchtopDepth(parentDepth, frontOverhang)
+  const widthDelta = benchtopCabinet.manuallyEditedDelta?.width ?? 0
+  const depthDelta = benchtopCabinet.manuallyEditedDelta?.depth ?? 0
 
   // Update benchtop dimensions if needed
   if (changes.dimensionsChanged || changes.childChanged) {
@@ -74,9 +76,9 @@ export const updateBenchtopPosition = (
 
     // Use CarcassAssembly.updateDimensions() - this calls BenchtopBuilder.updateDimensions()
     carcass.updateDimensions({
-      width: effectiveLength,
+      width: effectiveLength + widthDelta,
       height: benchtopThickness,
-      depth: benchtopDepth,
+      depth: benchtopDepth + depthDelta,
     })
   }
 

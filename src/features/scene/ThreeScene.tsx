@@ -43,7 +43,7 @@ import {
 } from './utils/handlers/applianceGapHandler'
 import { handleApplianceHorizontalGapChange } from './utils/handlers/applianceDimensionHandler'
 import { handleDeleteCabinet } from './utils/handlers/deleteCabinetHandler'
-import { updateAllDependentComponents } from './utils/handlers/dependentComponentsHandler'
+import { updateAllDependentComponents, updateChildCabinets } from './utils/handlers/dependentComponentsHandler'
 import { handleFillerSelect as handleFillerSelectHandler, handleFillerToggle as handleFillerToggleHandler } from './utils/handlers/fillerHandler'
 import {
   handleKickerSelect as handleKickerSelectHandler,
@@ -61,6 +61,7 @@ import {
   handleBenchtopSelect as handleBenchtopSelectHandler,
   handleBenchtopToggle as handleBenchtopToggleHandler
 } from './utils/handlers/benchtopHandler'
+import { updateBenchtopPosition } from './utils/handlers/benchtopPositionHandler'
 import { collectCartItems } from './utils/cartUtils'
 import { addToCart } from '@/server/addToCart'
 import { useSaveUserRoom, useLoadUserRoom } from '@/hooks/useUserRoomsQuery'
@@ -642,6 +643,46 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     // Trigger re-render to update UI snapshots
     setSelectedCabinets(prev => prev.map(cab => ({ ...cab })))
   }, [cabinets, setSelectedCabinets])
+
+  const handleManualDimensionDeltaChange = useCallback((
+    cabinetId: string,
+    dimension: "width" | "height" | "depth",
+    delta: number
+  ) => {
+    const cabinet = cabinets.find((c) => c.cabinetId === cabinetId)
+    if (!cabinet) return
+
+    cabinet.manuallyEditedDelta = {
+      ...cabinet.manuallyEditedDelta,
+      [dimension]: delta,
+    }
+
+    if (cabinet.cabinetType === "benchtop" && cabinet.benchtopParentCabinetId) {
+      const parentCabinet = cabinets.find(
+        (c) => c.cabinetId === cabinet.benchtopParentCabinetId
+      )
+      if (parentCabinet) {
+        updateBenchtopPosition(parentCabinet, cabinets, {
+          dimensionsChanged: true,
+        })
+      }
+    }
+
+    if (cabinet.cabinetType === "panel" && cabinet.parentCabinetId) {
+      const parentCabinet = cabinets.find(
+        (c) => c.cabinetId === cabinet.parentCabinetId
+      )
+      if (parentCabinet) {
+        updateChildCabinets(parentCabinet, cabinets, {
+          heightChanged: dimension === "height",
+          depthChanged: dimension === "depth",
+        })
+      }
+    }
+
+    partData.updateCabinet(cabinet)
+    setSelectedCabinets(prev => prev.map(cab => ({ ...cab })))
+  }, [cabinets, partData, setSelectedCabinets])
 
   // Handle bulkhead selection from modal - creates bulkhead with proper product association
   const handleBulkheadSelect = useCallback((cabinetId: string, productId: string) => {
@@ -1414,7 +1455,8 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
             benchtopLeftOverhang: selectedCabinet.benchtopLeftOverhang,
             benchtopRightOverhang: selectedCabinet.benchtopRightOverhang,
             benchtopThickness: selectedCabinet.benchtopThickness,
-            benchtopHeightFromFloor: selectedCabinet.benchtopHeightFromFloor
+            benchtopHeightFromFloor: selectedCabinet.benchtopHeightFromFloor,
+            manuallyEditedDelta: selectedCabinet.manuallyEditedDelta
           } : null}
           viewManager={viewManager}
           allCabinets={cabinets}
@@ -1427,6 +1469,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
           onBenchtopOverhangChange={handleBenchtopOverhangChange}
           onBenchtopThicknessChange={handleBenchtopThicknessChange}
           onBenchtopHeightFromFloorChange={handleBenchtopHeightFromFloorChange}
+          onManualDimensionDeltaChange={handleManualDimensionDeltaChange}
 
           onShelfCountChange={(newCount: number) => {
             if (selectedCabinet) {

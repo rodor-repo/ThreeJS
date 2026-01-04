@@ -3,7 +3,19 @@ import { RotateCcw } from 'lucide-react'
 import type { GDMapping } from '../hooks/useGDMapping'
 import { getDimensionBadges, getDrawerHeightIndex } from '../hooks/useGDMapping'
 import DimensionInput from './DimensionInput'
-import type { DimEntry } from '../utils/dimensionUtils'
+import {
+  getDimensionTypeForEditing,
+  type DimEntry,
+  type PrimaryDimensionType,
+} from '../utils/dimensionUtils'
+
+type DeltaDimension = Exclude<PrimaryDimensionType, null>
+
+export type ChildDeltaConfig = {
+  type: 'benchtop' | 'panel' | string
+  deltaDimensions: ReadonlyArray<DeltaDimension>
+  badgeLabel?: string
+}
 
 export interface DimensionsSectionProps {
   /** Sorted list of dimension entries */
@@ -18,8 +30,8 @@ export interface DimensionsSectionProps {
   drawerQty: number
   /** Whether this is a modal filler/panel (height/depth disabled) */
   isModalFillerOrPanel: boolean
-  /** Whether this is a child benchtop (width/depth disabled, only thickness editable) */
-  isChildBenchtop?: boolean
+  /** Delta editing config for child cabinets (benchtops, panels) */
+  childDeltaConfig?: ChildDeltaConfig
   /** Value change callback */
   onValueChange: (id: string, value: number | string) => void
   /** Editing value change callback */
@@ -44,7 +56,7 @@ export const DimensionsSection: React.FC<DimensionsSectionProps> = ({
   gdMapping,
   drawerQty,
   isModalFillerOrPanel,
-  isChildBenchtop = false,
+  childDeltaConfig,
   onValueChange,
   onEditingChange,
   onReset,
@@ -70,39 +82,21 @@ export const DimensionsSection: React.FC<DimensionsSectionProps> = ({
             gdMapping.depthGDIds.includes(dimObj.GDId)
           )
 
-          // Check if width/depth should be disabled for child benchtop
-          // Child benchtops can only edit thickness (height in carcass terms)
-          // Check by GDId first, then fallback to dimension name
-          const dimName = (dimObj.dim || '').toLowerCase()
-          const isWidthByGD = dimObj.GDId && gdMapping.widthGDIds.includes(dimObj.GDId)
-          const isHeightByGD = dimObj.GDId && gdMapping.heightGDIds.includes(dimObj.GDId)
-          const isDepthByGD = dimObj.GDId && gdMapping.depthGDIds.includes(dimObj.GDId)
+          const dimensionType = getDimensionTypeForEditing(dimObj, gdMapping)
+          const isDeltaDimension =
+            !!dimensionType &&
+            !!childDeltaConfig?.deltaDimensions?.includes(dimensionType)
 
-          const isWidthByName = dimName.includes('length') || dimName.includes('width')
-          const isHeightByName = dimName.includes('thickness') || dimName.includes('height')
-          const isDepthByName = dimName.includes('depth')
-
-          let isWidthOrLengthDim = false
-          let isDepthDim = false
-
-          if (isWidthByGD) {
-            isWidthOrLengthDim = true
-          } else if (isHeightByGD) {
-            // height is thickness for benchtops, not disabled
-          } else if (isDepthByGD) {
-            isDepthDim = true
-          } else if (isWidthByName) {
-            isWidthOrLengthDim = true
-          } else if (isDepthByName) {
-            isDepthDim = true
-          }
-          
-          const isDisabledForChildBenchtop = isChildBenchtop && (isWidthOrLengthDim || isDepthDim)
-
-          const isDisabled = isDependentDrawer || !!isDisabledForFillerPanel || !!isDisabledForChildBenchtop
+          const isDisabled =
+            isDependentDrawer || (!!isDisabledForFillerPanel && !isDeltaDimension)
 
           // Get badges for this dimension
           const badges = getDimensionBadges(dimObj.GDId, gdMapping)
+          const deltaBadge = childDeltaConfig?.badgeLabel ?? 'Base + Delta'
+          const displayBadges =
+            isDeltaDimension && !badges.includes(deltaBadge)
+              ? [...badges, deltaBadge]
+              : badges
 
           return (
             <DimensionInput
@@ -112,7 +106,7 @@ export const DimensionsSection: React.FC<DimensionsSectionProps> = ({
               value={values[id]}
               editingValue={editingValues[id]}
               disabled={isDisabled}
-              badges={badges}
+              badges={displayBadges}
               onValueChange={onValueChange}
               onEditingChange={onEditingChange}
               onReset={onReset}

@@ -47,6 +47,8 @@ export const updateChildCabinets = (
 
   childCabinets.forEach((childCabinet) => {
     const side = childCabinet.parentSide
+    const heightDelta = childCabinet.manuallyEditedDelta?.height ?? 0
+    const depthDelta = childCabinet.manuallyEditedDelta?.depth ?? 0
 
     // Check if parent is overhead cabinet with overhang doors
     const isOverheadWithOverhang =
@@ -69,7 +71,7 @@ export const updateChildCabinets = (
       // parentTop = parentY + parentHeight
       // childHeight = parentTop - childY
       const parentTop = parentY + parentHeight
-      const newHeight = parentTop - newY
+      const newHeight = parentTop - newY + heightDelta
 
       childCabinet.carcass.updateDimensions({
         width: childCabinet.carcass.dimensions.width,
@@ -121,7 +123,7 @@ export const updateChildCabinets = (
         childCabinet.carcass.updateDimensions({
           width: childCabinet.carcass.dimensions.width,
           height: childCabinet.carcass.dimensions.height,
-          depth: parentDepth, // Match parent depth
+          depth: parentDepth + depthDelta, // Match parent depth + delta
         })
       }
     }
@@ -180,7 +182,7 @@ export const updateChildCabinets = (
     // 6. Overhang change: Update child height and position for overhead cabinets
     if (changes.overhangChanged && isOverheadWithOverhang) {
       // Add overhang extension to height, and position 20mm lower to align with door overhang
-      const newHeight = parentHeight + overhangAmount
+      const newHeight = parentHeight + overhangAmount + heightDelta
       const newY = parentY - overhangAmount // Position 20mm lower (negative Y) to align with door overhang
 
       // Update offset to match new position
@@ -200,7 +202,7 @@ export const updateChildCabinets = (
       )
     } else if (changes.overhangChanged && !isOverheadWithOverhang) {
       // Overhang was disabled, remove the extension (restore to parent height and position)
-      const newHeight = parentHeight
+      const newHeight = parentHeight + heightDelta
       const newY = parentY // Align bottom with parent bottom
 
       // Reset offset

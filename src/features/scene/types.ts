@@ -83,4 +83,10 @@ export type CabinetData = {
   benchtopHeightFromFloor?: number  // Default 740mm, min 0, max 1200mm
   /** Vertical offset from parent cabinet Y position - used for fillers/panels */
   parentYOffset?: number
+  /** Manual dimension adjustments for child cabinets (benchtops, panels) */
+  manuallyEditedDelta?: {
+    width?: number   // For benchtop length, panel width
+    height?: number  // For panel height
+    depth?: number   // For benchtop depth, panel depth
+  }
 }

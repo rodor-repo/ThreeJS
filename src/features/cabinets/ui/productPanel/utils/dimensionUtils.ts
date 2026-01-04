@@ -16,6 +16,11 @@ export const toNum = (v: number | string | undefined): number =>
 export type DimEntry = [string, WsProduct["dims"][string]]
 
 /**
+ * Primary dimension type derived from GD or name
+ */
+export type PrimaryDimensionType = "width" | "height" | "depth" | null
+
+/**
  * Build a sorted list of dimension entries from WsProduct.dims
  */
 export function buildDimsList(dims: WsProduct["dims"] | undefined): DimEntry[] {
@@ -46,6 +51,34 @@ export function getDefaultDimValue(
     return clampValue(defVal, dimObj.min, dimObj.max)
   }
   return String(dimObj.defaultValue ?? dimObj.options?.[0] ?? "")
+}
+
+/**
+ * Determine the primary dimension type for a dimension entry
+ */
+export function getDimensionTypeForEditing(
+  dimObj: WsProduct["dims"][string],
+  gdMapping: GDMapping
+): PrimaryDimensionType {
+  const gdId = dimObj.GDId
+  const dimName = (dimObj.dim || "").toLowerCase()
+
+  const isWidthByGD = !!(gdId && gdMapping.widthGDIds.includes(gdId))
+  const isHeightByGD = !!(gdId && gdMapping.heightGDIds.includes(gdId))
+  const isDepthByGD = !!(gdId && gdMapping.depthGDIds.includes(gdId))
+
+  const isWidthByName = dimName.includes("length") || dimName.includes("width")
+  const isHeightByName =
+    dimName.includes("thickness") || dimName.includes("height")
+  const isDepthByName = dimName.includes("depth")
+
+  if (isWidthByGD) return "width"
+  if (isHeightByGD) return "height"
+  if (isDepthByGD) return "depth"
+  if (isWidthByName) return "width"
+  if (isHeightByName) return "height"
+  if (isDepthByName) return "depth"
+  return null
 }
 
 /**

@@ -1,4 +1,3 @@
-import * as THREE from "three"
 import _ from "lodash"
 import {
   CarcassAssembly,
@@ -67,6 +66,12 @@ const APPLIANCE_DEFAULTS = {
     kickerHeight: 100,
   },
 }
+
+// UI-level min/max limits for configurable appliance gaps
+export const APPLIANCE_GAP_LIMITS = {
+  top: { min: 0, max: 100 },
+  side: { min: 10, max: 100 },
+} as const
 
 const getProductDefaultDimensions = (productId: string | undefined) => {
   if (!productId) return {}

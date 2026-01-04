@@ -1,16 +1,16 @@
 'use client'
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
-import { motion } from 'framer-motion'
 import { X, Maximize, Move, Eye, Settings } from 'lucide-react'
 import type { CabinetData, WallDimensions } from '@/features/scene/types'
 import { View, ViewId } from '@/features/cabinets/ViewManager'
 import { repositionViewCabinets, checkLeftWallOverflow } from '@/features/scene/utils/handlers/viewRepositionHandler'
 import { applyWidthChangeWithLock } from '@/features/scene/utils/handlers/lockBehaviorHandler'
 import { updateAllDependentComponents } from '@/features/scene/utils/handlers/dependentComponentsHandler'
+import { applyApplianceGapChange } from '@/features/scene/utils/handlers/applianceGapHandler'
+import { APPLIANCE_GAP_LIMITS } from '@/features/cabinets/factory/cabinetFactory'
 import { toastThrottled } from './ProductPanel'
 import { CollapsibleSection } from './productPanel/components/CollapsibleSection'
-import { useCollapsibleSections } from './productPanel/hooks/useCollapsibleSections'
 import { ViewSelector } from './ViewSelector'
 
 // Appliance type labels and icons
@@ -320,112 +320,25 @@ export const AppliancePanel: React.FC<AppliancePanelProps> = ({
   const handleGapChange = useCallback((gap: 'top' | 'left' | 'right', value: number) => {
     if (!selectedCabinet?.carcass) return
 
-    // Store old shell dimensions and position for view repositioning
-    const oldShellWidth = selectedCabinet.carcass.dimensions.width
-    const oldX = selectedCabinet.group.position.x
-
-    // Calculate new gaps
-    const newTopGap = gap === 'top' ? value : topGap
-    const newLeftGap = gap === 'left' ? value : leftGap
-    const newRightGap = gap === 'right' ? value : rightGap
-
-    // Calculate new shell dimensions (visual dimensions stay the same, includes kicker!)
-    const newShellWidth = visualWidth + newLeftGap + newRightGap
-    const newShellHeight = visualHeight + newTopGap + kickerHeight
-    const newShellDepth = visualDepth
-
-    const newShellDims = {
-      width: newShellWidth,
-      height: newShellHeight,
-      depth: newShellDepth,
-    }
-
-    // Apply lock behavior if shell width changed
-    const widthDelta = newShellWidth - oldShellWidth
-    if (Math.abs(widthDelta) > 0.1) {
-      if (selectedCabinet.viewId && selectedCabinet.viewId !== 'none') {
-        const leftLock = selectedCabinet.leftLock ?? false
-        const rightLock = selectedCabinet.rightLock ?? false
-
-        // Check for left wall overflow
-        if (widthDelta > 0) {
-          const pushAmount = rightLock ? widthDelta : (!leftLock && !rightLock) ? widthDelta / 2 : 0
-
-          if (pushAmount > 0) {
-            // Check if THIS cabinet hits the wall
-            if (oldX - pushAmount < -0.1) {
-              toastThrottled('Cannot expand: cabinet would hit the left wall')
-              return
-            }
-
-            const rightEdge = oldX + oldShellWidth
-            const overflow = checkLeftWallOverflow(
-              pushAmount,
-              selectedCabinet.cabinetId,
-              rightEdge,
-              selectedCabinet.viewId as ViewId,
-              cabinets,
-              cabinetGroups,
-              viewManager as ViewManagerResult
-            )
-
-            if (overflow !== null) {
-              toastThrottled(
-                `Cannot expand gaps: a cabinet would be pushed ${overflow.toFixed(
-                  0
-                )}mm past the left wall. Please reduce the gaps or move cabinets first.`
-              )
-              return
-            }
-          }
-        }
-      }
-
-      const lockResult = applyWidthChangeWithLock(
-        selectedCabinet,
-        newShellWidth,
-        oldShellWidth,
-        oldX
-      )
-
-      if (!lockResult) {
-        toastThrottled('Cannot resize gaps when both left and right edges are locked')
-        return
-      }
-
-      const { newX } = lockResult
-      selectedCabinet.group.position.x = newX
-    }
-
-    // Update config with new gap values
-    const newConfig = {
-      applianceTopGap: newTopGap,
-      applianceLeftGap: newLeftGap,
-      applianceRightGap: newRightGap,
-    }
-
-    // Update carcass dimensions first (the shell)
-    selectedCabinet.carcass.updateDimensions(newShellDims)
-
-    // Update config (this also rebuilds, but dimensions are already set)
-    selectedCabinet.carcass.updateConfig(newConfig)
-
-    // Update all dependent components (benchtop, kicker, etc.)
-    updateAllDependentComponents(selectedCabinet, cabinets, wallDimensions, {
-      widthChanged: true, // Gaps always affect shell width
-      heightChanged: gap === 'top',
+    const result = applyApplianceGapChange({
+      cabinet: selectedCabinet,
+      gaps: {
+        top: gap === 'top' ? value : undefined,
+        left: gap === 'left' ? value : undefined,
+        right: gap === 'right' ? value : undefined,
+      },
+      cabinets,
+      cabinetGroups,
+      viewManager: viewManager as ViewManagerResult,
+      wallDimensions,
     })
 
-    // Update local gap state
-    if (gap === 'top') setTopGap(value)
-    if (gap === 'left') setLeftGap(value)
-    if (gap === 'right') setRightGap(value)
+    if (!result.applied) return
 
-    // Trigger view repositioning if shell width changed
-    if (Math.abs(widthDelta) > 0.1) {
-      triggerViewReposition(widthDelta, oldX, oldShellWidth)
-    }
-  }, [selectedCabinet, visualWidth, visualHeight, visualDepth, topGap, leftGap, rightGap, triggerViewReposition, cabinets, cabinetGroups, viewManager])
+    setTopGap(result.newGaps.top)
+    setLeftGap(result.newGaps.left)
+    setRightGap(result.newGaps.right)
+  }, [selectedCabinet, cabinets, cabinetGroups, viewManager, wallDimensions])
 
   // Update kicker height - this also changes shell height
   const handleKickerChange = useCallback((value: number) => {
@@ -579,24 +492,24 @@ export const AppliancePanel: React.FC<AppliancePanelProps> = ({
               <SliderInput
                 label="Top Gap"
                 value={topGap}
-                min={0}
-                max={100}
+                min={APPLIANCE_GAP_LIMITS.top.min}
+                max={APPLIANCE_GAP_LIMITS.top.max}
                 step={1}
                 onChange={(v) => handleGapChange('top', v)}
               />
               <SliderInput
                 label="Left Gap"
                 value={leftGap}
-                min={10}
-                max={100}
+                min={APPLIANCE_GAP_LIMITS.side.min}
+                max={APPLIANCE_GAP_LIMITS.side.max}
                 step={1}
                 onChange={(v) => handleGapChange('left', v)}
               />
               <SliderInput
                 label="Right Gap"
                 value={rightGap}
-                min={10}
-                max={100}
+                min={APPLIANCE_GAP_LIMITS.side.min}
+                max={APPLIANCE_GAP_LIMITS.side.max}
                 step={1}
                 onChange={(v) => handleGapChange('right', v)}
               />
@@ -643,8 +556,8 @@ export const AppliancePanel: React.FC<AppliancePanelProps> = ({
                     <button
                       onClick={() => handleFridgeConfigChange('doorCount', 1)}
                       className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${selectedCabinet.carcass.config.fridgeDoorCount === 1
-                          ? 'bg-white text-blue-600 shadow-sm'
-                          : 'text-gray-500 hover:text-gray-700'
+                        ? 'bg-white text-blue-600 shadow-sm'
+                        : 'text-gray-500 hover:text-gray-700'
                         }`}
                     >
                       1 Door
@@ -652,8 +565,8 @@ export const AppliancePanel: React.FC<AppliancePanelProps> = ({
                     <button
                       onClick={() => handleFridgeConfigChange('doorCount', 2)}
                       className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${(selectedCabinet.carcass.config.fridgeDoorCount !== 1) // Default 2
-                          ? 'bg-white text-blue-600 shadow-sm'
-                          : 'text-gray-500 hover:text-gray-700'
+                        ? 'bg-white text-blue-600 shadow-sm'
+                        : 'text-gray-500 hover:text-gray-700'
                         }`}
                     >
                       2 Doors
@@ -668,8 +581,8 @@ export const AppliancePanel: React.FC<AppliancePanelProps> = ({
                       <button
                         onClick={() => handleFridgeConfigChange('doorSide', 'left')}
                         className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${(selectedCabinet.carcass.config.fridgeDoorSide !== 'right') // Default left
-                            ? 'bg-white text-blue-600 shadow-sm'
-                            : 'text-gray-500 hover:text-gray-700'
+                          ? 'bg-white text-blue-600 shadow-sm'
+                          : 'text-gray-500 hover:text-gray-700'
                           }`}
                       >
                         Left
@@ -677,8 +590,8 @@ export const AppliancePanel: React.FC<AppliancePanelProps> = ({
                       <button
                         onClick={() => handleFridgeConfigChange('doorSide', 'right')}
                         className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${selectedCabinet.carcass.config.fridgeDoorSide === 'right'
-                            ? 'bg-white text-blue-600 shadow-sm'
-                            : 'text-gray-500 hover:text-gray-700'
+                          ? 'bg-white text-blue-600 shadow-sm'
+                          : 'text-gray-500 hover:text-gray-700'
                           }`}
                       >
                         Right

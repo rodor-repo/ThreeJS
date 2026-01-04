@@ -37,6 +37,11 @@ import { handleViewDimensionChange } from './utils/handlers/viewDimensionHandler
 import { handleSplashbackHeightChange } from './utils/handlers/splashbackHandler'
 import { handleKickerHeightChange } from './utils/handlers/kickerHeightHandler'
 import { handleProductDimensionChange, getWidthConstraints } from './utils/handlers/productDimensionHandler'
+import {
+  applyApplianceGapChange,
+  getApplianceGapValues,
+  getApplianceWidthConstraints,
+} from './utils/handlers/applianceGapHandler'
 import { handleDeleteCabinet } from './utils/handlers/deleteCabinetHandler'
 import { updateAllDependentComponents } from './utils/handlers/dependentComponentsHandler'
 import { handleFillerSelect as handleFillerSelectHandler, handleFillerToggle as handleFillerToggleHandler } from './utils/handlers/fillerHandler'
@@ -74,6 +79,8 @@ import { UserRoomsModal } from './ui/UserRoomsModal'
 import { SaveRoomModal } from './ui/SaveRoomModal'
 import { serializeRoom } from './utils/roomPersistenceUtils'
 import type { UserSavedRoom, RoomCategory, SavedRoom } from '@/types/roomTypes'
+import { clamp } from '@/features/carcass/utils/carcass-math-utils'
+import { APPLIANCE_GAP_LIMITS } from '@/features/cabinets/factory/cabinetFactory'
 
 interface ThreeSceneProps {
   wallDimensions: WallDims
@@ -763,7 +770,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
 
         setShowAddToCartModal(false)
         setCartItemsToAdd(null)
-        
+
         if (response.itemErrors && response.itemErrors.length > 0) {
           toast.success(
             `Added ${response.itemsAdded} item(s) to cart! (${response.itemErrors.length} had errors)`,
@@ -952,22 +959,47 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     const cabinet = cabinets.find(c => c.cabinetId === cabinetId)
     if (!cabinet) return
 
-    handleProductDimensionChange(
-      {
-        width: newWidth,
-        height: cabinet.carcass.dimensions.height,
-        depth: cabinet.carcass.dimensions.depth
-      },
-      {
-        selectedCabinet: cabinet,
+    if (cabinet.cabinetType === 'appliance') {
+      const { leftGap, rightGap } = getApplianceGapValues(cabinet)
+      const widthDelta = newWidth - cabinet.carcass.dimensions.width
+      const gapDelta = widthDelta / 2
+      const newLeftGap = clamp(
+        leftGap + gapDelta,
+        APPLIANCE_GAP_LIMITS.side.min,
+        APPLIANCE_GAP_LIMITS.side.max
+      )
+      const newRightGap = clamp(
+        rightGap + gapDelta,
+        APPLIANCE_GAP_LIMITS.side.min,
+        APPLIANCE_GAP_LIMITS.side.max
+      )
+
+      applyApplianceGapChange({
+        cabinet,
+        gaps: { left: newLeftGap, right: newRightGap },
         cabinets,
-        cabinetSyncs,
-        selectedCabinets,
         cabinetGroups,
         viewManager,
-        wallDimensions
-      }
-    )
+        wallDimensions,
+      })
+    } else {
+      handleProductDimensionChange(
+        {
+          width: newWidth,
+          height: cabinet.carcass.dimensions.height,
+          depth: cabinet.carcass.dimensions.depth
+        },
+        {
+          selectedCabinet: cabinet,
+          cabinets,
+          cabinetSyncs,
+          selectedCabinets,
+          cabinetGroups,
+          viewManager,
+          wallDimensions
+        }
+      )
+    }
 
     // Update part data for all affected cabinets
     partData.updateCabinet(cabinet)
@@ -1180,7 +1212,9 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
 
       {/* User Width Slider - appears on right-click (User mode only) */}
       {selectedMode === 'user' && cabinetWithLockIcons && (() => {
-        const constraints = getWidthConstraints(cabinetWithLockIcons.productId)
+        const constraints = cabinetWithLockIcons.cabinetType === 'appliance'
+          ? getApplianceWidthConstraints(cabinetWithLockIcons)
+          : getWidthConstraints(cabinetWithLockIcons.productId)
         return (
           <UserWidthSlider
             cabinet={cabinetWithLockIcons}
@@ -1657,7 +1691,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         cabinetErrors={cabinetErrors}
       />
 
-      {selectedMode === 'admin' &&<HistoryControls
+      {selectedMode === 'admin' && <HistoryControls
         past={past}
         future={future}
         undo={undo}

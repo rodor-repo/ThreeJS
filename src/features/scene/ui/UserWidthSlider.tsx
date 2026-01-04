@@ -28,6 +28,11 @@ export const UserWidthSlider: React.FC<UserWidthSliderProps> = ({
     setWidth(newWidth)
     // Call immediately without debounce for smooth visual feedback (matches ProductPanel behavior)
     onWidthChange(cabinet.cabinetId, newWidth)
+    // The appliance width has its own logic, so we need to respect it
+    const appliedWidth = cabinet.carcass.dimensions.width
+    if (Math.abs(appliedWidth - newWidth) > 0.1) {
+      setWidth(appliedWidth)
+    }
   }
 
   return (

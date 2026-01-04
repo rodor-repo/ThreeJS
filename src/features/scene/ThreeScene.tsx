@@ -1164,14 +1164,13 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         hasProjectId={!!currentUserRoom?.projectId}
       />
 
-      {selectedMode === 'admin' && (
-        <BottomRightActions
-          cabinetsCount={cabinets.length}
-          onExport={handleExport}
-          onNesting={handleNesting}
-          onSettings={handleSettingsClick}
-        />
-      )}
+      <BottomRightActions
+        cabinetsCount={cabinets.length}
+        onExport={handleExport}
+        onNesting={handleNesting}
+        onSettings={handleSettingsClick}
+        mode={selectedMode}
+      />
 
       {/* Settings Sidebar */}
       <SettingsSidebar

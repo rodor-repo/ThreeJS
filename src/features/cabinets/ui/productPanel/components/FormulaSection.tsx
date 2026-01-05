@@ -5,6 +5,13 @@ import { parse } from "mathjs"
 import type { FormulaPiece } from "@/types/formulaTypes"
 import { FormulaSearchDropdown } from "./FormulaSearchDropdown"
 import { FormulaPieceExplorer } from "./FormulaPieceExplorer"
+import {
+  buildFormulaSegments,
+  isInteractiveSegment,
+  removeFormulaRange,
+  replaceFormulaRange,
+} from "./formulaExpressionUtils"
+import { FormulaVisualExpression } from "./FormulaVisualExpression"
 
 type DimensionOption = {
   id: string
@@ -158,6 +165,7 @@ const FormulaEditorModal: React.FC<FormulaEditorModalProps> = ({
 }) => {
   const [pieceQuery, setPieceQuery] = useState("")
   const [isSearchFocused, setIsSearchFocused] = useState(false)
+  const [selectedSegmentIndex, setSelectedSegmentIndex] = useState<number | null>(null)
   const editorRef = useRef<HTMLTextAreaElement | null>(null)
 
   useEffect(() => {
@@ -168,11 +176,32 @@ const FormulaEditorModal: React.FC<FormulaEditorModalProps> = ({
 
   const statusStyle = target ? STATUS_STYLES[draftStatus] : STATUS_STYLES.empty
   const targetFormula = target?.formula ?? ""
+  const formulaSegments = useMemo(
+    () => buildFormulaSegments(draftValue, pieces),
+    [draftValue, pieces]
+  )
+  const lastInteractiveIndex = useMemo(() => {
+    for (let i = formulaSegments.length - 1; i >= 0; i -= 1) {
+      if (isInteractiveSegment(formulaSegments[i])) {
+        return i
+      }
+    }
+    return null
+  }, [formulaSegments])
 
-  const insertToken = (token: string) => {
+  useEffect(() => {
+    if (selectedSegmentIndex === null) return
+    const segment = formulaSegments[selectedSegmentIndex]
+    if (!segment || !isInteractiveSegment(segment)) {
+      setSelectedSegmentIndex(null)
+    }
+  }, [formulaSegments, selectedSegmentIndex])
+
+  const insertTokenAtCursor = (token: string) => {
     const textarea = editorRef.current
     if (!textarea) {
       onDraftChange(draftValue ? `${draftValue}${token}` : token)
+      setSelectedSegmentIndex(null)
       return
     }
     const start = textarea.selectionStart ?? draftValue.length
@@ -184,6 +213,22 @@ const FormulaEditorModal: React.FC<FormulaEditorModalProps> = ({
       const cursor = start + token.length
       textarea.setSelectionRange(cursor, cursor)
     })
+    setSelectedSegmentIndex(null)
+  }
+
+  const replaceSelectedToken = (token: string) => {
+    if (selectedSegmentIndex === null) return false
+    const segment = formulaSegments[selectedSegmentIndex]
+    if (!segment || !isInteractiveSegment(segment)) return false
+    const nextValue = replaceFormulaRange(draftValue, segment.start, segment.end, token)
+    onDraftChange(nextValue)
+    setSelectedSegmentIndex(null)
+    return true
+  }
+
+  const handleTokenInsert = (token: string) => {
+    if (replaceSelectedToken(token)) return
+    insertTokenAtCursor(token)
   }
 
   return (
@@ -259,7 +304,10 @@ const FormulaEditorModal: React.FC<FormulaEditorModalProps> = ({
                         query={pieceQuery}
                         pieces={pieces}
                         isOpen={isSearchFocused}
-                        onSelect={(piece) => insertToken(piece.token)}
+                        onSelect={(piece) => {
+                          handleTokenInsert(piece.token)
+                          setPieceQuery("")
+                        }}
                       />
                     </div>
                   </div>
@@ -270,7 +318,7 @@ const FormulaEditorModal: React.FC<FormulaEditorModalProps> = ({
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {OPERATOR_TOKENS.map((item) => (
-                        <TokenButton key={item.label} item={item} onInsert={insertToken} />
+                        <TokenButton key={item.label} item={item} onInsert={handleTokenInsert} />
                       ))}
                     </div>
                   </div>
@@ -281,7 +329,7 @@ const FormulaEditorModal: React.FC<FormulaEditorModalProps> = ({
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {COMPARISON_TOKENS.map((item) => (
-                        <TokenButton key={item.label} item={item} onInsert={insertToken} />
+                        <TokenButton key={item.label} item={item} onInsert={handleTokenInsert} />
                       ))}
                     </div>
                   </div>
@@ -292,19 +340,22 @@ const FormulaEditorModal: React.FC<FormulaEditorModalProps> = ({
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {FUNCTION_TOKENS.map((item) => (
-                        <TokenButton key={item.label} item={item} onInsert={insertToken} />
+                        <TokenButton key={item.label} item={item} onInsert={handleTokenInsert} />
                       ))}
                     </div>
                   </div>
 
                   <div className="flex-1 min-h-[180px]">
-                    <div className="text-[11px] font-bold uppercase tracking-widest text-gray-500 mb-2">
-                      Puzzle pieces
+                    <div className="text-[11px] font-bold uppercase tracking-widest text-gray-500">
+                      Puzzle piece builder
+                    </div>
+                    <div className="text-[10px] text-gray-400 mb-2">
+                      Choose a cabinet, pick a type, then insert a piece.
                     </div>
                     <FormulaPieceExplorer
                       pieces={pieces}
                       defaultCabinetId={activeCabinetId}
-                      onInsert={insertToken}
+                      onInsert={handleTokenInsert}
                     />
                   </div>
                 </div>
@@ -324,6 +375,72 @@ const FormulaEditorModal: React.FC<FormulaEditorModalProps> = ({
                   </div>
 
                   <div className="space-y-2">
+                    <div className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="text-[11px] font-bold uppercase tracking-widest text-gray-500">
+                          Visual formula
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {selectedSegmentIndex !== null && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const segment = formulaSegments[selectedSegmentIndex]
+                                  if (!segment || !isInteractiveSegment(segment)) {
+                                    setSelectedSegmentIndex(null)
+                                    return
+                                  }
+                                  const nextValue = removeFormulaRange(
+                                    draftValue,
+                                    segment.start,
+                                    segment.end
+                                  )
+                                  onDraftChange(nextValue)
+                                  setSelectedSegmentIndex(null)
+                                }}
+                                className="text-[11px] font-semibold text-red-600 hover:text-red-700"
+                              >
+                                Remove
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setSelectedSegmentIndex(null)}
+                                className="text-[11px] font-semibold text-gray-500 hover:text-gray-700"
+                              >
+                                Cancel
+                              </button>
+                            </>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (lastInteractiveIndex === null) return
+                              const segment = formulaSegments[lastInteractiveIndex]
+                              if (!segment || !isInteractiveSegment(segment)) return
+                              const nextValue = removeFormulaRange(
+                                draftValue,
+                                segment.start,
+                                segment.end
+                              )
+                              onDraftChange(nextValue)
+                              setSelectedSegmentIndex(null)
+                            }}
+                            className="text-[11px] font-semibold text-gray-600 hover:text-gray-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                            disabled={lastInteractiveIndex === null}
+                          >
+                            Backspace
+                          </button>
+                        </div>
+                      </div>
+                      <FormulaVisualExpression
+                        formula={draftValue}
+                        pieces={pieces}
+                        segments={formulaSegments}
+                        selectedIndex={selectedSegmentIndex}
+                        onSelect={setSelectedSegmentIndex}
+                      />
+                    </div>
                     <textarea
                       ref={editorRef}
                       value={draftValue}

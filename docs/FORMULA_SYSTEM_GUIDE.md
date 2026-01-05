@@ -95,6 +95,7 @@ Minimal UI is provided for now:
 - `FormulaSection` in
   `src/features/cabinets/ui/productPanel/components/FormulaSection.tsx`
   - lets admins pick a dimension, type a formula, and insert puzzle pieces
+  - puzzle pieces are inserted via a stepper: choose cabinet, pick a type, then select a piece
 
 Wired into:
 - ProductPanel: `src/features/cabinets/ui/productPanel/DynamicPanel.tsx`

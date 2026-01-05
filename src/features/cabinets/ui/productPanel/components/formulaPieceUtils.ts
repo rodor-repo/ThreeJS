@@ -55,9 +55,21 @@ export const buildCabinetBuckets = (
     buckets.set(key, existing)
   })
 
-  const sortedBuckets = Array.from(buckets.values()).sort((a, b) =>
-    a.label.localeCompare(b.label)
-  )
+  const sortedBuckets = Array.from(buckets.values()).sort((a, b) => {
+    const aMatch = a.label.match(/\d+/)
+    const bMatch = b.label.match(/\d+/)
+    const aHasNumber = Boolean(aMatch)
+    const bHasNumber = Boolean(bMatch)
+    if (aHasNumber && bHasNumber) {
+      const aNum = Number.parseInt(aMatch?.[0] || "0", 10)
+      const bNum = Number.parseInt(bMatch?.[0] || "0", 10)
+      if (aNum !== bNum) return aNum - bNum
+    }
+    if (aHasNumber !== bHasNumber) {
+      return aHasNumber ? -1 : 1
+    }
+    return a.label.localeCompare(b.label)
+  })
 
   sortedBuckets.forEach((bucket) => {
     bucket.categories.forEach((list, category) => {

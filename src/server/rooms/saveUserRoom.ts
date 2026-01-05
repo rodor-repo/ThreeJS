@@ -1,8 +1,6 @@
 "use server"
 
-import { cookies } from "next/headers"
-import { USER_SESSION_COOKIE_NAME } from "@/lib/auth/constants"
-import { verifyRoomSessionToken } from "@/lib/auth/session"
+import { requireUserSession } from "@/lib/auth/server"
 import { getAdminDb, getCompanyId } from "@/server/firebase"
 import type { UserSavedRoom } from "@/types/roomTypes"
 
@@ -37,19 +35,10 @@ export interface SaveUserRoomResult {
 export async function saveUserRoom(
   data: SaveUserRoomData
 ): Promise<SaveUserRoomResult> {
+  const session = await requireUserSession()
+
   if (!data.originalRoomId) {
     throw new Error("originalRoomId is required to save a user room")
-  }
-
-  const cookieStore = cookies()
-  const sessionToken = cookieStore.get(USER_SESSION_COOKIE_NAME)?.value
-  if (!sessionToken) {
-    throw new Error("AUTH_REQUIRED")
-  }
-
-  const session = await verifyRoomSessionToken(sessionToken)
-  if (!session) {
-    throw new Error("AUTH_REQUIRED")
   }
 
   const db = getAdminDb()

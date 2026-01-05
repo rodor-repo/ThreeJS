@@ -71,7 +71,7 @@ src/nesting/
 ├── nest-serializer.ts     # Cross-tab data serialization
 ├── nest-canvas.tsx        # Canvas visualization component
 ├── PartDataManager.ts     # Singleton part dimension database
-├── usePartData.ts         # React hook for PartDataManager
+├── usePartData.ts         # DEPRECATED - can be deleted
 └── ExportPartExcel.ts     # CSV/Excel export utility
 
 src/app/nesting/
@@ -422,21 +422,19 @@ interface PartData {
 }
 ```
 
-### usePartData Hook
+### On-Demand Part Calculation (Simplified Architecture)
 
-- **Location**: `src/nesting/usePartData.ts`
-- **Purpose**: React hook that automatically syncs PartDataManager with cabinets array.
+Previously, the system used a `usePartData` React hook to continuously sync part data with cabinets.
+**This has been simplified** - parts are now calculated fresh on-demand only when needed:
 
-```typescript
-const {
-  getAllParts,
-  getCabinetParts,
-  updateCabinet,
-  removeCabinet,
-  clear,
-  getStats,
-} = usePartData(cabinets, wsProducts)
-```
+1. **NestingModal opens** → calls `partDataManager.updateAllCabinets(cabinets)` to calculate materials list
+2. **Generate button clicked** → `serializeCabinetsForNesting()` calls `updateAllCabinets()` before serializing
+3. **Export button clicked** → `handleExport` calls `updateAllCabinets()` before exporting CSV
+
+This approach:
+- Removes unnecessary computation during cabinet editing
+- Simplifies the codebase by eliminating scattered update calls
+- Ensures fresh, accurate data at the moment it's needed
 
 ### nest-serializer
 
@@ -476,7 +474,16 @@ const {
 
 ```typescript
 import { exportPartsToCSV } from '@/nesting/ExportPartExcel'
-import { extractPartsFromScene } from '@/nesting/nest-mapper'
+import { getPartDataManager } from '@/nesting/PartDataManager'
+
+// Calculate parts fresh before export
+const partDataManager = getPartDataManager()
+partDataManager.setWsProducts(wsProducts)
+partDataManager.updateAllCabinets(cabinets)
+const parts = partDataManager.getAllParts()
+
+// Export to CSV
+exportPartsToCSV(parts, 'export.csv')
 
 const parts = extractPartsFromScene(cabinets)
 exportPartsToCSV(parts, `nesting-parts-export-${Date.now()}.csv`)

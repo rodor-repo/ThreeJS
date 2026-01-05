@@ -200,7 +200,6 @@ interface FillerToggleParams {
   ) => void
   deleteCabinet: (id: string) => void
   setCabinetToDelete: (cabinet: CabinetData | null) => void
-  removeCabinetParts?: (cabinetId: string) => void
 }
 
 /**
@@ -213,7 +212,7 @@ export const handleFillerToggle = (
   params: FillerToggleParams
 ) => {
   if (enabled) return
-  const { cabinets, wallDimensions, viewManager, setCabinetGroups, deleteCabinet, setCabinetToDelete, removeCabinetParts } = params
+  const { cabinets, wallDimensions, viewManager, setCabinetGroups, deleteCabinet, setCabinetToDelete } = params
 
   const childCabinet = cabinets.find(
     (c) =>
@@ -235,10 +234,6 @@ export const handleFillerToggle = (
     allCabinets: cabinets,
     wallDimensions,
   })
-
-  if (removeCabinetParts) {
-    removeCabinetParts(childCabinet.cabinetId)
-  }
 
   // Update all dependent components of the parent cabinet (benchtop, kicker, bulkhead, underPanel)
   // Use setTimeout to ensure the cabinet is removed from the array

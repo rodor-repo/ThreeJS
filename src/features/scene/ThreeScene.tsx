@@ -18,6 +18,7 @@ import { useThreeRenderer } from './hooks/useThreeRenderer'
 import { useScenePanels, DEFAULT_WALL_COLOR } from './hooks/useScenePanels'
 import { useWallsAutoAdjust } from './hooks/useWallsAutoAdjust'
 import { useProductDrivenCreation } from './hooks/useProductDrivenCreation'
+import { useFormulaEngine } from './hooks/useFormulaEngine'
 import type { Category, WallDimensions as WallDims, CabinetData } from './types'
 import { CameraControls } from './ui/CameraControls'
 import { SettingsSidebar } from './ui/SettingsSidebar'
@@ -180,6 +181,30 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
   // View manager for grouping cabinets
   const viewManager = useViewManager(cabinets)
 
+  const {
+    formulaPieces,
+    getFormula,
+    setFormula,
+    scheduleFormulaRecalc,
+    getFormulaLastEvaluatedAt,
+  } = useFormulaEngine({
+    cabinets,
+    selectedCabinets,
+    setSelectedCabinets,
+    cabinetGroups,
+    cabinetSyncs,
+    viewManager,
+    wallDimensions,
+    onFormulasApplied: () => {
+      debouncedIncrementDimensionVersion()
+    },
+  })
+
+  const handleApplianceDimensionsUpdated = useCallback(() => {
+    debouncedIncrementDimensionVersion()
+    scheduleFormulaRecalc()
+  }, [debouncedIncrementDimensionVersion, scheduleFormulaRecalc])
+
   // Price calculation for all cabinets
   // Proactively calculates prices without needing to open ProductPanel
   const {
@@ -293,6 +318,10 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     { isOrthoActiveRef, orthoCameraRef }, // orthoRefs
     selectedMode
   )
+
+  useEffect(() => {
+    scheduleFormulaRecalc()
+  }, [scheduleFormulaRecalc, dimensionVersion, dragEndVersion, cabinets.length])
 
   useWallTransparency({
     cameraViewMode,
@@ -1428,6 +1457,11 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
           cabinets={cabinets}
           cabinetGroups={cabinetGroups}
           cabinetSyncs={cabinetSyncs}
+          formulaPieces={formulaPieces}
+          getFormula={getFormula}
+          onFormulaChange={setFormula}
+          getFormulaLastEvaluatedAt={getFormulaLastEvaluatedAt}
+          onDimensionsUpdated={handleApplianceDimensionsUpdated}
           wallDimensions={wallDimensions}
         />
       )}
@@ -1471,6 +1505,10 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
           allCabinets={cabinets}
           initialGroupData={selectedCabinet ? (cabinetGroups.get(selectedCabinet.cabinetId) || []) : []}
           initialSyncData={selectedCabinet ? (cabinetSyncs.get(selectedCabinet.cabinetId) || []) : []}
+          formulaPieces={formulaPieces}
+          getFormula={getFormula}
+          onFormulaChange={setFormula}
+          getFormulaLastEvaluatedAt={getFormulaLastEvaluatedAt}
           onSyncChange={handlePanelSyncChange}
           onViewChange={handlePanelViewChange}
           onGroupChange={handlePanelGroupChange}

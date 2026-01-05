@@ -9,6 +9,7 @@ export type PersistedPanelState = {
   materialColor: string
   materialSelections?: MaterialSelections
   price?: { amount: number }
+  formulas?: Record<string, string>
 }
 
 /**

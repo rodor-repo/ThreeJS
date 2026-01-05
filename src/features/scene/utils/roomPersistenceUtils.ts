@@ -148,6 +148,20 @@ async function prefetchProductData(productIds: string[]): Promise<void> {
   }
 }
 
+const remapFormulaIds = (
+  formula: string,
+  idMap: Map<string, string>
+): string => {
+  return formula.replace(
+    /(cab|dim)\(\s*(['"])([^'"]+)\2/g,
+    (match, fnName, quote, id) => {
+      const mapped = idMap.get(id)
+      if (!mapped) return match
+      return `${fnName}(${quote}${mapped}${quote}`
+    }
+  )
+}
+
 export type CreateCabinetFn = (
   cabinetType: CabinetType,
   subcategoryId: string,
@@ -217,6 +231,7 @@ export function serializeRoom({
       materialSelections: persisted?.materialSelections,
       materialColor: persisted?.materialColor,
       dimensionValues: persisted?.values,
+      dimensionFormulas: persisted?.formulas,
       shelfCount: cabinet.carcass.config.shelfCount,
       doorEnabled: cabinet.carcass.config.doorEnabled,
       doorCount: cabinet.carcass.config.doorCount,
@@ -543,7 +558,8 @@ export async function restoreRoom({
         if (
           savedCabinet.materialSelections ||
           savedCabinet.materialColor ||
-          savedCabinet.dimensionValues
+          savedCabinet.dimensionValues ||
+          savedCabinet.dimensionFormulas
         ) {
           let nextValues = savedCabinet.dimensionValues || {}
           if (savedCabinet.productId) {
@@ -562,10 +578,22 @@ export async function restoreRoom({
             }
           }
 
+          const nextFormulas = savedCabinet.dimensionFormulas
+            ? Object.fromEntries(
+                Object.entries(savedCabinet.dimensionFormulas).map(
+                  ([dimId, formula]) => [
+                    dimId,
+                    remapFormulaIds(formula, oldIdToNewId),
+                  ]
+                )
+              )
+            : undefined
+
           cabinetPanelState.set(cabinetData.cabinetId, {
             values: nextValues,
             materialColor: savedCabinet.materialColor || "#ffffff",
             materialSelections: savedCabinet.materialSelections,
+            formulas: nextFormulas,
           })
         }
 

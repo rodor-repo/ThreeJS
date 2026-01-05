@@ -37,6 +37,10 @@ export const DynamicPanelWithQuery: React.FC<ProductPanelProps> = ({
   onBenchtopThicknessChange,
   onBenchtopHeightFromFloorChange,
   onManualDimensionDeltaChange,
+  formulaPieces,
+  getFormula,
+  onFormulaChange,
+  getFormulaLastEvaluatedAt,
 }) => {
   const productId = selectedCabinet?.productId
 
@@ -123,6 +127,10 @@ export const DynamicPanelWithQuery: React.FC<ProductPanelProps> = ({
       onBenchtopThicknessChange={onBenchtopThicknessChange}
       onBenchtopHeightFromFloorChange={onBenchtopHeightFromFloorChange}
       onManualDimensionDeltaChange={onManualDimensionDeltaChange}
+      formulaPieces={formulaPieces}
+      getFormula={getFormula}
+      onFormulaChange={onFormulaChange}
+      getFormulaLastEvaluatedAt={getFormulaLastEvaluatedAt}
       loading={isLoading}
       error={isError}
     />

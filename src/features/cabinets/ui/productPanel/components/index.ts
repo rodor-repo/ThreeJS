@@ -38,3 +38,5 @@ export type { CollapsibleSectionProps } from "./CollapsibleSection"
 export { GroupingSection } from "./GroupingSection"
 export type { GroupingSectionProps } from "./GroupingSection"
 
+export { FormulaSection } from "./FormulaSection"
+

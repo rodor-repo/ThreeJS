@@ -18,6 +18,7 @@ import { useThreeRenderer } from './hooks/useThreeRenderer'
 import { useScenePanels, DEFAULT_WALL_COLOR } from './hooks/useScenePanels'
 import { useWallsAutoAdjust } from './hooks/useWallsAutoAdjust'
 import { useProductDrivenCreation } from './hooks/useProductDrivenCreation'
+import { useFormulaEngine } from './hooks/useFormulaEngine'
 import type { Category, WallDimensions as WallDims, CabinetData } from './types'
 import { CameraControls } from './ui/CameraControls'
 import { SettingsSidebar } from './ui/SettingsSidebar'
@@ -32,7 +33,7 @@ import { NestingModal } from './ui/NestingModal'
 import { WsProducts, WsRooms } from '@/types/erpTypes'
 import type { ViewId } from '../cabinets/ViewManager'
 import { exportPartsToCSV } from '@/nesting/ExportPartExcel'
-import { usePartData } from '@/nesting/usePartData'
+import { getPartDataManager } from '@/nesting/PartDataManager'
 import { handleViewDimensionChange } from './utils/handlers/viewDimensionHandler'
 import { handleSplashbackHeightChange } from './utils/handlers/splashbackHandler'
 import { handleKickerHeightChange } from './utils/handlers/kickerHeightHandler'
@@ -180,9 +181,29 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
   // View manager for grouping cabinets
   const viewManager = useViewManager(cabinets)
 
-  // Part data manager - tracks all part dimensions (X, Y, Z) for export
-  // Automatically updates when cabinets array changes
-  const partData = usePartData(cabinets, wsProducts)
+  const {
+    formulaPieces,
+    getFormula,
+    setFormula,
+    scheduleFormulaRecalc,
+    getFormulaLastEvaluatedAt,
+  } = useFormulaEngine({
+    cabinets,
+    selectedCabinets,
+    setSelectedCabinets,
+    cabinetGroups,
+    cabinetSyncs,
+    viewManager,
+    wallDimensions,
+    onFormulasApplied: () => {
+      debouncedIncrementDimensionVersion()
+    },
+  })
+
+  const handleApplianceDimensionsUpdated = useCallback(() => {
+    debouncedIncrementDimensionVersion()
+    scheduleFormulaRecalc()
+  }, [debouncedIncrementDimensionVersion, scheduleFormulaRecalc])
 
   // Price calculation for all cabinets
   // Proactively calculates prices without needing to open ProductPanel
@@ -297,6 +318,10 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     { isOrthoActiveRef, orthoCameraRef }, // orthoRefs
     selectedMode
   )
+
+  useEffect(() => {
+    scheduleFormulaRecalc()
+  }, [scheduleFormulaRecalc, dimensionVersion, dragEndVersion, cabinets.length])
 
   useWallTransparency({
     cameraViewMode,
@@ -467,9 +492,8 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
       setCabinetGroups,
       deleteCabinet,
       setCabinetToDelete,
-      removeCabinetParts: partData.removeCabinet
     })
-  }, [cabinets, wallDimensions, viewManager, setCabinetGroups, deleteCabinet, setCabinetToDelete, partData.removeCabinet])
+  }, [cabinets, wallDimensions, viewManager, setCabinetGroups, deleteCabinet, setCabinetToDelete])
 
   // Handle kicker selection from modal - creates kicker with proper product association
   const handleKickerSelect = useCallback((cabinetId: string, productId: string) => {
@@ -698,9 +722,8 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
       }
     }
 
-    partData.updateCabinet(cabinet)
     setSelectedCabinets(prev => prev.map(cab => ({ ...cab })))
-  }, [cabinets, partData, setSelectedCabinets])
+  }, [cabinets, setSelectedCabinets])
 
   // Handle bulkhead selection from modal - creates bulkhead with proper product association
   const handleBulkheadSelect = useCallback((cabinetId: string, productId: string) => {
@@ -974,7 +997,12 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     }
 
     try {
-      const partDataList = partData.getAllParts()
+      // Calculate parts fresh when export is clicked
+      const partDataManager = getPartDataManager()
+      partDataManager.setWsProducts(wsProducts)
+      partDataManager.updateAllCabinets(cabinets)
+      
+      const partDataList = partDataManager.getAllParts()
       if (partDataList.length === 0) {
         alert('No parts found to export.')
         return
@@ -1006,7 +1034,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
       console.error('Error exporting parts:', error)
       alert('Failed to export parts. Please check the console for details.')
     }
-  }, [cabinets, partData])
+  }, [cabinets, wsProducts])
 
   const handleNesting = useCallback(() => {
     setShowNestingModal(true)
@@ -1064,16 +1092,8 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
       )
     }
 
-    // Update part data for all affected cabinets
-    partData.updateCabinet(cabinet)
-    // Also update synced cabinets if they exist
-    const syncedCabinetIds = cabinetSyncs.get(cabinet.cabinetId) || []
-    syncedCabinetIds.forEach(syncId => {
-      const syncedCab = cabinets.find(c => c.cabinetId === syncId)
-      if (syncedCab) partData.updateCabinet(syncedCab)
-    })
     debouncedIncrementDimensionVersion()
-  }, [cabinets, cabinetSyncs, cabinetGroups, viewManager, wallDimensions, partData, debouncedIncrementDimensionVersion, selectedCabinets])
+  }, [cabinets, cabinetSyncs, cabinetGroups, viewManager, wallDimensions, debouncedIncrementDimensionVersion, selectedCabinets])
 
   const handlePanelSyncChange = useCallback((cabinetId: string, syncCabinets: string[]) => {
     setCabinetSyncs(prev => {
@@ -1437,6 +1457,11 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
           cabinets={cabinets}
           cabinetGroups={cabinetGroups}
           cabinetSyncs={cabinetSyncs}
+          formulaPieces={formulaPieces}
+          getFormula={getFormula}
+          onFormulaChange={setFormula}
+          getFormulaLastEvaluatedAt={getFormulaLastEvaluatedAt}
+          onDimensionsUpdated={handleApplianceDimensionsUpdated}
           wallDimensions={wallDimensions}
         />
       )}
@@ -1480,6 +1505,10 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
           allCabinets={cabinets}
           initialGroupData={selectedCabinet ? (cabinetGroups.get(selectedCabinet.cabinetId) || []) : []}
           initialSyncData={selectedCabinet ? (cabinetSyncs.get(selectedCabinet.cabinetId) || []) : []}
+          formulaPieces={formulaPieces}
+          getFormula={getFormula}
+          onFormulaChange={setFormula}
+          getFormulaLastEvaluatedAt={getFormulaLastEvaluatedAt}
           onSyncChange={handlePanelSyncChange}
           onViewChange={handlePanelViewChange}
           onGroupChange={handlePanelGroupChange}
@@ -1492,8 +1521,6 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
           onShelfCountChange={(newCount: number) => {
             if (selectedCabinet) {
               selectedCabinet.carcass.updateConfig({ shelfCount: newCount })
-              // Update part data when shelf count changes
-              partData.updateCabinet(selectedCabinet)
             }
           }}
 
@@ -1511,20 +1538,6 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
                   wallDimensions
                 }
               )
-              // Update part data when dimensions change
-              // Update all affected cabinets (selected + synced + grouped)
-              const affectedCabinets = new Set<CabinetData>([selectedCabinet])
-              const syncCabinets = cabinetSyncs.get(selectedCabinet.cabinetId) || []
-              syncCabinets.forEach(id => {
-                const cab = cabinets.find(c => c.cabinetId === id)
-                if (cab) affectedCabinets.add(cab)
-              })
-              const groupCabinets = cabinetGroups.get(selectedCabinet.cabinetId) || []
-              groupCabinets.forEach(({ cabinetId }) => {
-                const cab = cabinets.find(c => c.cabinetId === cabinetId)
-                if (cab) affectedCabinets.add(cab)
-              })
-              affectedCabinets.forEach(cab => partData.updateCabinet(cab))
 
               // Debounced increment to trigger wall adjustments after dimension change
               debouncedIncrementDimensionVersion()
@@ -1563,17 +1576,12 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
                 transparent: true
               });
               selectedCabinet.carcass.updateDoorMaterial(doorMaterial);
-
-              // Update part data when door material changes
-              partData.updateCabinet(selectedCabinet)
             }
           }}
           onDoorCountChange={(count) => {
             if (selectedCabinet) {
               // Update door count
               selectedCabinet.carcass.updateDoorConfiguration(count);
-              // Update part data when door count changes
-              partData.updateCabinet(selectedCabinet)
             }
           }}
           onOverhangDoorToggle={(overhang) => {
@@ -1593,9 +1601,6 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
               // Toggle drawers on/off directly on the carcass
               selectedCabinet.carcass.updateDrawerEnabled(enabled);
 
-              // Update part data when drawer toggle changes
-              partData.updateCabinet(selectedCabinet)
-
               // Trigger re-render while preserving multi-selection
               setSelectedCabinets(prev => prev.map(cab => ({ ...cab })))
             }
@@ -1606,9 +1611,6 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
               // Update drawer quantity directly on the carcass
               selectedCabinet.carcass.updateDrawerQuantity(quantity);
 
-              // Update part data when drawer quantity changes
-              partData.updateCabinet(selectedCabinet)
-
               // Trigger re-render while preserving multi-selection
               setSelectedCabinets(prev => prev.map(cab => ({ ...cab })))
             }
@@ -1618,9 +1620,6 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
 
               // Update individual drawer height directly on the carcass
               selectedCabinet.carcass.updateDrawerHeight(index, height, changedId);
-
-              // Update part data when drawer height changes
-              partData.updateCabinet(selectedCabinet)
 
               // Trigger re-render while preserving multi-selection
               setSelectedCabinets(prev => prev.map(cab => ({ ...cab })))
@@ -1685,8 +1684,6 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
               allCabinets: cabinets,
               wallDimensions
             })
-            // Remove cabinet from part data database
-            partData.removeCabinet(cabinetToDelete.cabinetId)
             closeDeleteModal()
           }
         }}

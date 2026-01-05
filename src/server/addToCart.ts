@@ -1,8 +1,6 @@
 "use server"
 
-import { cookies } from "next/headers"
-import { USER_SESSION_COOKIE_NAME } from "@/lib/auth/constants"
-import { verifyRoomSessionToken } from "@/lib/auth/session"
+import { requireUserSession } from "@/lib/auth/server"
 
 // Types matching the Add to Cart API documentation
 
@@ -113,14 +111,10 @@ export async function addToCart(
     process.env.WEBSHOP_ADD_TO_CART_URL ||
     `${process.env.WEBSHOP_URL}/api/3D/three-js/add-to-cart`
 
-  const cookieStore = cookies()
-  const sessionToken = cookieStore.get(USER_SESSION_COOKIE_NAME)?.value
-  if (!sessionToken) {
-    return { success: false, error: "AUTH_REQUIRED" }
-  }
-
-  const session = await verifyRoomSessionToken(sessionToken)
-  if (!session) {
+  let session
+  try {
+    session = await requireUserSession()
+  } catch {
     return { success: false, error: "AUTH_REQUIRED" }
   }
 

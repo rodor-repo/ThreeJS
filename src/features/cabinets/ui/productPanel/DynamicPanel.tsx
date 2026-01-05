@@ -36,6 +36,7 @@ import {
   SimpleColorPicker,
   CollapsibleSection,
   GroupingSection,
+  FormulaSection,
 } from "./components"
 
 // Import utils
@@ -110,6 +111,10 @@ export const DynamicPanel: React.FC<DynamicPanelProps> = ({
   onBenchtopThicknessChange,
   onBenchtopHeightFromFloorChange,
   onManualDimensionDeltaChange,
+  formulaPieces,
+  getFormula,
+  onFormulaChange,
+  getFormulaLastEvaluatedAt,
 }) => {
   const cabinetId = selectedCabinet?.cabinetId
 
@@ -158,6 +163,18 @@ export const DynamicPanel: React.FC<DynamicPanelProps> = ({
 
   // Calculate drawer quantity for dependent drawer detection
   const drawerQty = selectedCabinet?.carcass?.config?.drawerQuantity || 0
+
+  const formulaDimensions = useMemo(
+    () =>
+      dimsList.map(([dimId, dimObj]) => ({
+        id: dimId,
+        label: dimObj.dim || dimId,
+      })),
+    [dimsList]
+  )
+  const lastFormulaEvaluatedAt = cabinetId && getFormulaLastEvaluatedAt
+    ? getFormulaLastEvaluatedAt(cabinetId)
+    : undefined
 
   // Calculate modal filler/panel status
   const isModalFillerOrPanel =
@@ -474,11 +491,13 @@ export const DynamicPanel: React.FC<DynamicPanelProps> = ({
   // Persist values and price changes
   useEffect(() => {
     if (!cabinetId || !hasHydrated) return
+    const existing = persistence.getPersisted()
     persistence.setPersisted({
       values: panelState.values,
       materialColor: panelState.materialColor,
       materialSelections: panelState.materialSelections,
       price: priceQuery.priceData,
+      formulas: existing?.formulas,
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -748,6 +767,38 @@ export const DynamicPanel: React.FC<DynamicPanelProps> = ({
                 noWrapper
               />
             </CollapsibleSection>
+
+            {cabinetId && formulaPieces && onFormulaChange && (
+              <CollapsibleSection
+                id="formulas"
+                title="Formulas"
+                icon={
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M3 12h6" />
+                    <path d="M15 12h6" />
+                    <path d="M9 5l6 14" />
+                  </svg>
+                }
+              >
+                <FormulaSection
+                  cabinetId={cabinetId}
+                  dimensions={formulaDimensions}
+                  pieces={formulaPieces}
+                  getFormula={getFormula}
+                  onFormulaChange={onFormulaChange}
+                  lastEvaluatedAt={lastFormulaEvaluatedAt}
+                />
+              </CollapsibleSection>
+            )}
 
             {/* Benchtop Settings - Only for benchtops */}
             {selectedCabinet?.cabinetType === 'benchtop' && (

@@ -8,6 +8,7 @@ import type {
   DoorMaterialData,
 } from "@/features/carcass"
 import type { WsProduct } from "@/types/erpTypes"
+import type { FormulaPiece } from "@/types/formulaTypes"
 
 export interface SelectedCabinetSnapshot {
   group: Group
@@ -88,6 +89,13 @@ export interface ProductPanelCallbacks {
     dimension: "width" | "height" | "depth",
     delta: number
   ) => void
+  getFormula?: (cabinetId: string, dimId: string) => string | undefined
+  onFormulaChange?: (
+    cabinetId: string,
+    dimId: string,
+    formula: string | null
+  ) => void
+  getFormulaLastEvaluatedAt?: (cabinetId: string) => number | undefined
 }
 
 export interface ProductPanelProps extends ProductPanelCallbacks {
@@ -106,6 +114,8 @@ export interface ProductPanelProps extends ProductPanelCallbacks {
   initialGroupData?: Array<{ cabinetId: string; percentage: number }>
   /** Initial sync data for the selected cabinet */
   initialSyncData?: string[]
+  /** Formula pieces available for composing expressions */
+  formulaPieces?: FormulaPiece[]
 }
 
 export interface DimensionRange {

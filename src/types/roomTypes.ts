@@ -46,6 +46,7 @@ export interface SavedCabinet {
   >
   materialColor?: string
   dimensionValues?: Record<string, number | string>
+  dimensionFormulas?: Record<string, string>
   shelfCount?: number
   doorEnabled?: boolean
   doorCount?: number

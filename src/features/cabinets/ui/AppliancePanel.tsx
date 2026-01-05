@@ -10,7 +10,10 @@ import { handleApplianceHorizontalGapChange, handleApplianceWidthChange } from '
 import { APPLIANCE_GAP_LIMITS } from '@/features/cabinets/factory/cabinetFactory'
 import { CollapsibleSection } from './productPanel/components/CollapsibleSection'
 import { GroupingSection } from './productPanel/components/GroupingSection'
+import { FormulaSection } from './productPanel/components/FormulaSection'
 import { useCabinetGroups } from './productPanel/hooks/useCabinetGroups'
+import type { FormulaPiece } from '@/types/formulaTypes'
+import { APPLIANCE_FORMULA_DIMENSIONS } from '@/types/formulaTypes'
 
 // Appliance type labels and icons
 const APPLIANCE_INFO: Record<string, { label: string; icon: string }> = {
@@ -42,6 +45,15 @@ interface AppliancePanelProps {
   cabinetGroups: Map<string, Array<{ cabinetId: string; percentage: number }>>
   cabinetSyncs: Map<string, string[]>
   wallDimensions: WallDimensions
+  formulaPieces?: FormulaPiece[]
+  getFormula?: (cabinetId: string, dimId: string) => string | undefined
+  onFormulaChange?: (
+    cabinetId: string,
+    dimId: string,
+    formula: string | null
+  ) => void
+  getFormulaLastEvaluatedAt?: (cabinetId: string) => number | undefined
+  onDimensionsUpdated?: () => void
 }
 
 interface SliderInputProps {
@@ -139,6 +151,11 @@ export const AppliancePanel: React.FC<AppliancePanelProps> = ({
   cabinetGroups,
   cabinetSyncs,
   wallDimensions,
+  formulaPieces,
+  getFormula,
+  onFormulaChange,
+  getFormulaLastEvaluatedAt,
+  onDimensionsUpdated,
 }) => {
   // Local state for VISUAL dimensions and gaps
   // Visual dimensions = what the user sees as the appliance size
@@ -214,6 +231,18 @@ export const AppliancePanel: React.FC<AppliancePanelProps> = ({
     onSyncChange,
   })
 
+  const applianceFormulaDimensions = useMemo(
+    () =>
+      APPLIANCE_FORMULA_DIMENSIONS.map((dim) => ({
+        id: dim.id,
+        label: dim.label,
+      })),
+    []
+  )
+  const lastFormulaEvaluatedAt = selectedCabinetId && getFormulaLastEvaluatedAt
+    ? getFormulaLastEvaluatedAt(selectedCabinetId)
+    : undefined
+
   // Update VISUAL dimensions when changed
   // This changes the appliance size, which also changes the shell size (visual + gaps)
   const handleDimensionChange = useCallback((dimension: 'width' | 'height' | 'depth', value: number) => {
@@ -232,6 +261,7 @@ export const AppliancePanel: React.FC<AppliancePanelProps> = ({
 
       if (applied) {
         setVisualWidth(value)
+        onDimensionsUpdated?.()
       }
       return
     }
@@ -254,7 +284,8 @@ export const AppliancePanel: React.FC<AppliancePanelProps> = ({
 
     if (dimension === 'height') setVisualHeight(value)
     if (dimension === 'depth') setVisualDepth(value)
-  }, [selectedCabinet, selectedCabinets, visualWidth, visualHeight, visualDepth, topGap, leftGap, rightGap, kickerHeight, cabinets, cabinetGroups, cabinetSyncs, viewManager, wallDimensions])
+    onDimensionsUpdated?.()
+  }, [selectedCabinet, selectedCabinets, visualWidth, visualHeight, visualDepth, topGap, leftGap, rightGap, kickerHeight, cabinets, cabinetGroups, cabinetSyncs, viewManager, wallDimensions, onDimensionsUpdated])
 
   // Update gaps when changed
   // This changes the shell size while keeping visual size the same
@@ -279,6 +310,7 @@ export const AppliancePanel: React.FC<AppliancePanelProps> = ({
 
       setLeftGap(result.newGaps.left)
       setRightGap(result.newGaps.right)
+      onDimensionsUpdated?.()
       return
     }
 
@@ -296,7 +328,8 @@ export const AppliancePanel: React.FC<AppliancePanelProps> = ({
     if (!result.applied) return
 
     setTopGap(result.newGaps.top)
-  }, [selectedCabinet, selectedCabinets, cabinets, cabinetGroups, cabinetSyncs, viewManager, wallDimensions])
+    onDimensionsUpdated?.()
+  }, [selectedCabinet, selectedCabinets, cabinets, cabinetGroups, cabinetSyncs, viewManager, wallDimensions, onDimensionsUpdated])
 
   // Update kicker height - this also changes shell height
   const handleKickerChange = useCallback((value: number) => {
@@ -325,7 +358,8 @@ export const AppliancePanel: React.FC<AppliancePanelProps> = ({
     })
 
     setKickerHeight(value)
-  }, [selectedCabinet, visualHeight, topGap])
+    onDimensionsUpdated?.()
+  }, [selectedCabinet, visualHeight, topGap, onDimensionsUpdated])
 
   // Calculate displayed shell dimensions for info display
   const shellWidth = useMemo(() => visualWidth + leftGap + rightGap, [visualWidth, leftGap, rightGap])
@@ -469,6 +503,23 @@ export const AppliancePanel: React.FC<AppliancePanelProps> = ({
               </div>
             </div>
           </CollapsibleSection>
+
+          {selectedCabinet && formulaPieces && onFormulaChange && (
+            <CollapsibleSection
+              id="applianceFormulas"
+              title="Formulas"
+              icon={<FridgeIcon />}
+            >
+              <FormulaSection
+                cabinetId={selectedCabinet.cabinetId}
+                dimensions={applianceFormulaDimensions}
+                pieces={formulaPieces}
+                getFormula={getFormula}
+                onFormulaChange={onFormulaChange}
+                lastEvaluatedAt={lastFormulaEvaluatedAt}
+              />
+            </CollapsibleSection>
+          )}
 
           {/* Kicker Section */}
           <CollapsibleSection

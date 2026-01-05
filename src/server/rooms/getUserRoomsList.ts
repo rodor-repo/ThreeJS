@@ -1,8 +1,6 @@
 "use server"
 
-import { cookies } from "next/headers"
-import { USER_SESSION_COOKIE_NAME } from "@/lib/auth/constants"
-import { verifyRoomSessionToken } from "@/lib/auth/session"
+import { requireUserSession } from "@/lib/auth/server"
 import { getAdminDb, getCompanyId } from "@/server/firebase"
 import type { UserRoomListItem, RoomCategory } from "@/types/roomTypes"
 
@@ -17,17 +15,7 @@ import type { UserRoomListItem, RoomCategory } from "@/types/roomTypes"
  * @returns Array of user room list items
  */
 export async function getUserRoomsList(): Promise<UserRoomListItem[]> {
-  const cookieStore = cookies()
-  const sessionToken = cookieStore.get(USER_SESSION_COOKIE_NAME)?.value
-  if (!sessionToken) {
-    throw new Error("AUTH_REQUIRED")
-  }
-
-  const session = await verifyRoomSessionToken(sessionToken)
-  if (!session) {
-    throw new Error("AUTH_REQUIRED")
-  }
-
+  const session = await requireUserSession()
   const normalizedEmail = session.email.toLowerCase().trim()
 
   const db = getAdminDb()

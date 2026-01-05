@@ -37,11 +37,15 @@ export const NestingModal: React.FC<NestingModalProps> = ({
   const [cuttingToolsThick, setCuttingToolsThick] = useState<number>(10) // Default 10mm
 
   // Get all unique materials from cabinet parts (actual selected materials)
-  // Re-compute when modal opens (isOpen) to ensure fresh data from PartDataManager
+  // Calculate parts fresh when modal opens to ensure up-to-date data
   const materials = useMemo(() => {
     if (!isOpen) return [] // Don't compute if modal is closed
     
+    // Calculate all parts fresh when modal opens
     const pdm = getPartDataManager()
+    pdm.setWsProducts(wsProducts)
+    pdm.updateAllCabinets(cabinets)
+    
     const materialSet = new Map<string, { id: string, name: string }>()
     
     // Collect unique material names from all cabinet parts
@@ -68,7 +72,7 @@ export const NestingModal: React.FC<NestingModalProps> = ({
     }
     
     return materialsList
-  }, [isOpen, cabinets])
+  }, [isOpen, cabinets, wsProducts])
 
   // Set default selected material when materials change
   useEffect(() => {

@@ -162,14 +162,15 @@ These hooks add specific features to the scene.
   - Watches for product selection in the UI menu.
   - Triggers `createCabinet` to add the corresponding 3D model to the scene.
 
-### 9. `usePartData`
+### 9. `PartDataManager` (On-Demand)
 
-- **Location**: `src/nesting/usePartData.ts`
-- **Purpose**: Central **part database** for nesting/export.
+- **Location**: `src/nesting/PartDataManager.ts`
+- **Purpose**: Part database for nesting/export (calculated on-demand).
 - **Responsibilities**:
-  - Tracks all parts for every cabinet (dimensions, material, cabinet meta).
-  - Auto-syncs when `cabinets` or `wsProducts` change.
-  - Powers CSV export and the nesting workflow (`NestingModal`).
+  - Calculates part dimensions from cabinet data when needed.
+  - Called fresh when: NestingModal opens, Export clicked, Generate clicked.
+  - Powers CSV export and the nesting workflow.
+- **Note**: The `usePartData` hook has been deprecated - parts are no longer continuously synced.
 
 ---
 

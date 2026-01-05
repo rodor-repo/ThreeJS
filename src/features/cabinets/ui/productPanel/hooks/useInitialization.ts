@@ -138,6 +138,7 @@ export function useInitialization(options: UseInitializationOptions): void {
       materialColor: nextColor,
       materialSelections: nextSelections,
       price: saved?.price,
+      formulas: saved?.formulas,
     })
 
     // Sync material selections to PartDataManager

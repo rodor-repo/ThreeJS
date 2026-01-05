@@ -1,5 +1,6 @@
 "use server"
 
+import { requireAdminSession } from "@/lib/auth/server"
 import { getAdminDb, getCompanyId } from "@/server/firebase"
 import { resolveRoomIdByUrl } from "@/server/rooms/resolveRoomId"
 import type { SavedRoom } from "@/types/roomTypes"
@@ -20,6 +21,8 @@ export async function saveRoomDesign(
   roomUrl: string,
   design: Omit<SavedRoom, "id" | "name" | "category">
 ): Promise<void> {
+  await requireAdminSession()
+
   if (!roomUrl) {
     throw new Error("roomUrl is required to save a design")
   }

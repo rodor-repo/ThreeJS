@@ -55,6 +55,10 @@ type UseRoomPersistenceOptions = {
   onLoadRoomReady?: (loadRoom: (room: SavedRoom) => Promise<void>) => void
   cabinetSyncs?: CabinetSyncsMap
   setCabinetSyncs?: Dispatch<SetStateAction<CabinetSyncsMap>>
+  viewGDFormulas?: Map<ViewId, Record<string, string>>
+  setViewGDFormulas?: Dispatch<
+    SetStateAction<Map<ViewId, Record<string, string>>>
+  >
   /** Current room URL slug */
   currentRoomUrl?: string | null
   /** Current room ID resolved from room url */
@@ -81,6 +85,8 @@ export const useRoomPersistence = ({
   onLoadRoomReady,
   cabinetSyncs,
   setCabinetSyncs,
+  viewGDFormulas,
+  setViewGDFormulas,
   currentRoomUrl,
   currentRoomId,
   wsRooms,
@@ -133,6 +139,7 @@ export const useRoomPersistence = ({
         // Use category name from wsRooms, with fallback
         roomCategory: (categoryName as SavedRoom["category"]) || "Kitchen",
         cabinetSyncs,
+        viewGDFormulas,
       })
 
       // Save to Firestore using set() with merge:true
@@ -168,6 +175,7 @@ export const useRoomPersistence = ({
     wallDimensions,
     wsProducts,
     cabinetSyncs,
+    viewGDFormulas,
   ])
 
   const loadRoom = useCallback(
@@ -187,6 +195,7 @@ export const useRoomPersistence = ({
         assignCabinetToView,
         updateCabinetLock,
         setCabinetSyncs,
+        setViewGDFormulas,
       })
     },
     [
@@ -202,6 +211,7 @@ export const useRoomPersistence = ({
       updateCabinetViewId,
       viewManagerInstance,
       setCabinetSyncs,
+      setViewGDFormulas,
     ]
   )
 

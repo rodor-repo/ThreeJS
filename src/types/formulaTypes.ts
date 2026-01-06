@@ -5,6 +5,9 @@ export type FormulaPiece = {
   group: string
 }
 
+export type ViewGDFormulaMap = Record<string, string>
+export type ViewGDFormulas = Record<string, ViewGDFormulaMap>
+
 export const APPLIANCE_FORMULA_DIMENSIONS = [
   { id: "appliance:width", label: "Appliance Width" },
   { id: "appliance:height", label: "Appliance Height" },

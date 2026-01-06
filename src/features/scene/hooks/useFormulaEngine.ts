@@ -6,6 +6,7 @@ import type { CabinetData, WallDimensions } from "../types"
 import type { ViewId } from "@/features/cabinets/ViewManager"
 import { getClient } from "@/app/QueryProvider"
 import { priceQueryKeys } from "@/features/cabinets/ui/productPanel/utils/queryKeys"
+import type { WsProducts } from "@/types/erpTypes"
 import {
   cabinetPanelState,
   getPersistedState,
@@ -44,6 +45,7 @@ import {
   DEFAULT_BENCHTOP_THICKNESS,
 } from "@/features/carcass/builders/builder-constants"
 import { updateBenchtopPosition } from "../utils/handlers/benchtopPositionHandler"
+import { ProductDataResponse } from "@/server/getProductData"
 
 const EPSILON = 0.1
 const DEFAULT_MATERIAL_COLOR = "#ffffff"
@@ -95,6 +97,7 @@ type UseFormulaEngineArgs = {
   cabinetSyncs: Map<string, string[]>
   viewManager: ViewManagerResult
   wallDimensions: WallDimensions
+  wsProducts?: WsProducts | null
   onFormulasApplied?: () => void
 }
 
@@ -153,9 +156,11 @@ const getCabinetLabel = (cabinet: CabinetData): string => {
 
 const buildFormulaPieces = (
   cabinets: CabinetData[],
-  getProductDataCached: (productId: string | undefined) => any
+  getProductDataCached: (productId: string | undefined) => any,
+  wsProducts?: WsProducts | null
 ): FormulaPiece[] => {
   const pieces: FormulaPiece[] = []
+  const viewGdMap = new Map<string, Map<string, string>>()
 
   cabinets.forEach((cabinet) => {
     const label = getCabinetLabel(cabinet)
@@ -354,7 +359,32 @@ const buildFormulaPieces = (
           })
         })
       }
+
+      if (cabinet.viewId && cabinet.viewId !== "none" && dims) {
+        const viewId = cabinet.viewId
+        const viewEntry = viewGdMap.get(viewId) ?? new Map<string, string>()
+        Object.values(dims).forEach((dimObj: any) => {
+          if (!dimObj?.GDId || dimObj.visible === false) return
+          if (viewEntry.has(dimObj.GDId)) return
+          const gdLabel =
+            wsProducts?.GDs?.[dimObj.GDId]?.GD || dimObj.dim || dimObj.GDId
+          viewEntry.set(dimObj.GDId, gdLabel)
+        })
+        viewGdMap.set(viewId, viewEntry)
+      }
     }
+  })
+
+  viewGdMap.forEach((gdEntries, viewId) => {
+    const group = `View ${viewId} - Global Dimensions`
+    gdEntries.forEach((label, gdId) => {
+      pieces.push({
+        id: `view-${viewId}-${gdId}`,
+        label,
+        token: `viewGd("${viewId}", "${gdId}")`,
+        group,
+      })
+    })
   })
 
   return pieces
@@ -451,6 +481,7 @@ export function useFormulaEngine({
   cabinetSyncs,
   viewManager,
   wallDimensions,
+  wsProducts,
   onFormulasApplied,
 }: UseFormulaEngineArgs): UseFormulaEngineReturn {
   const cabinetById = useMemo(
@@ -460,12 +491,12 @@ export function useFormulaEngine({
 
   const getProductDataCached = useCallback((productId: string | undefined) => {
     if (!productId) return undefined
-    return getClient().getQueryData(priceQueryKeys.productData(productId))
+    return getClient().getQueryData(priceQueryKeys.productData(productId)) as ProductDataResponse | undefined
   }, [])
 
   const formulaPieces = useMemo(
-    () => buildFormulaPieces(cabinets, getProductDataCached),
-    [cabinets, getProductDataCached]
+    () => buildFormulaPieces(cabinets, getProductDataCached, wsProducts),
+    [cabinets, getProductDataCached, wsProducts]
   )
 
   const [lastEvaluatedVersion, setLastEvaluatedVersion] = useState(0)
@@ -582,6 +613,35 @@ export function useFormulaEngine({
       return toNumber(fallback)
     },
     [cabinetById, getProductDataCached]
+  )
+
+  const getViewGdValue = useCallback(
+    (viewId: string, gdId: string): number | null => {
+      if (!viewId || viewId === "none") return null
+      const cabinetIds = viewManager.getCabinetsInView
+        ? viewManager.getCabinetsInView(viewId as ViewId)
+        : cabinets
+            .filter((cabinet) => cabinet.viewId === viewId)
+            .map((cabinet) => cabinet.cabinetId)
+
+      for (const cabinetId of cabinetIds) {
+        const cabinet = cabinetById.get(cabinetId)
+        if (!cabinet?.productId) continue
+        const cached = getProductDataCached(cabinet.productId)
+        const dims = cached?.product?.dims
+        if (!dims) continue
+        const dimEntry = Object.entries(dims).find(
+          ([, dimObj]) => dimObj?.GDId === gdId && dimObj?.visible !== false
+        )
+        if (!dimEntry) continue
+        const dimId = dimEntry[0]
+        const value = getCabinetDimValue(cabinet.cabinetId, dimId)
+        if (isFiniteNumber(value)) return value
+      }
+
+      return null
+    },
+    [cabinetById, cabinets, getCabinetDimValue, getProductDataCached, viewManager]
   )
 
   const applyApplianceFormulaValue = useCallback(
@@ -1045,6 +1105,8 @@ export function useFormulaEngine({
             getCabinetField(cabinetId, field) ?? 0,
           dim: (cabinetId: string, dimId: string) =>
             getCabinetDimValue(cabinetId, dimId) ?? 0,
+          viewGd: (viewId: string, gdId: string) =>
+            getViewGdValue(viewId, gdId) ?? 0,
         }
 
         cabinets.forEach((cabinet) => {
@@ -1210,6 +1272,7 @@ export function useFormulaEngine({
     cabinets,
     getCabinetDimValue,
     getCabinetField,
+    getViewGdValue,
     getProductDataCached,
     applyApplianceFormulaValue,
     applyBenchtopFormulaValue,

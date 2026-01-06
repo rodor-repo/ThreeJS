@@ -29,6 +29,10 @@ type UseUndoRedoOptions = {
   setCabinetSyncs: (
     syncs: CabinetSyncsMap | ((prev: CabinetSyncsMap) => CabinetSyncsMap)
   ) => void
+  viewGDFormulas?: Map<ViewId, Record<string, string>>
+  setViewGDFormulas?: (
+    formulas: Map<ViewId, Record<string, string>>
+  ) => void
   wallDimensions: WallDims
   wallColor: string
   setWallColor: (color: string) => void
@@ -63,6 +67,8 @@ export const useUndoRedo = ({
   setCabinetGroups,
   cabinetSyncs,
   setCabinetSyncs,
+  viewGDFormulas,
+  setViewGDFormulas,
   wallDimensions,
   wallColor,
   setWallColor,
@@ -107,11 +113,13 @@ export const useUndoRedo = ({
       roomName: "Snapshot",
       roomCategory: "Kitchen",
       cabinetSyncs,
+      viewGDFormulas,
     })
   }, [
     cabinets,
     cabinetGroups,
     cabinetSyncs,
+    viewGDFormulas,
     wallDimensions,
     wallColor,
     wsProducts,
@@ -223,6 +231,7 @@ export const useUndoRedo = ({
         assignCabinetToView,
         updateCabinetLock,
         setCabinetSyncs,
+        setViewGDFormulas,
       })
 
       isRestoring.current = false
@@ -241,6 +250,7 @@ export const useUndoRedo = ({
     assignCabinetToView,
     updateCabinetLock,
     setCabinetSyncs,
+    setViewGDFormulas,
   ])
 
   const redo = useCallback(async () => {
@@ -268,6 +278,7 @@ export const useUndoRedo = ({
         assignCabinetToView,
         updateCabinetLock,
         setCabinetSyncs,
+        setViewGDFormulas,
       })
 
       isRestoring.current = false
@@ -286,6 +297,7 @@ export const useUndoRedo = ({
     assignCabinetToView,
     updateCabinetLock,
     setCabinetSyncs,
+    setViewGDFormulas,
   ])
 
   const jumpTo = useCallback(
@@ -319,6 +331,7 @@ export const useUndoRedo = ({
         assignCabinetToView,
         updateCabinetLock,
         setCabinetSyncs,
+        setViewGDFormulas,
       })
 
       isRestoring.current = false
@@ -338,6 +351,7 @@ export const useUndoRedo = ({
       assignCabinetToView,
       updateCabinetLock,
       setCabinetSyncs,
+      setViewGDFormulas,
     ]
   )
 

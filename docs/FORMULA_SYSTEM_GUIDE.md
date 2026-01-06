@@ -5,14 +5,15 @@ It covers the data model, runtime flow, UI, and where to extend behavior.
 
 ## Overview
 
-Admins can attach mathjs expressions to cabinet dimensions. Formulas are
-evaluated with "puzzle pieces" (cabinet geometry, dims, appliance gaps,
-benchtop settings, filler/panel positioning) and applied through the same
-handlers used by manual edits. This ensures locks, pairing/sync, and dependent
-components behave the same.
+Admins can attach mathjs expressions to cabinet dimensions and view-level
+Global Dimensions (GDs). Formulas are evaluated with "puzzle pieces" (cabinet
+geometry, dims, appliance gaps, benchtop settings, filler/panel positioning,
+view GD values) and applied through the same handlers used by manual edits.
+This ensures locks, pairing/sync, and dependent components behave the same.
 
 Key properties:
 - Expressions are stored per cabinetId + dimId.
+- View GD expressions are stored per viewId + gdId.
 - Results overwrite persisted dimensionValues.
 - Recalculation is debounced and guarded against loops.
 
@@ -23,10 +24,11 @@ Key properties:
   - Formulas stored as `PersistedPanelState.formulas?: Record<string, string>`
 
 - Room persistence:
-  - `dimensionFormulas` in `src/types/roomTypes.ts`
+  - `dimensionFormulas` + `viewGDFormulas` in `src/types/roomTypes.ts`
   - Serialized/deserialized in `src/features/scene/utils/roomPersistenceUtils.ts`
   - On room load, cabinet IDs change, so formulas are remapped via:
-    - `remapFormulaIds(...)` for `cab("id", ...)` and `dim("id", ...)` tokens
+    - `remapFormulaIds(...)` for `cab("id", ...)`, `dim("id", ...)`, and
+      `viewGd("viewId", ...)` tokens
 
 ## Runtime Flow
 
@@ -38,9 +40,15 @@ Key properties:
   - Applies results through existing handlers.
   - Updates persisted dimensionValues.
 
+- Hook: `src/features/scene/hooks/useGDFormulaEngine.ts`
+  - Evaluates view-level GD formulas with the same scope helpers.
+  - Applies results through `handleViewDimensionChange`.
+
 - Integration:
   - `src/features/scene/ThreeScene.tsx` wires `useFormulaEngine` and triggers
     recalculation on `dimensionVersion` and `dragEndVersion` changes.
+  - `src/features/scene/ThreeScene.tsx` wires `useGDFormulaEngine` and shares
+    the same debounced recalculation triggers.
 
 ### Evaluation scope
 
@@ -49,8 +57,10 @@ Formulas are evaluated with these helper functions:
   - field examples: `x`, `y`, `width`, `height`, `left`, `right`, etc.
 - `dim(cabinetId, dimId)`
   - reads persisted dimensionValues or defaults.
+- `viewGd(viewId, gdId)`
+  - reads the current GD value from cabinets in that view.
 
-Both helpers return numbers (or 0 if missing).
+All helpers return numbers (or 0 if missing).
 
 ### Triggering recalculation
 
@@ -58,6 +68,7 @@ Recalculations happen when:
 - A formula is saved/cleared (debounced).
 - Cabinet dimensions change (debounced `dimensionVersion`).
 - Cabinets are moved (drag end).
+- View GD formulas are saved/cleared (debounced).
 
 Debounce timing is in `useFormulaEngine` (`300ms`).
 
@@ -67,6 +78,12 @@ Debounce timing is in `useFormulaEngine` (`300ms`).
 compare to avoid oscillating updates. Admins should still avoid cycles.
 
 ## Applying Results
+
+### View GD formulas
+
+- GD updates apply through:
+  - `handleViewDimensionChange` in
+    `src/features/scene/utils/handlers/viewDimensionHandler.ts`
 
 ### Standard cabinets
 
@@ -117,14 +134,20 @@ Minimal UI is provided for now:
   `src/features/cabinets/ui/productPanel/components/FormulaSection.tsx`
   - lets admins pick a dimension, type a formula, and insert puzzle pieces
   - puzzle pieces are inserted via a stepper: choose cabinet, pick a type, then select a piece
+- `GDFormulaSection` in
+  `src/features/scene/ui/GDFormulaSection.tsx`
+  - lets admins attach formulas to view-level GDs
+  - uses the same formula editor modal and puzzle pieces
 
 Wired into:
 - ProductPanel: `src/features/cabinets/ui/productPanel/DynamicPanel.tsx`
 - AppliancePanel: `src/features/cabinets/ui/AppliancePanel.tsx`
+- ViewDetailDrawer: `src/features/scene/ui/ViewDetailDrawer.tsx`
 
 The UI relies on:
 - `formulaPieces` (from `useFormulaEngine`)
 - `getFormula` / `onFormulaChange`
+- `getGDFormula` / `onGDFormulaChange`
 
 ## Puzzle Pieces
 
@@ -138,6 +161,7 @@ Categories include:
 - Appliance visuals and gaps (visual width/height, top/left/right gaps, kicker)
 - Benchtop settings (height from floor, thickness, overhangs)
 - Filler/panel positioning (off-the-floor)
+- View GD values (grouped by view)
 
 To add new pieces:
 1) Update `buildFormulaPieces` to add tokens and labels.
@@ -147,6 +171,7 @@ To add new pieces:
 
 - Engine and evaluation:
   - `src/features/scene/hooks/useFormulaEngine.ts`
+  - `src/features/scene/hooks/useGDFormulaEngine.ts`
 
 - Room persistence:
   - `src/types/roomTypes.ts`
@@ -154,8 +179,10 @@ To add new pieces:
 
 - UI:
   - `src/features/cabinets/ui/productPanel/components/FormulaSection.tsx`
+  - `src/features/scene/ui/GDFormulaSection.tsx`
   - `src/features/cabinets/ui/productPanel/DynamicPanel.tsx`
   - `src/features/cabinets/ui/AppliancePanel.tsx`
+  - `src/features/scene/ui/ViewDetailDrawer.tsx`
 
 - Dimension application:
   - `src/features/scene/utils/handlers/productDimensionHandler.ts`

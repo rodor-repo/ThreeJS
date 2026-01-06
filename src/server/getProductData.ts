@@ -3,7 +3,7 @@
 import { createSwrCache } from "@/server/swrCache"
 import type { GDThreeJsType, WsProduct } from "@/types/erpTypes"
 
-type ProductDataResponse = {
+export type ProductDataResponse = {
   product: WsProduct
   materialOptions: MaterialOptionsResponse
   defaultMaterialSelections: DefaultMaterialSelections

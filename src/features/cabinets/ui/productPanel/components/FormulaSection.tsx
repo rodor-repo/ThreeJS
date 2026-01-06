@@ -534,6 +534,7 @@ export const FormulaSection: React.FC<FormulaSectionProps> = ({
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [formulaDraft, setFormulaDraft] = useState("")
   const [dimensionFilter, setDimensionFilter] = useState("")
+  const [formulaVersion, setFormulaVersion] = useState(0)
 
   useEffect(() => {
     if (!dimensions.length) return
@@ -554,7 +555,7 @@ export const FormulaSection: React.FC<FormulaSectionProps> = ({
           error: statusInfo.error,
         }
       }),
-    [cabinetId, dimensions, getFormula]
+    [cabinetId, dimensions, getFormula, formulaVersion]
   )
 
   const formulaMetaById = useMemo(
@@ -702,11 +703,13 @@ export const FormulaSection: React.FC<FormulaSectionProps> = ({
           if (!activeMeta) return
           if (!canSave) return
           onFormulaChange?.(cabinetId, activeMeta.id, formulaDraft.trim())
+          setFormulaVersion((version) => version + 1)
           setIsModalOpen(false)
         }}
         onClear={() => {
           if (!activeMeta) return
           onFormulaChange?.(cabinetId, activeMeta.id, null)
+          setFormulaVersion((version) => version + 1)
           setFormulaDraft("")
         }}
         onClose={() => setIsModalOpen(false)}

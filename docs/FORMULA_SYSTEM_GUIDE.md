@@ -6,9 +6,10 @@ It covers the data model, runtime flow, UI, and where to extend behavior.
 ## Overview
 
 Admins can attach mathjs expressions to cabinet dimensions. Formulas are
-evaluated with "puzzle pieces" (cabinet geometry, dims, appliance gaps) and
-applied through the same handlers used by manual edits. This ensures locks,
-pairing/sync, and dependent components behave the same.
+evaluated with "puzzle pieces" (cabinet geometry, dims, appliance gaps,
+benchtop settings, filler/panel positioning) and applied through the same
+handlers used by manual edits. This ensures locks, pairing/sync, and dependent
+components behave the same.
 
 Key properties:
 - Expressions are stored per cabinetId + dimId.
@@ -89,6 +90,26 @@ Appliance formulas apply through:
 - Top gap: `applyApplianceGapChange`
 - Height/depth/kicker: direct carcass updates + `updateAllDependentComponents`
 
+### Benchtops
+
+Targets are defined in:
+- `src/types/formulaTypes.ts`
+
+Benchtop formulas apply through:
+- Height from floor: updates `manuallyEditedDelta.height` for child benchtops
+  (or `group.position.y` for standalone)
+- Thickness: updates carcass height + dependent components
+- Overhangs: updates benchtop config, depth (front), and dependent components
+
+### Fillers/Panels
+
+Targets are defined in:
+- `src/types/formulaTypes.ts`
+
+Filler/panel formulas apply through:
+- Off-the-floor: updates `parentYOffset`, `group.position.y`, and height
+  to keep the top edge fixed, then updates dependent components
+
 ## UI Integration
 
 Minimal UI is provided for now:
@@ -115,6 +136,8 @@ Categories include:
 - Geometry: position, width/height/depth, left/right/top/bottom edges
 - Product dimensions (from wsProduct dims)
 - Appliance visuals and gaps (visual width/height, top/left/right gaps, kicker)
+- Benchtop settings (height from floor, thickness, overhangs)
+- Filler/panel positioning (off-the-floor)
 
 To add new pieces:
 1) Update `buildFormulaPieces` to add tokens and labels.
@@ -147,6 +170,14 @@ Common extensions:
   - Update `APPLIANCE_FORMULA_DIMENSIONS` in `src/types/formulaTypes.ts`
   - Add value resolver in `getApplianceFormulaValue`
   - Add apply behavior in `applyApplianceFormulaValue`
+
+- Add new benchtop or filler/panel formula targets:
+  - Update `BENCHTOP_FORMULA_DIMENSIONS` or `FILLER_PANEL_FORMULA_DIMENSIONS`
+    in `src/types/formulaTypes.ts`
+  - Add value resolver in `getBenchtopFormulaValue` or
+    `getFillerPanelFormulaValue`
+  - Add apply behavior in `applyBenchtopFormulaValue` or
+    `applyFillerPanelFormulaValue`
 
 - Add new product-dimension behaviors:
   - Extend GD mapping handling in `applyProductFormulaUpdates`

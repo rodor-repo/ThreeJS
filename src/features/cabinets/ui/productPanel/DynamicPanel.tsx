@@ -50,6 +50,10 @@ import {
 } from "./utils/dimensionUtils"
 import { toastThrottled } from "./utils/toastUtils"
 import { getBenchtopBaseDimensions } from "@/features/scene/utils/benchtopUtils"
+import {
+  BENCHTOP_FORMULA_DIMENSIONS,
+  FILLER_PANEL_FORMULA_DIMENSIONS,
+} from "@/types/formulaTypes"
 
 /**
  * Props for the DynamicPanel component
@@ -164,14 +168,37 @@ export const DynamicPanel: React.FC<DynamicPanelProps> = ({
   // Calculate drawer quantity for dependent drawer detection
   const drawerQty = selectedCabinet?.carcass?.config?.drawerQuantity || 0
 
-  const formulaDimensions = useMemo(
-    () =>
-      dimsList.map(([dimId, dimObj]) => ({
-        id: dimId,
-        label: dimObj.dim || dimId,
-      })),
-    [dimsList]
-  )
+  const formulaDimensions = useMemo(() => {
+    const baseDimensions = dimsList.map(([dimId, dimObj]) => ({
+      id: dimId,
+      label: dimObj.dim || dimId,
+    }))
+
+    if (selectedCabinet?.cabinetType === "benchtop") {
+      return [
+        ...baseDimensions,
+        ...BENCHTOP_FORMULA_DIMENSIONS.map((dim) => ({
+          id: dim.id,
+          label: dim.label,
+        })),
+      ]
+    }
+
+    if (
+      selectedCabinet?.cabinetType === "filler" ||
+      selectedCabinet?.cabinetType === "panel"
+    ) {
+      return [
+        ...baseDimensions,
+        ...FILLER_PANEL_FORMULA_DIMENSIONS.map((dim) => ({
+          id: dim.id,
+          label: dim.label,
+        })),
+      ]
+    }
+
+    return baseDimensions
+  }, [dimsList, selectedCabinet?.cabinetType])
   const lastFormulaEvaluatedAt = cabinetId && getFormulaLastEvaluatedAt
     ? getFormulaLastEvaluatedAt(cabinetId)
     : undefined

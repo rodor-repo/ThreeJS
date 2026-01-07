@@ -46,6 +46,7 @@ import {
 import { handleApplianceHorizontalGapChange } from './utils/handlers/applianceDimensionHandler'
 import { handleDeleteCabinet } from './utils/handlers/deleteCabinetHandler'
 import { updateAllDependentComponents, updateChildCabinets } from './utils/handlers/dependentComponentsHandler'
+import { handleFillGaps } from './utils/handlers/fillGapsHandler'
 import { handleFillerSelect as handleFillerSelectHandler, handleFillerToggle as handleFillerToggleHandler } from './utils/handlers/fillerHandler'
 import {
   handleKickerSelect as handleKickerSelectHandler,
@@ -76,6 +77,7 @@ import { BottomRightActions } from './ui/BottomRightActions'
 import { HistoryControls } from './ui/HistoryControls'
 import { SaveButton } from './ui/SaveButton'
 import { DimensionLineControls } from './ui/DimensionLineControls'
+import { MultiSelectToolbar } from './ui/MultiSelectToolbar'
 import type { AppMode } from './context/ModeContext'
 import { UserWidthSlider } from './ui/UserWidthSlider'
 import { UserRoomsModal } from './ui/UserRoomsModal'
@@ -84,6 +86,7 @@ import { serializeRoom } from './utils/roomPersistenceUtils'
 import type { UserSavedRoom, RoomCategory, SavedRoom } from '@/types/roomTypes'
 import { clamp } from '@/features/carcass/utils/carcass-math-utils'
 import { APPLIANCE_GAP_LIMITS } from '@/features/cabinets/factory/cabinetFactory'
+import type { FillGapsMode } from './utils/handlers/fillGapsTypes'
 
 interface ThreeSceneProps {
   wallDimensions: WallDims
@@ -225,6 +228,28 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     scheduleFormulaRecalc()
     scheduleGDFormulaRecalc()
   }, [debouncedIncrementDimensionVersion, scheduleFormulaRecalc, scheduleGDFormulaRecalc])
+
+  const handleFillGapsAction = useCallback((mode: FillGapsMode) => {
+    const applied = handleFillGaps({
+      selectedCabinets,
+      cabinets,
+      wallDimensions,
+      mode,
+    })
+
+    if (applied) {
+      scheduleFormulaRecalc()
+      scheduleGDFormulaRecalc()
+      debouncedIncrementDimensionVersion()
+    }
+  }, [
+    cabinets,
+    debouncedIncrementDimensionVersion,
+    scheduleFormulaRecalc,
+    scheduleGDFormulaRecalc,
+    selectedCabinets,
+    wallDimensions,
+  ])
 
   // Price calculation for all cabinets
   // Proactively calculates prices without needing to open ProductPanel
@@ -1283,6 +1308,11 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         onNesting={handleNesting}
         onSettings={handleSettingsClick}
         mode={selectedMode}
+      />
+
+      <MultiSelectToolbar
+        selectedCabinets={selectedCabinets}
+        onFillGaps={handleFillGapsAction}
       />
 
       {/* Settings Sidebar */}

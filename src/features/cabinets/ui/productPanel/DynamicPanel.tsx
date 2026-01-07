@@ -30,13 +30,12 @@ import {
   BenchtopSection,
   MaterialsSection,
   ColorPickerModal,
-  PairSection,
-  SyncSection,
   OffTheFloorControl,
   SimpleColorPicker,
   CollapsibleSection,
   GroupingSection,
   FormulaSection,
+  KickerHeightSection,
 } from "./components"
 
 // Import utils
@@ -96,6 +95,7 @@ export const DynamicPanel: React.FC<DynamicPanelProps> = ({
   selectedCabinet,
   onDimensionsChange,
   onMaterialChange,
+  onViewKickerHeightChange,
   loading,
   error,
   threeJsGDs,
@@ -203,6 +203,24 @@ export const DynamicPanel: React.FC<DynamicPanelProps> = ({
     ? getFormulaLastEvaluatedAt(cabinetId)
     : undefined
 
+  // Calculate current kicker height for the view
+  const currentKickerHeight = useMemo(() => {
+    if (!allCabinets || !selectedCabinet?.viewId) return 100
+
+    const viewCabinets = allCabinets.filter(c => c.viewId === selectedCabinet.viewId)
+    const baseTallCabinets = viewCabinets.filter(c => c.cabinetType === 'base' || c.cabinetType === 'tall')
+
+    if (baseTallCabinets.length === 0) return 100
+
+    // Use the first one's Y position as kicker height
+    return Math.round(baseTallCabinets[0].group.position.y)
+  }, [allCabinets, selectedCabinet?.viewId])
+
+  const showKickerHeightSection = useMemo(() => {
+    return (selectedCabinet?.cabinetType === 'base' || selectedCabinet?.cabinetType === 'tall') &&
+      (!!selectedCabinet?.viewId && selectedCabinet.viewId !== 'none')
+  }, [selectedCabinet?.cabinetType, selectedCabinet?.viewId])
+
   // Calculate modal filler/panel status
   const isModalFillerOrPanel =
     (selectedCabinet?.cabinetType === "filler" ||
@@ -243,8 +261,8 @@ export const DynamicPanel: React.FC<DynamicPanelProps> = ({
   const childDeltaConfig = useMemo<{
     type: string;
     deltaDimensions: readonly ("width" | "height" | "depth")[];
-} | undefined
->(() => {
+  } | undefined
+  >(() => {
     if (!selectedCabinet) return undefined
 
     if (
@@ -338,8 +356,8 @@ export const DynamicPanel: React.FC<DynamicPanelProps> = ({
         const childCabinet = fullSelectedCabinet
         const parentCabinet = childCabinet?.parentCabinetId
           ? allCabinets?.find(
-              (cabinet) => cabinet.cabinetId === childCabinet.parentCabinetId
-            )
+            (cabinet) => cabinet.cabinetId === childCabinet.parentCabinetId
+          )
           : undefined
 
         if (childCabinet && parentCabinet) {
@@ -884,8 +902,8 @@ export const DynamicPanel: React.FC<DynamicPanelProps> = ({
                   heightFromFloorDefault={
                     selectedCabinet.benchtopParentCabinetId
                       ? (selectedCabinet.benchtopHeightFromFloor ??
-                          selectedCabinet.group.position.y) -
-                        (selectedCabinet.manuallyEditedDelta?.height ?? 0)
+                        selectedCabinet.group.position.y) -
+                      (selectedCabinet.manuallyEditedDelta?.height ?? 0)
                       : 740
                   }
                   onHeightFromFloorChange={
@@ -900,33 +918,33 @@ export const DynamicPanel: React.FC<DynamicPanelProps> = ({
 
             {/* Off the Floor - Only for Fillers and Panels */}
             {shouldShowOffTheFloor && (
-                <CollapsibleSection
-                  id="offTheFloor"
-                  title="Off The Floor"
-                  icon={
-                    <svg
-                      width="20"
-                      height="20"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <line x1="12" y1="19" x2="12" y2="5" />
-                      <polyline points="5 12 12 5 19 12" />
-                    </svg>
-                  }
-                >
-                  <OffTheFloorControl
-                    value={offTheFloorState.offTheFloor}
-                    editingValue={offTheFloorState.editingOffTheFloor}
-                    onValueChange={offTheFloorState.handleOffTheFloorChange}
-                    onEditingChange={offTheFloorState.setEditingOffTheFloor}
-                  />
-                </CollapsibleSection>
-              )}
+              <CollapsibleSection
+                id="offTheFloor"
+                title="Off The Floor"
+                icon={
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <line x1="12" y1="19" x2="12" y2="5" />
+                    <polyline points="5 12 12 5 19 12" />
+                  </svg>
+                }
+              >
+                <OffTheFloorControl
+                  value={offTheFloorState.offTheFloor}
+                  editingValue={offTheFloorState.editingOffTheFloor}
+                  onValueChange={offTheFloorState.handleOffTheFloorChange}
+                  onEditingChange={offTheFloorState.setEditingOffTheFloor}
+                />
+              </CollapsibleSection>
+            )}
 
             {/* Materials selection */}
             {wsProduct && (
@@ -960,6 +978,35 @@ export const DynamicPanel: React.FC<DynamicPanelProps> = ({
                     setOpenMaterialId(materialId)
                   }
                   noWrapper
+                />
+              </CollapsibleSection>
+            )}
+
+            {/* Global Kicker Height - Only for Base and Tall cabinets with an assigned view */}
+            {showKickerHeightSection && selectedCabinet?.viewId && selectedCabinet.viewId !== 'none' && onViewKickerHeightChange && (
+              <CollapsibleSection
+                id="kickerHeight"
+                title="Kicker Height"
+                icon={
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M7 21v-4a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v4" />
+                    <rect x="3" y="3" width="18" height="12" rx="2" />
+                  </svg>
+                }
+              >
+                <KickerHeightSection
+                  viewId={selectedCabinet.viewId}
+                  currentKickerHeight={currentKickerHeight}
+                  onKickerHeightChange={onViewKickerHeightChange}
                 />
               </CollapsibleSection>
             )}

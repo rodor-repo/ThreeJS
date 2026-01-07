@@ -10,6 +10,7 @@ import type { CabinetData, WallDimensions } from '../types'
 import { cabinetPanelState } from '@/features/cabinets/ui/ProductPanel'
 import type { ViewId } from '@/features/cabinets/ViewManager'
 import { GDFormulaSection } from './GDFormulaSection'
+import { KickerHeightSection } from '@/features/cabinets/ui/productPanel/components/KickerHeightSection'
 
 type Props = {
   isOpen: boolean
@@ -558,52 +559,15 @@ export const ViewDetailDrawer: React.FC<Props> = ({
             </div>
             
             {/* Kicker Height Control - above Splashback */}
-            {viewId && (
+            {viewId && onKickerHeightChange && (
               <div className="mt-6 pt-6 border-t border-gray-300">
                 <div className="border border-gray-200 rounded-lg bg-white p-4">
                   <h3 className="font-semibold text-gray-800 mb-4">Kicker Height</h3>
-                  <div>
-                    <h4 className="font-medium text-gray-700 mb-3 text-sm">Leg Height for Base and Tall Cabinets</h4>
-                    
-                    {/* Number input and slider */}
-                    <div>
-                      <div className="flex items-center gap-1.5 mb-1.5">
-                        <input
-                          type="number"
-                          className="w-20 text-center text-sm px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent leading-tight"
-                          value={kickerHeightValue}
-                          min={16}
-                          max={170}
-                          onChange={(e) => {
-                            const val = Number(e.target.value)
-                            if (val >= 16 && val <= 170 && viewId) {
-                              setKickerHeightValue(val)
-                              onKickerHeightChange?.(viewId, val)
-                            }
-                          }}
-                        />
-                        <span className="text-sm text-gray-500">mm</span>
-                      </div>
-                      <input
-                        type="range"
-                        className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
-                        value={kickerHeightValue}
-                        min={16}
-                        max={170}
-                        onChange={(e) => {
-                          const val = Number(e.target.value)
-                          if (viewId) {
-                            setKickerHeightValue(val)
-                            onKickerHeightChange?.(viewId, val)
-                          }
-                        }}
-                      />
-                      <div className="flex justify-between text-xs text-gray-500 mt-1">
-                        <span>16</span>
-                        <span>170</span>
-                      </div>
-                    </div>
-                  </div>
+                  <KickerHeightSection
+                    viewId={viewId}
+                    currentKickerHeight={kickerHeightValue}
+                    onKickerHeightChange={onKickerHeightChange}
+                  />
                 </div>
               </div>
             )}

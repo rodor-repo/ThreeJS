@@ -38,7 +38,11 @@ export type { CollapsibleSectionProps } from "./CollapsibleSection"
 export { GroupingSection } from "./GroupingSection"
 export type { GroupingSectionProps } from "./GroupingSection"
 
+export { KickerHeightSection } from "./KickerHeightSection"
+
 export { FormulaSection } from "./FormulaSection"
 export { FormulaEditorModal } from "./FormulaEditorModal"
-export type { FormulaEditorModalProps, FormulaTargetMeta } from "./FormulaEditorModal"
-
+export type {
+  FormulaEditorModalProps,
+  FormulaTargetMeta,
+} from "./FormulaEditorModal"

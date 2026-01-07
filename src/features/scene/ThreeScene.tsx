@@ -1035,7 +1035,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
       const partDataManager = getPartDataManager()
       partDataManager.setWsProducts(wsProducts)
       partDataManager.updateAllCabinets(cabinets)
-      
+
       const partDataList = partDataManager.getAllParts()
       if (partDataList.length === 0) {
         alert('No parts found to export.')
@@ -1598,6 +1598,13 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
                 kickerHeightChanged: true
               })
             }
+          }}
+          onViewKickerHeightChange={(viewId, height) => {
+            handleKickerHeightChange(viewId as ViewId, height, {
+              cabinets,
+              viewManager,
+              wallDimensions
+            })
           }}
           onDoorToggle={(enabled) => {
             if (selectedCabinet) {

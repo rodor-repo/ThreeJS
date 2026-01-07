@@ -2,7 +2,7 @@ export const USER_SESSION_COOKIE_NAME = "threejs_session"
 export const ADMIN_SESSION_COOKIE_NAME = "threejs_admin_session"
 export const BRIDGE_NONCE_COOKIE_NAME = "bridge_nonce"
 
-export const DEFAULT_SESSION_TTL_SECONDS = 2 * 60 * 60
+export const DEFAULT_SESSION_TTL_SECONDS = 24 * 60 * 60
 export const BRIDGE_STATE_TTL_SECONDS = 5 * 60
 export const BRIDGE_NONCE_TTL_SECONDS = 10 * 60
 

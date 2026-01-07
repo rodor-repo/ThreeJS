@@ -1376,6 +1376,10 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
               wallDimensions,
               viewId: selectedViewId as ViewId,
             })
+
+            // Trigger formula recalculation and layout refresh
+            scheduleGDFormulaRecalc()
+            debouncedIncrementDimensionVersion()
           }}
           onSplashbackHeightChange={(viewId, height) => {
             handleSplashbackHeightChange(viewId as ViewId, height, {
@@ -1383,6 +1387,10 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
               viewManager,
               wallDimensions
             })
+
+            // Trigger formula recalculation and layout refresh
+            scheduleGDFormulaRecalc()
+            debouncedIncrementDimensionVersion()
           }}
           onKickerHeightChange={(viewId, height) => {
             handleKickerHeightChange(viewId as ViewId, height, {
@@ -1390,6 +1398,10 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
               viewManager,
               wallDimensions
             })
+
+            // Trigger formula recalculation and layout refresh
+            scheduleGDFormulaRecalc()
+            debouncedIncrementDimensionVersion()
           }}
           formulaPieces={formulaPieces}
           getGDFormula={getGDFormula}
@@ -1578,7 +1590,8 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
                 }
               )
 
-              // Debounced increment to trigger wall adjustments after dimension change
+              // Trigger formula recalculation and layout refresh
+              scheduleFormulaRecalc()
               debouncedIncrementDimensionVersion()
             }
           }}

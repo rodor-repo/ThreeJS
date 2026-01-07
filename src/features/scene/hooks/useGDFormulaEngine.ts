@@ -18,14 +18,14 @@ import {
   DEFAULT_BENCHTOP_THICKNESS,
 } from "@/features/carcass/builders/builder-constants"
 import { handleViewDimensionChange } from "../utils/handlers/viewDimensionHandler"
+import {
+  realignAllViews,
+  type ViewManagerResult,
+} from "../utils/handlers/viewRealignHandler"
 import { ProductDataResponse } from "@/server/getProductData"
 
 const EPSILON = 0.1
 const MAX_PASSES = 3
-
-interface ViewManagerResult {
-  getCabinetsInView: (viewId: ViewId) => string[]
-}
 
 type UseGDFormulaEngineArgs = {
   cabinets: CabinetData[]
@@ -168,20 +168,37 @@ export function useGDFormulaEngine({
 
   const getProductDataCached = useCallback((productId: string | undefined) => {
     if (!productId) return undefined
-    return getClient().getQueryData(priceQueryKeys.productData(productId)) as ProductDataResponse
+    return getClient().getQueryData(
+      priceQueryKeys.productData(productId)
+    ) as ProductDataResponse
   }, [])
 
   const isApplyingRef = useRef(false)
   const recalcRef = useRef<() => void>(() => {})
+  const realignAllRef = useRef<() => void>(() => {})
   const lastEvaluatedAtRef = useRef<Map<string, number>>(new Map())
 
-  const scheduleGDFormulaRecalc = useMemo(
-    () =>
-      debounce(() => {
-        recalcRef.current()
-      }, 300),
-    []
-  )
+  const scheduleGDFormulaRecalc = useMemo(() => {
+    const debouncedRecalc = debounce(() => {
+      recalcRef.current()
+    }, 300)
+
+    const debouncedRealign = debounce(() => {
+      realignAllRef.current()
+    }, 400)
+
+    const trigger = () => {
+      debouncedRecalc()
+      debouncedRealign()
+    }
+
+    trigger.cancel = () => {
+      debouncedRecalc.cancel()
+      debouncedRealign.cancel()
+    }
+
+    return trigger
+  }, [])
 
   const getGDFormula = useCallback(
     (viewId: ViewId, gdId: string) => viewGDFormulas.get(viewId)?.[gdId],
@@ -418,6 +435,12 @@ export function useGDFormulaEngine({
   ])
 
   recalcRef.current = recalcFormulas
+
+  useEffect(() => {
+    realignAllRef.current = () => {
+      realignAllViews(cabinets, viewManager, wallDimensions)
+    }
+  }, [cabinets, viewManager, wallDimensions])
 
   const getGDFormulaLastEvaluatedAt = useCallback(
     (viewId: ViewId, gdId: string) =>

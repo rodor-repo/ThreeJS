@@ -70,7 +70,15 @@ Recalculations happen when:
 - Cabinets are moved (drag end).
 - View GD formulas are saved/cleared (debounced).
 
-Debounce timing is in `useFormulaEngine` (`300ms`).
+### Automated View Realignment
+
+To handle minor misalignments that can occur after complex formula-driven resizing (especially with fillers, panels, and benchtops), the system includes an automated realignment trigger. 
+
+Whenever a formula recalculation is scheduled, a secondary debounced task is queued to run **400ms** later (after the formula evaluation pass should be complete). This task calls `realignAllViews`, which forces every cabinet in the scene to update its dependent components with `positionChanged: true`. This effectively "settles" the scene after formulas have finished applying.
+
+Debounce timing: 
+- Formula recalc: `300ms`
+- View realignment: `400ms`
 
 ### Loop protection
 

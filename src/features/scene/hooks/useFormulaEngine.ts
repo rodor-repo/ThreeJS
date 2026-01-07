@@ -33,6 +33,11 @@ import {
 } from "../utils/handlers/applianceGapHandler"
 import { updateAllDependentComponents } from "../utils/handlers/dependentComponentsHandler"
 import { getEffectiveLeftEdge, getEffectiveRightEdge } from "../lib/snapUtils"
+import {
+  realignViewCabinets,
+  realignAllViews,
+  type ViewManagerResult,
+} from "../utils/handlers/viewRealignHandler"
 import type { FormulaPiece } from "@/types/formulaTypes"
 import {
   APPLIANCE_FORMULA_DIM_ID_SET,
@@ -84,10 +89,6 @@ const isFillerPanelFormulaDimId = (
   dimId: string
 ): dimId is FillerPanelFormulaDimId =>
   FILLER_PANEL_FORMULA_DIM_ID_SET.has(dimId as FillerPanelFormulaDimId)
-
-interface ViewManagerResult {
-  getCabinetsInView: (viewId: ViewId) => string[]
-}
 
 type UseFormulaEngineArgs = {
   cabinets: CabinetData[]
@@ -504,14 +505,29 @@ export function useFormulaEngine({
 
   const isApplyingRef = useRef(false)
   const recalcRef = useRef<() => void>(() => {})
+  const realignAllRef = useRef<() => void>(() => {})
 
-  const scheduleFormulaRecalc = useMemo(
-    () =>
-      debounce(() => {
-        recalcRef.current()
-      }, 300),
-    []
-  )
+  const scheduleFormulaRecalc = useMemo(() => {
+    const debouncedRecalc = debounce(() => {
+      recalcRef.current()
+    }, 300)
+
+    const debouncedRealign = debounce(() => {
+      realignAllRef.current()
+    }, 400) // Fires after formulas should be finished applying
+
+    const trigger = () => {
+      debouncedRecalc()
+      debouncedRealign()
+    }
+
+    trigger.cancel = () => {
+      debouncedRecalc.cancel()
+      debouncedRealign.cancel()
+    }
+
+    return trigger
+  }, [])
 
   const getFormula = useCallback((cabinetId: string, dimId: string) => {
     const current = getPersistedState(cabinetId)
@@ -1282,6 +1298,12 @@ export function useFormulaEngine({
   ])
 
   recalcRef.current = recalcFormulas
+
+  useEffect(() => {
+    realignAllRef.current = () => {
+      realignAllViews(cabinets, viewManager, wallDimensions)
+    }
+  }, [cabinets, viewManager, wallDimensions])
 
   const getFormulaLastEvaluatedAt = useCallback(
     (cabinetId: string) => lastEvaluatedAtRef.current.get(cabinetId),

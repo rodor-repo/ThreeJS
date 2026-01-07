@@ -52,6 +52,7 @@ export interface ProductPanelCallbacks {
   onDimensionsChange?: (dimensions: CarcassDimensions) => void
   onMaterialChange?: (material: Partial<CarcassMaterialData>) => void
   onKickerHeightChange?: (kickerHeight: number) => void
+  onViewKickerHeightChange?: (viewId: string, height: number) => void
   onDoorToggle?: (enabled: boolean) => void
   onDoorMaterialChange?: (material: Partial<DoorMaterialData>) => void
   onDoorCountChange?: (count: number) => void

@@ -47,12 +47,14 @@ function getBridgeProviderBaseUrl(provider: BridgeProvider) {
 export function buildBridgeStartUrl(
   provider: BridgeProvider,
   state: string,
-  returnTo: string
+  returnTo: string,
+  origin: string
 ) {
   const baseUrl = getBridgeProviderBaseUrl(provider)
   const url = new URL(BRIDGE_START_PATH, baseUrl)
   url.searchParams.set("state", state)
   url.searchParams.set("return_to", returnTo)
+  url.searchParams.set("origin", origin)
   return url
 }
 
@@ -69,8 +71,9 @@ export async function startBridgeFlow(
     provider,
   })
 
+  const origin = request.nextUrl.origin
   const response = NextResponse.redirect(
-    buildBridgeStartUrl(provider, state, returnTo),
+    buildBridgeStartUrl(provider, state, returnTo, origin),
     307
   )
 
@@ -78,6 +81,7 @@ export async function startBridgeFlow(
     console.info("bridge: redirecting to provider start", {
       provider,
       returnTo,
+      origin,
     })
   }
 

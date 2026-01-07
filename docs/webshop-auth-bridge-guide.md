@@ -21,19 +21,24 @@ These existing endpoints are already used by the 3D app and show the URL naming 
 - Path: `/api/3D/three-js/auth-bridge/start`
 - Query params:
   - `state` (required) — signed JWT from the 3D app
-  - `return_to` (required) — original 3D app path+query (for redirect convenience)
+  - `return_to` (required) — original 3D app path+query (relative URL)
+  - `origin` (required) — the origin of the 3D app (e.g., `https://3d-app.com`)
 - Auth requirement: relies on existing webshop session cookies (user must be logged in)
 
 ### Behavior
 
 1. Validate the webshop user session from cookies.
 2. Validate presence of `state` (no need to verify signature on the webshop).
-3. Compute `state_hash = SHA-256(state)`.
-4. Generate a one-time `code` (random, short TTL 30–60s).
-5. Store in Redis:
+3. Determine the preferred redirect origin:
+   - Use the `origin` query parameter if provided.
+   - Fall back to the standard `Referer` or `Origin` request headers if `origin` is missing.
+   - Match against allowed origins (`NEXT_PUBLIC_THREEJS_APP_URLS`).
+4. Compute `state_hash = SHA-256(state)`.
+5. Generate a one-time `code` (random, short TTL 30–60s).
+6. Store in Redis:
    - bound to `uid`, `email`, and `state_hash`
    - TTL 30–60 seconds
-6. Redirect the user to the 3D app callback with:
+7. Redirect the user to the 3D app callback with:
    - `code`
    - `state` (the same value received)
    - callback path on 3D app: `/api/auth/bridge/callback`

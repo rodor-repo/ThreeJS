@@ -19,6 +19,7 @@ import { useScenePanels, DEFAULT_WALL_COLOR } from './hooks/useScenePanels'
 import { useWallsAutoAdjust } from './hooks/useWallsAutoAdjust'
 import { useProductDrivenCreation } from './hooks/useProductDrivenCreation'
 import { useFormulaEngine } from './hooks/useFormulaEngine'
+import { useGDFormulaEngine } from './hooks/useGDFormulaEngine'
 import type { Category, WallDimensions as WallDims, CabinetData } from './types'
 import { CameraControls } from './ui/CameraControls'
 import { SettingsSidebar } from './ui/SettingsSidebar'
@@ -45,6 +46,7 @@ import {
 import { handleApplianceHorizontalGapChange } from './utils/handlers/applianceDimensionHandler'
 import { handleDeleteCabinet } from './utils/handlers/deleteCabinetHandler'
 import { updateAllDependentComponents, updateChildCabinets } from './utils/handlers/dependentComponentsHandler'
+import { handleFillGaps } from './utils/handlers/fillGapsHandler'
 import { handleFillerSelect as handleFillerSelectHandler, handleFillerToggle as handleFillerToggleHandler } from './utils/handlers/fillerHandler'
 import {
   handleKickerSelect as handleKickerSelectHandler,
@@ -75,6 +77,7 @@ import { BottomRightActions } from './ui/BottomRightActions'
 import { HistoryControls } from './ui/HistoryControls'
 import { SaveButton } from './ui/SaveButton'
 import { DimensionLineControls } from './ui/DimensionLineControls'
+import { MultiSelectToolbar } from './ui/MultiSelectToolbar'
 import type { AppMode } from './context/ModeContext'
 import { UserWidthSlider } from './ui/UserWidthSlider'
 import { UserRoomsModal } from './ui/UserRoomsModal'
@@ -83,6 +86,7 @@ import { serializeRoom } from './utils/roomPersistenceUtils'
 import type { UserSavedRoom, RoomCategory, SavedRoom } from '@/types/roomTypes'
 import { clamp } from '@/features/carcass/utils/carcass-math-utils'
 import { APPLIANCE_GAP_LIMITS } from '@/features/cabinets/factory/cabinetFactory'
+import type { FillGapsMode } from './utils/handlers/fillGapsTypes'
 
 interface ThreeSceneProps {
   wallDimensions: WallDims
@@ -137,6 +141,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
   const [cabinetGroups, setCabinetGroups] = useState<Map<string, Array<{ cabinetId: string; percentage: number }>>>(new Map())
   // Cabinet sync relationships: Map of cabinetId -> array of synced cabinetIds
   const [cabinetSyncs, setCabinetSyncs] = useState<Map<string, string[]>>(new Map())
+  const [viewGDFormulas, setViewGDFormulas] = useState<Map<ViewId, Record<string, string>>>(new Map())
   // Version counter that increments when cabinet dimensions change to trigger wall adjustments
   const [dimensionVersion, setDimensionVersion] = useState(0)
   // Debounced increment to avoid excessive updates when slider is being dragged
@@ -195,6 +200,24 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     cabinetSyncs,
     viewManager,
     wallDimensions,
+    wsProducts,
+    onFormulasApplied: () => {
+      debouncedIncrementDimensionVersion()
+    },
+  })
+
+  const {
+    getGDFormula,
+    setGDFormula,
+    scheduleGDFormulaRecalc,
+    getGDFormulaLastEvaluatedAt,
+  } = useGDFormulaEngine({
+    cabinets,
+    cabinetGroups,
+    viewManager,
+    wallDimensions,
+    viewGDFormulas,
+    setViewGDFormulas,
     onFormulasApplied: () => {
       debouncedIncrementDimensionVersion()
     },
@@ -203,7 +226,30 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
   const handleApplianceDimensionsUpdated = useCallback(() => {
     debouncedIncrementDimensionVersion()
     scheduleFormulaRecalc()
-  }, [debouncedIncrementDimensionVersion, scheduleFormulaRecalc])
+    scheduleGDFormulaRecalc()
+  }, [debouncedIncrementDimensionVersion, scheduleFormulaRecalc, scheduleGDFormulaRecalc])
+
+  const handleFillGapsAction = useCallback((mode: FillGapsMode) => {
+    const applied = handleFillGaps({
+      selectedCabinets,
+      cabinets,
+      wallDimensions,
+      mode,
+    })
+
+    if (applied) {
+      scheduleFormulaRecalc()
+      scheduleGDFormulaRecalc()
+      debouncedIncrementDimensionVersion()
+    }
+  }, [
+    cabinets,
+    debouncedIncrementDimensionVersion,
+    scheduleFormulaRecalc,
+    scheduleGDFormulaRecalc,
+    selectedCabinets,
+    wallDimensions,
+  ])
 
   // Price calculation for all cabinets
   // Proactively calculates prices without needing to open ProductPanel
@@ -321,7 +367,14 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
 
   useEffect(() => {
     scheduleFormulaRecalc()
-  }, [scheduleFormulaRecalc, dimensionVersion, dragEndVersion, cabinets.length])
+    scheduleGDFormulaRecalc()
+  }, [
+    scheduleFormulaRecalc,
+    scheduleGDFormulaRecalc,
+    dimensionVersion,
+    dragEndVersion,
+    cabinets.length,
+  ])
 
   useWallTransparency({
     cameraViewMode,
@@ -407,6 +460,8 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     setCabinetGroups,
     cabinetSyncs,
     setCabinetSyncs,
+    viewGDFormulas,
+    setViewGDFormulas,
     wallDimensions,
     wallColor,
     setWallColor,
@@ -430,6 +485,8 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
     setCabinetGroups,
     cabinetSyncs,
     setCabinetSyncs,
+    viewGDFormulas,
+    setViewGDFormulas,
     wallDimensions,
     wallColor,
     setWallColor,
@@ -817,6 +874,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
               roomName: effectiveRoomName || projectName,
               roomCategory: (categoryName as RoomCategory) || currentUserRoom?.category || "Kitchen",
               cabinetSyncs,
+              viewGDFormulas,
             })
 
             // Save user room with project details using mutation
@@ -950,6 +1008,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         roomName: currentRoomName || projectName,
         roomCategory: (categoryName as RoomCategory) || "Kitchen",
         cabinetSyncs,
+        viewGDFormulas,
       })
 
       // Save user room using mutation
@@ -1001,7 +1060,7 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
       const partDataManager = getPartDataManager()
       partDataManager.setWsProducts(wsProducts)
       partDataManager.updateAllCabinets(cabinets)
-      
+
       const partDataList = partDataManager.getAllParts()
       if (partDataList.length === 0) {
         alert('No parts found to export.')
@@ -1251,6 +1310,11 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
         mode={selectedMode}
       />
 
+      <MultiSelectToolbar
+        selectedCabinets={selectedCabinets}
+        onFillGaps={handleFillGapsAction}
+      />
+
       {/* Settings Sidebar */}
       <SettingsSidebar
         isOpen={showSettingsSidebar}
@@ -1339,8 +1403,13 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
               cabinets,
               cabinetGroups,
               viewManager,
-              wallDimensions
+              wallDimensions,
+              viewId: selectedViewId as ViewId,
             })
+
+            // Trigger formula recalculation and layout refresh
+            scheduleGDFormulaRecalc()
+            debouncedIncrementDimensionVersion()
           }}
           onSplashbackHeightChange={(viewId, height) => {
             handleSplashbackHeightChange(viewId as ViewId, height, {
@@ -1348,6 +1417,10 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
               viewManager,
               wallDimensions
             })
+
+            // Trigger formula recalculation and layout refresh
+            scheduleGDFormulaRecalc()
+            debouncedIncrementDimensionVersion()
           }}
           onKickerHeightChange={(viewId, height) => {
             handleKickerHeightChange(viewId as ViewId, height, {
@@ -1355,7 +1428,15 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
               viewManager,
               wallDimensions
             })
+
+            // Trigger formula recalculation and layout refresh
+            scheduleGDFormulaRecalc()
+            debouncedIncrementDimensionVersion()
           }}
+          formulaPieces={formulaPieces}
+          getGDFormula={getGDFormula}
+          onGDFormulaChange={setGDFormula}
+          getGDFormulaLastEvaluatedAt={getGDFormulaLastEvaluatedAt}
         />
       )}
 
@@ -1539,7 +1620,8 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
                 }
               )
 
-              // Debounced increment to trigger wall adjustments after dimension change
+              // Trigger formula recalculation and layout refresh
+              scheduleFormulaRecalc()
               debouncedIncrementDimensionVersion()
             }
           }}
@@ -1559,6 +1641,13 @@ const WallScene: React.FC<ThreeSceneProps> = ({ wallDimensions, onDimensionsChan
                 kickerHeightChanged: true
               })
             }
+          }}
+          onViewKickerHeightChange={(viewId, height) => {
+            handleKickerHeightChange(viewId as ViewId, height, {
+              cabinets,
+              viewManager,
+              wallDimensions
+            })
           }}
           onDoorToggle={(enabled) => {
             if (selectedCabinet) {

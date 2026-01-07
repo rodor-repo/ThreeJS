@@ -6,6 +6,7 @@ import type { CabinetData, WallDimensions } from "../types"
 import type { ViewId } from "@/features/cabinets/ViewManager"
 import { getClient } from "@/app/QueryProvider"
 import { priceQueryKeys } from "@/features/cabinets/ui/productPanel/utils/queryKeys"
+import type { WsProducts } from "@/types/erpTypes"
 import {
   cabinetPanelState,
   getPersistedState,
@@ -32,8 +33,24 @@ import {
 } from "../utils/handlers/applianceGapHandler"
 import { updateAllDependentComponents } from "../utils/handlers/dependentComponentsHandler"
 import { getEffectiveLeftEdge, getEffectiveRightEdge } from "../lib/snapUtils"
+import {
+  realignViewCabinets,
+  realignAllViews,
+  type ViewManagerResult,
+} from "../utils/handlers/viewRealignHandler"
 import type { FormulaPiece } from "@/types/formulaTypes"
-import { APPLIANCE_FORMULA_DIM_ID_SET } from "@/types/formulaTypes"
+import {
+  APPLIANCE_FORMULA_DIM_ID_SET,
+  BENCHTOP_FORMULA_DIM_ID_SET,
+  FILLER_PANEL_FORMULA_DIM_ID_SET,
+} from "@/types/formulaTypes"
+import {
+  BENCHTOP_FIXED_DEPTH_EXTENSION,
+  DEFAULT_BENCHTOP_FRONT_OVERHANG,
+  DEFAULT_BENCHTOP_THICKNESS,
+} from "@/features/carcass/builders/builder-constants"
+import { updateBenchtopPosition } from "../utils/handlers/benchtopPositionHandler"
+import { ProductDataResponse } from "@/server/getProductData"
 
 const EPSILON = 0.1
 const DEFAULT_MATERIAL_COLOR = "#ffffff"
@@ -51,9 +68,27 @@ const isApplianceFormulaDimId = (
 ): dimId is ApplianceFormulaDimId =>
   APPLIANCE_FORMULA_DIM_ID_SET.has(dimId as ApplianceFormulaDimId)
 
-interface ViewManagerResult {
-  getCabinetsInView: (viewId: ViewId) => string[]
-}
+type BenchtopFormulaDimId = typeof BENCHTOP_FORMULA_DIM_ID_SET extends Set<
+  infer T
+>
+  ? T
+  : never
+
+const isBenchtopFormulaDimId = (
+  dimId: string
+): dimId is BenchtopFormulaDimId =>
+  BENCHTOP_FORMULA_DIM_ID_SET.has(dimId as BenchtopFormulaDimId)
+
+type FillerPanelFormulaDimId = typeof FILLER_PANEL_FORMULA_DIM_ID_SET extends Set<
+  infer T
+>
+  ? T
+  : never
+
+const isFillerPanelFormulaDimId = (
+  dimId: string
+): dimId is FillerPanelFormulaDimId =>
+  FILLER_PANEL_FORMULA_DIM_ID_SET.has(dimId as FillerPanelFormulaDimId)
 
 type UseFormulaEngineArgs = {
   cabinets: CabinetData[]
@@ -63,6 +98,7 @@ type UseFormulaEngineArgs = {
   cabinetSyncs: Map<string, string[]>
   viewManager: ViewManagerResult
   wallDimensions: WallDimensions
+  wsProducts?: WsProducts | null
   onFormulasApplied?: () => void
 }
 
@@ -121,9 +157,11 @@ const getCabinetLabel = (cabinet: CabinetData): string => {
 
 const buildFormulaPieces = (
   cabinets: CabinetData[],
-  getProductDataCached: (productId: string | undefined) => any
+  getProductDataCached: (productId: string | undefined) => any,
+  wsProducts?: WsProducts | null
 ): FormulaPiece[] => {
   const pieces: FormulaPiece[] = []
+  const viewGdMap = new Map<string, Map<string, string>>()
 
   cabinets.forEach((cabinet) => {
     const label = getCabinetLabel(cabinet)
@@ -260,6 +298,52 @@ const buildFormulaPieces = (
       )
     }
 
+    if (cabinet.cabinetType === "benchtop") {
+      const benchtopGroup = `${baseGroup} - Benchtop`
+      pieces.push(
+        {
+          id: `${cabId}-benchtop-heightFromFloor`,
+          label: "Height From Floor",
+          token: `dim("${cabId}", "benchtop:heightFromFloor")`,
+          group: benchtopGroup,
+        },
+        {
+          id: `${cabId}-benchtop-thickness`,
+          label: "Benchtop Thickness",
+          token: `dim("${cabId}", "benchtop:thickness")`,
+          group: benchtopGroup,
+        },
+        {
+          id: `${cabId}-benchtop-frontOverhang`,
+          label: "Front Overhang",
+          token: `dim("${cabId}", "benchtop:frontOverhang")`,
+          group: benchtopGroup,
+        },
+        {
+          id: `${cabId}-benchtop-leftOverhang`,
+          label: "Left Overhang",
+          token: `dim("${cabId}", "benchtop:leftOverhang")`,
+          group: benchtopGroup,
+        },
+        {
+          id: `${cabId}-benchtop-rightOverhang`,
+          label: "Right Overhang",
+          token: `dim("${cabId}", "benchtop:rightOverhang")`,
+          group: benchtopGroup,
+        }
+      )
+    }
+
+    if (cabinet.cabinetType === "filler" || cabinet.cabinetType === "panel") {
+      const positionGroup = `${baseGroup} - Position`
+      pieces.push({
+        id: `${cabId}-fillerPanel-offTheFloor`,
+        label: "Off The Floor",
+        token: `dim("${cabId}", "fillerPanel:offTheFloor")`,
+        group: positionGroup,
+      })
+    }
+
     if (cabinet.productId) {
       const cached = getProductDataCached(cabinet.productId)
       const dims = cached?.product?.dims
@@ -276,7 +360,32 @@ const buildFormulaPieces = (
           })
         })
       }
+
+      if (cabinet.viewId && cabinet.viewId !== "none" && dims) {
+        const viewId = cabinet.viewId
+        const viewEntry = viewGdMap.get(viewId) ?? new Map<string, string>()
+        Object.values(dims).forEach((dimObj: any) => {
+          if (!dimObj?.GDId || dimObj.visible === false) return
+          if (viewEntry.has(dimObj.GDId)) return
+          const gdLabel =
+            wsProducts?.GDs?.[dimObj.GDId]?.GD || dimObj.dim || dimObj.GDId
+          viewEntry.set(dimObj.GDId, gdLabel)
+        })
+        viewGdMap.set(viewId, viewEntry)
+      }
     }
+  })
+
+  viewGdMap.forEach((gdEntries, viewId) => {
+    const group = `View ${viewId} - Global Dimensions`
+    gdEntries.forEach((label, gdId) => {
+      pieces.push({
+        id: `view-${viewId}-${gdId}`,
+        label,
+        token: `viewGd("${viewId}", "${gdId}")`,
+        group,
+      })
+    })
   })
 
   return pieces
@@ -310,6 +419,61 @@ const getApplianceFormulaValue = (
   }
 }
 
+const getBenchtopFormulaValue = (
+  cabinet: CabinetData,
+  dimId: string
+): number | null => {
+  if (!isBenchtopFormulaDimId(dimId)) return null
+
+  const heightFromFloor =
+    cabinet.benchtopHeightFromFloor ?? cabinet.group.position.y
+  const thickness =
+    cabinet.benchtopThickness ??
+    cabinet.carcass.benchtop?.thickness ??
+    cabinet.carcass.dimensions.height ??
+    DEFAULT_BENCHTOP_THICKNESS
+  const frontOverhang =
+    cabinet.benchtopFrontOverhang ??
+    cabinet.carcass.config.benchtopFrontOverhang ??
+    DEFAULT_BENCHTOP_FRONT_OVERHANG
+  const leftOverhang =
+    cabinet.benchtopLeftOverhang ??
+    cabinet.carcass.config.benchtopLeftOverhang ??
+    0
+  const rightOverhang =
+    cabinet.benchtopRightOverhang ??
+    cabinet.carcass.config.benchtopRightOverhang ??
+    0
+
+  switch (dimId) {
+    case "benchtop:heightFromFloor":
+      return heightFromFloor
+    case "benchtop:thickness":
+      return thickness
+    case "benchtop:frontOverhang":
+      return frontOverhang
+    case "benchtop:leftOverhang":
+      return leftOverhang
+    case "benchtop:rightOverhang":
+      return rightOverhang
+    default:
+      return null
+  }
+}
+
+const getFillerPanelFormulaValue = (
+  cabinet: CabinetData,
+  dimId: string
+): number | null => {
+  if (!isFillerPanelFormulaDimId(dimId)) return null
+
+  if (dimId === "fillerPanel:offTheFloor") {
+    return cabinet.parentYOffset ?? cabinet.group.position.y
+  }
+
+  return null
+}
+
 export function useFormulaEngine({
   cabinets,
   selectedCabinets,
@@ -318,6 +482,7 @@ export function useFormulaEngine({
   cabinetSyncs,
   viewManager,
   wallDimensions,
+  wsProducts,
   onFormulasApplied,
 }: UseFormulaEngineArgs): UseFormulaEngineReturn {
   const cabinetById = useMemo(
@@ -327,12 +492,12 @@ export function useFormulaEngine({
 
   const getProductDataCached = useCallback((productId: string | undefined) => {
     if (!productId) return undefined
-    return getClient().getQueryData(priceQueryKeys.productData(productId))
+    return getClient().getQueryData(priceQueryKeys.productData(productId)) as ProductDataResponse | undefined
   }, [])
 
   const formulaPieces = useMemo(
-    () => buildFormulaPieces(cabinets, getProductDataCached),
-    [cabinets, getProductDataCached]
+    () => buildFormulaPieces(cabinets, getProductDataCached, wsProducts),
+    [cabinets, getProductDataCached, wsProducts]
   )
 
   const [lastEvaluatedVersion, setLastEvaluatedVersion] = useState(0)
@@ -340,14 +505,29 @@ export function useFormulaEngine({
 
   const isApplyingRef = useRef(false)
   const recalcRef = useRef<() => void>(() => {})
+  const realignAllRef = useRef<() => void>(() => {})
 
-  const scheduleFormulaRecalc = useMemo(
-    () =>
-      debounce(() => {
-        recalcRef.current()
-      }, 300),
-    []
-  )
+  const scheduleFormulaRecalc = useMemo(() => {
+    const debouncedRecalc = debounce(() => {
+      recalcRef.current()
+    }, 300)
+
+    const debouncedRealign = debounce(() => {
+      realignAllRef.current()
+    }, 400) // Fires after formulas should be finished applying
+
+    const trigger = () => {
+      debouncedRecalc()
+      debouncedRealign()
+    }
+
+    trigger.cancel = () => {
+      debouncedRecalc.cancel()
+      debouncedRealign.cancel()
+    }
+
+    return trigger
+  }, [])
 
   const getFormula = useCallback((cabinetId: string, dimId: string) => {
     const current = getPersistedState(cabinetId)
@@ -423,6 +603,19 @@ export function useFormulaEngine({
         if (isFiniteNumber(applianceVal)) return applianceVal
       }
 
+      if (cabinet.cabinetType === "benchtop") {
+        const benchtopVal = getBenchtopFormulaValue(cabinet, dimId)
+        if (isFiniteNumber(benchtopVal)) return benchtopVal
+      }
+
+      if (
+        cabinet.cabinetType === "filler" ||
+        cabinet.cabinetType === "panel"
+      ) {
+        const fillerPanelVal = getFillerPanelFormulaValue(cabinet, dimId)
+        if (isFiniteNumber(fillerPanelVal)) return fillerPanelVal
+      }
+
       const persisted = getPersistedState(cabinetId)
       const persistedVal = toNumber(persisted?.values?.[dimId])
       if (isFiniteNumber(persistedVal)) return persistedVal
@@ -436,6 +629,35 @@ export function useFormulaEngine({
       return toNumber(fallback)
     },
     [cabinetById, getProductDataCached]
+  )
+
+  const getViewGdValue = useCallback(
+    (viewId: string, gdId: string): number | null => {
+      if (!viewId || viewId === "none") return null
+      const cabinetIds = viewManager.getCabinetsInView
+        ? viewManager.getCabinetsInView(viewId as ViewId)
+        : cabinets
+            .filter((cabinet) => cabinet.viewId === viewId)
+            .map((cabinet) => cabinet.cabinetId)
+
+      for (const cabinetId of cabinetIds) {
+        const cabinet = cabinetById.get(cabinetId)
+        if (!cabinet?.productId) continue
+        const cached = getProductDataCached(cabinet.productId)
+        const dims = cached?.product?.dims
+        if (!dims) continue
+        const dimEntry = Object.entries(dims).find(
+          ([, dimObj]) => dimObj?.GDId === gdId && dimObj?.visible !== false
+        )
+        if (!dimEntry) continue
+        const dimId = dimEntry[0]
+        const value = getCabinetDimValue(cabinet.cabinetId, dimId)
+        if (isFiniteNumber(value)) return value
+      }
+
+      return null
+    },
+    [cabinetById, cabinets, getCabinetDimValue, getProductDataCached, viewManager]
   )
 
   const applyApplianceFormulaValue = useCallback(
@@ -544,6 +766,201 @@ export function useFormulaEngine({
       viewManager,
       wallDimensions,
     ]
+  )
+
+  const applyBenchtopFormulaValue = useCallback(
+    (
+      cabinet: CabinetData,
+      dimId: string,
+      value: number
+    ): { applied: boolean; actual?: number } => {
+      if (!isBenchtopFormulaDimId(dimId)) {
+        return { applied: false }
+      }
+
+      const currentFrontOverhang =
+        cabinet.benchtopFrontOverhang ??
+        cabinet.carcass.config.benchtopFrontOverhang ??
+        DEFAULT_BENCHTOP_FRONT_OVERHANG
+      const currentLeftOverhang =
+        cabinet.benchtopLeftOverhang ??
+        cabinet.carcass.config.benchtopLeftOverhang ??
+        0
+      const currentRightOverhang =
+        cabinet.benchtopRightOverhang ??
+        cabinet.carcass.config.benchtopRightOverhang ??
+        0
+
+      if (dimId === "benchtop:heightFromFloor") {
+        const clampedValue = Math.max(0, Math.min(1200, value))
+        const parentCabinet = cabinet.benchtopParentCabinetId
+          ? cabinets.find(
+              (cab) => cab.cabinetId === cabinet.benchtopParentCabinetId
+            )
+          : undefined
+
+        if (parentCabinet) {
+          const baseY =
+            parentCabinet.group.position.y +
+            parentCabinet.carcass.dimensions.height
+          const heightDelta = clampedValue - baseY
+
+          cabinet.manuallyEditedDelta = {
+            ...cabinet.manuallyEditedDelta,
+            height: heightDelta,
+          }
+
+          updateBenchtopPosition(parentCabinet, cabinets, {
+            positionChanged: true,
+          })
+        } else {
+          cabinet.benchtopHeightFromFloor = clampedValue
+          cabinet.group.position.setY(clampedValue)
+        }
+
+        setSelectedCabinets((prev) => prev.map((cab) => ({ ...cab })))
+        const actual = getBenchtopFormulaValue(cabinet, dimId) ?? clampedValue
+        return { applied: true, actual }
+      }
+
+      if (dimId === "benchtop:thickness") {
+        const clampedValue = Math.max(20, Math.min(60, value))
+        cabinet.benchtopThickness = clampedValue
+        cabinet.carcass.updateDimensions({
+          width: cabinet.carcass.dimensions.width,
+          height: clampedValue,
+          depth: cabinet.carcass.dimensions.depth,
+        })
+
+        const parentCabinet = cabinet.benchtopParentCabinetId
+          ? cabinets.find(
+              (cab) => cab.cabinetId === cabinet.benchtopParentCabinetId
+            )
+          : undefined
+        if (parentCabinet) {
+          updateAllDependentComponents(parentCabinet, cabinets, wallDimensions, {
+            widthChanged: true,
+            heightChanged: true,
+            depthChanged: true,
+          })
+        }
+
+        setSelectedCabinets((prev) => prev.map((cab) => ({ ...cab })))
+        return { applied: true, actual: clampedValue }
+      }
+
+      if (
+        dimId === "benchtop:frontOverhang" ||
+        dimId === "benchtop:leftOverhang" ||
+        dimId === "benchtop:rightOverhang"
+      ) {
+        const clampedValue = Math.max(0, Math.min(100, value))
+        const frontOverhang =
+          dimId === "benchtop:frontOverhang"
+            ? clampedValue
+            : currentFrontOverhang
+        const leftOverhang =
+          dimId === "benchtop:leftOverhang"
+            ? clampedValue
+            : currentLeftOverhang
+        const rightOverhang =
+          dimId === "benchtop:rightOverhang"
+            ? clampedValue
+            : currentRightOverhang
+
+        cabinet.benchtopFrontOverhang = frontOverhang
+        cabinet.benchtopLeftOverhang = leftOverhang
+        cabinet.benchtopRightOverhang = rightOverhang
+
+        if (dimId === "benchtop:frontOverhang") {
+          const parentCabinet = cabinet.benchtopParentCabinetId
+            ? cabinets.find(
+                (cab) => cab.cabinetId === cabinet.benchtopParentCabinetId
+              )
+            : undefined
+          const parentDepth = parentCabinet?.carcass.dimensions.depth ?? 600
+          cabinet.carcass.dimensions.depth =
+            parentDepth + BENCHTOP_FIXED_DEPTH_EXTENSION + frontOverhang
+        }
+
+        cabinet.carcass.updateBenchtopOverhangs(
+          frontOverhang,
+          leftOverhang,
+          rightOverhang
+        )
+
+        const parentCabinet = cabinet.benchtopParentCabinetId
+          ? cabinets.find(
+              (cab) => cab.cabinetId === cabinet.benchtopParentCabinetId
+            )
+          : undefined
+        if (parentCabinet) {
+          updateAllDependentComponents(parentCabinet, cabinets, wallDimensions, {
+            widthChanged: true,
+            heightChanged: true,
+            depthChanged: true,
+          })
+        }
+
+        setSelectedCabinets((prev) => prev.map((cab) => ({ ...cab })))
+        const actual = getBenchtopFormulaValue(cabinet, dimId) ?? clampedValue
+        return { applied: true, actual }
+      }
+
+      return { applied: false }
+    },
+    [cabinets, setSelectedCabinets, wallDimensions]
+  )
+
+  const applyFillerPanelFormulaValue = useCallback(
+    (
+      cabinet: CabinetData,
+      dimId: string,
+      value: number
+    ): { applied: boolean; actual?: number } => {
+      if (!isFillerPanelFormulaDimId(dimId)) {
+        return { applied: false }
+      }
+
+      const currentY = cabinet.group.position.y
+      const currentHeight = cabinet.carcass.dimensions.height
+      const topPosition = currentY + currentHeight
+      const parentCabinet = cabinet.parentCabinetId
+        ? cabinets.find((cab) => cab.cabinetId === cabinet.parentCabinetId)
+        : undefined
+
+      if (parentCabinet) {
+        cabinet.parentYOffset = value
+      } else {
+        cabinet.parentYOffset = undefined
+      }
+
+      const newY = parentCabinet
+        ? parentCabinet.group.position.y + value
+        : value
+      const newHeight = topPosition - newY
+
+      cabinet.group.position.set(
+        cabinet.group.position.x,
+        newY,
+        cabinet.group.position.z
+      )
+      cabinet.carcass.updateDimensions({
+        width: cabinet.carcass.dimensions.width,
+        height: newHeight,
+        depth: cabinet.carcass.dimensions.depth,
+      })
+
+      updateAllDependentComponents(cabinet, cabinets, wallDimensions, {
+        positionChanged: true,
+        heightChanged: true,
+      })
+
+      setSelectedCabinets((prev) => prev.map((cab) => ({ ...cab })))
+      const actual = getFillerPanelFormulaValue(cabinet, dimId) ?? value
+      return { applied: true, actual }
+    },
+    [cabinets, setSelectedCabinets, wallDimensions]
   )
 
   const applyProductFormulaUpdates = useCallback(
@@ -704,6 +1121,8 @@ export function useFormulaEngine({
             getCabinetField(cabinetId, field) ?? 0,
           dim: (cabinetId: string, dimId: string) =>
             getCabinetDimValue(cabinetId, dimId) ?? 0,
+          viewGd: (viewId: string, gdId: string) =>
+            getViewGdValue(viewId, gdId) ?? 0,
         }
 
         cabinets.forEach((cabinet) => {
@@ -767,12 +1186,68 @@ export function useFormulaEngine({
             return
           }
 
+          const isBenchtop = cabinet.cabinetType === "benchtop"
+          const isFillerPanel =
+            cabinet.cabinetType === "filler" || cabinet.cabinetType === "panel"
           const cached = getProductDataCached(cabinet.productId)
-          const appliedValues = applyProductFormulaUpdates(
-            cabinet,
-            updates,
-            cached
-          )
+          let appliedValues: Record<string, number> = {}
+
+          if (isBenchtop || isFillerPanel) {
+            const customUpdates: Record<string, number> = {}
+            const remainingUpdates: Record<string, number> = {}
+
+            Object.entries(updates).forEach(([dimId, value]) => {
+              if (isBenchtop && BENCHTOP_FORMULA_DIM_ID_SET.has(dimId as BenchtopFormulaDimId)) {
+                customUpdates[dimId] = value
+                return
+              }
+              if (isFillerPanel && FILLER_PANEL_FORMULA_DIM_ID_SET.has(dimId as FillerPanelFormulaDimId)) {
+                customUpdates[dimId] = value
+                return
+              }
+              remainingUpdates[dimId] = value
+            })
+
+            if (Object.keys(remainingUpdates).length > 0) {
+              appliedValues = applyProductFormulaUpdates(
+                cabinet,
+                remainingUpdates,
+                cached
+              )
+            }
+
+            const customApplied: Record<string, number> = {}
+
+            if (isBenchtop) {
+              Object.entries(customUpdates).forEach(([dimId, value]) => {
+                const result = applyBenchtopFormulaValue(
+                  cabinet,
+                  dimId,
+                  value
+                )
+                if (result.applied && isFiniteNumber(result.actual)) {
+                  customApplied[dimId] = result.actual
+                }
+              })
+            }
+
+            if (isFillerPanel) {
+              Object.entries(customUpdates).forEach(([dimId, value]) => {
+                const result = applyFillerPanelFormulaValue(
+                  cabinet,
+                  dimId,
+                  value
+                )
+                if (result.applied && isFiniteNumber(result.actual)) {
+                  customApplied[dimId] = result.actual
+                }
+              })
+            }
+
+            appliedValues = { ...appliedValues, ...customApplied }
+          } else {
+            appliedValues = applyProductFormulaUpdates(cabinet, updates, cached)
+          }
 
           if (Object.keys(appliedValues).length > 0) {
             if (isDev) {
@@ -813,13 +1288,22 @@ export function useFormulaEngine({
     cabinets,
     getCabinetDimValue,
     getCabinetField,
+    getViewGdValue,
     getProductDataCached,
     applyApplianceFormulaValue,
+    applyBenchtopFormulaValue,
+    applyFillerPanelFormulaValue,
     applyProductFormulaUpdates,
     onFormulasApplied,
   ])
 
   recalcRef.current = recalcFormulas
+
+  useEffect(() => {
+    realignAllRef.current = () => {
+      realignAllViews(cabinets, viewManager, wallDimensions)
+    }
+  }, [cabinets, viewManager, wallDimensions])
 
   const getFormulaLastEvaluatedAt = useCallback(
     (cabinetId: string) => lastEvaluatedAtRef.current.get(cabinetId),

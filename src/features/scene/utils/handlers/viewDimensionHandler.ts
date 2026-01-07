@@ -27,9 +27,14 @@ export const handleViewDimensionChange = (
     cabinetGroups: Map<string, Array<{ cabinetId: string; percentage: number }>>
     viewManager: ViewManagerResult
     wallDimensions: WallDimensions
+    viewId?: ViewId
   }
 ) => {
-  const { cabinets, cabinetGroups, viewManager, wallDimensions } = params
+  const { cabinets, cabinetGroups, viewManager, wallDimensions, viewId } = params
+
+  const cabinetsInScope = viewId
+    ? cabinets.filter((cabinet) => cabinet.viewId === viewId)
+    : cabinets
 
   // Find all cabinets that have this GDId in their product dimensions
   const cabinetsToUpdate: Array<{
@@ -47,7 +52,7 @@ export const handleViewDimensionChange = (
     Object.entries(dims).forEach(([dimId, dimObj]: [string, any]) => {
       if (dimObj.GDId === gdId && dimObj.visible !== false) {
         // Find all cabinets with this productId
-        const cabinetsWithProduct = cabinets.filter(
+        const cabinetsWithProduct = cabinetsInScope.filter(
           (c) => c.productId === productId
         )
         cabinetsWithProduct.forEach((cabinet) => {
@@ -114,7 +119,7 @@ export const handleViewDimensionChange = (
       }
 
       // Apply door overhang to ALL top/overhead cabinets
-      cabinets.forEach((cab) => {
+      cabinetsInScope.forEach((cab) => {
         if (cab.cabinetType === "top") {
           cab.carcass.updateOverhangDoor(overhangDoor)
           // Update cabinetPanelState if this cabinet has the dimension

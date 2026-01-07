@@ -8,6 +8,7 @@
  */
 
 import { CabinetType } from "@/features/carcass"
+import type { ViewGDFormulas } from "@/types/formulaTypes"
 
 /**
  * Room category type.
@@ -129,6 +130,7 @@ export interface SavedRoom {
   cabinets: SavedCabinet[]
   views: SavedView[]
   cabinetSyncs?: Array<{ cabinetId: string; syncedWith: string[] }>
+  viewGDFormulas?: ViewGDFormulas
 }
 
 /**

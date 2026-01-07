@@ -5,6 +5,7 @@ import {
   type SavedCabinet,
   type SavedView,
 } from "@/types/roomTypes"
+import type { ViewGDFormulas } from "@/types/formulaTypes"
 import { cabinetPanelState } from "@/features/cabinets/ui/ProductPanel"
 import { priceQueryKeys } from "@/features/cabinets/ui/productPanel/utils/queryKeys"
 import type { WsProducts } from "@/types/erpTypes"
@@ -150,14 +151,26 @@ async function prefetchProductData(productIds: string[]): Promise<void> {
 
 const remapFormulaIds = (
   formula: string,
-  idMap: Map<string, string>
+  idMap: Map<string, string>,
+  viewIdMap?: Map<string, ViewId>
 ): string => {
-  return formula.replace(
+  const withCabinetIds = formula.replace(
     /(cab|dim)\(\s*(['"])([^'"]+)\2/g,
     (match, fnName, quote, id) => {
       const mapped = idMap.get(id)
       if (!mapped) return match
       return `${fnName}(${quote}${mapped}${quote}`
+    }
+  )
+
+  if (!viewIdMap) return withCabinetIds
+
+  return withCabinetIds.replace(
+    /viewGd\(\s*(['"])([^'"]+)\1/g,
+    (match, quote, viewId) => {
+      const mapped = viewIdMap.get(viewId)
+      if (!mapped) return match
+      return `viewGd(${quote}${mapped}${quote}`
     }
   )
 }
@@ -190,6 +203,7 @@ interface SerializeRoomOptions {
   roomName: string
   roomCategory: RoomCategory
   cabinetSyncs?: CabinetSyncsMap
+  viewGDFormulas?: Map<ViewId, Record<string, string>>
 }
 
 export function serializeRoom({
@@ -203,6 +217,7 @@ export function serializeRoom({
   roomName,
   roomCategory,
   cabinetSyncs,
+  viewGDFormulas,
 }: SerializeRoomOptions): SavedRoom {
   const savedCabinets: SavedCabinet[] = cabinets.map((cabinet) => {
     const persisted = cabinetPanelState.get(cabinet.cabinetId)
@@ -288,6 +303,15 @@ export function serializeRoom({
       }))
     : undefined
 
+  const savedViewGDFormulas: ViewGDFormulas | undefined = viewGDFormulas
+    ? Object.fromEntries(
+        Array.from(viewGDFormulas.entries()).filter(
+          ([viewId, formulas]) =>
+            viewId !== "none" && Object.keys(formulas || {}).length > 0
+        )
+      )
+    : undefined
+
   const backWallLength = wallDimensions.backWallLength ?? wallDimensions.length
 
   return {
@@ -309,6 +333,7 @@ export function serializeRoom({
     cabinets: savedCabinets,
     views: savedViews,
     cabinetSyncs: savedSyncs,
+    viewGDFormulas: savedViewGDFormulas,
   }
 }
 
@@ -337,6 +362,7 @@ interface RestoreRoomOptions {
     rightLock: boolean
   ) => void
   setCabinetSyncs?: (syncs: CabinetSyncsMap) => void
+  setViewGDFormulas?: (formulas: Map<ViewId, Record<string, string>>) => void
 }
 
 export async function restoreRoom({
@@ -353,6 +379,7 @@ export async function restoreRoom({
   assignCabinetToView,
   updateCabinetLock,
   setCabinetSyncs,
+  setViewGDFormulas,
 }: RestoreRoomOptions): Promise<void> {
   setNumbersVisible(false)
   clearCabinets()
@@ -583,7 +610,7 @@ export async function restoreRoom({
                 Object.entries(savedCabinet.dimensionFormulas).map(
                   ([dimId, formula]) => [
                     dimId,
-                    remapFormulaIds(formula, oldIdToNewId),
+                    remapFormulaIds(formula, oldIdToNewId, viewIdMap),
                   ]
                 )
               )
@@ -754,6 +781,32 @@ export async function restoreRoom({
           }
         })
         setCabinetSyncs(syncsMap)
+      }
+
+      if (setViewGDFormulas) {
+        const nextViewFormulas = new Map<ViewId, Record<string, string>>()
+        const savedViewFormulas = savedRoom.viewGDFormulas || {}
+
+        Object.entries(savedViewFormulas).forEach(([savedViewId, formulas]) => {
+          const mappedViewId = viewIdMap.get(savedViewId)
+          if (!mappedViewId) return
+
+          const mappedFormulas: Record<string, string> = {}
+          Object.entries(formulas || {}).forEach(([gdId, formula]) => {
+            if (!formula || formula.trim() === "") return
+            mappedFormulas[gdId] = remapFormulaIds(
+              formula,
+              oldIdToNewId,
+              viewIdMap
+            )
+          })
+
+          if (Object.keys(mappedFormulas).length > 0) {
+            nextViewFormulas.set(mappedViewId, mappedFormulas)
+          }
+        })
+
+        setViewGDFormulas(nextViewFormulas)
       }
 
       console.log(

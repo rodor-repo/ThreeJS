@@ -4,10 +4,13 @@ import { ChevronLeft } from 'lucide-react'
 import { useQueries } from '@tanstack/react-query'
 import { getProductData } from '@/server/getProductData'
 import { priceQueryKeys } from '@/features/cabinets/ui/productPanel/utils/queryKeys'
-import type { WsProducts, GDThreeJsType } from '@/types/erpTypes'
+import type { WsProducts } from '@/types/erpTypes'
+import type { FormulaPiece } from '@/types/formulaTypes'
 import type { CabinetData, WallDimensions } from '../types'
 import { cabinetPanelState } from '@/features/cabinets/ui/ProductPanel'
-import _ from 'lodash'
+import type { ViewId } from '@/features/cabinets/ViewManager'
+import { GDFormulaSection } from './GDFormulaSection'
+import { KickerHeightSection } from '@/features/cabinets/ui/productPanel/components/KickerHeightSection'
 
 type Props = {
   isOpen: boolean
@@ -21,6 +24,17 @@ type Props = {
   onDimensionChange?: (gdId: string, newValue: number, productDataMap: Map<string, any>) => void
   onSplashbackHeightChange?: (viewId: string, height: number) => void
   onKickerHeightChange?: (viewId: string, height: number) => void
+  formulaPieces?: FormulaPiece[]
+  getGDFormula?: (viewId: ViewId, gdId: string) => string | undefined
+  onGDFormulaChange?: (
+    viewId: ViewId,
+    gdId: string,
+    formula: string | null
+  ) => void
+  getGDFormulaLastEvaluatedAt?: (
+    viewId: ViewId,
+    gdId: string
+  ) => number | undefined
 }
 
 export const ViewDetailDrawer: React.FC<Props> = ({
@@ -34,17 +48,25 @@ export const ViewDetailDrawer: React.FC<Props> = ({
   onDimensionChange,
   onSplashbackHeightChange,
   onKickerHeightChange,
+  formulaPieces,
+  getGDFormula,
+  onGDFormulaChange,
+  getGDFormulaLastEvaluatedAt,
 }) => {
-  // Get all unique productIds from cabinets in the scene
+  const viewCabinets = useMemo(() => {
+    if (!viewId) return []
+    return cabinets.filter((cabinet) => cabinet.viewId === viewId)
+  }, [cabinets, viewId])
+  // Get all unique productIds from cabinets in the view
   const uniqueProductIds = useMemo(() => {
     const productIdSet = new Set<string>()
-    cabinets.forEach((cabinet) => {
+    viewCabinets.forEach((cabinet) => {
       if (cabinet.productId && !cabinet.productId.startsWith("appliance-")) {
         productIdSet.add(cabinet.productId)
       }
     })
     return Array.from(productIdSet).sort()
-  }, [cabinets])
+  }, [viewCabinets])
 
   // Memoize queries to keep useQueries stable
   const queries = useMemo(() => uniqueProductIds.map((productId) => ({
@@ -103,7 +125,7 @@ export const ViewDetailDrawer: React.FC<Props> = ({
           if (!productId) return
           
           // Find cabinets with this productId
-          const cabinetsWithProduct = cabinets.filter(c => c.productId === productId)
+          const cabinetsWithProduct = viewCabinets.filter(c => c.productId === productId)
           
           // Find dimensions with this GDId
           const dims = query.data.product.dims
@@ -209,74 +231,64 @@ export const ViewDetailDrawer: React.FC<Props> = ({
         }
       })
       .filter((gd): gd is NonNullable<typeof gd> => gd !== null)
-  }, [allGDIds, wsProducts, productQueries, uniqueProductIds, cabinets])
+  }, [allGDIds, wsProducts, productQueries, uniqueProductIds, viewCabinets])
 
   // State for slider values
   const [sliderValues, setSliderValues] = useState<Record<string, number>>({})
   
   // Calculate current gap between ALL base/tall and ALL top cabinets in the view (globally)
-  const calculateCurrentGap = useCallback((viewId: string | null): number => {
-    if (!viewId) return 20
-    
-    // Get all cabinets in the scene that belong to this view
-    const viewCabinets = cabinets.filter(c => c.viewId === viewId)
-    
-    if (viewCabinets.length < 2) return 20
-    
+  const calculateCurrentGap = useCallback((targetCabinets: CabinetData[]): number => {
+    if (targetCabinets.length < 2) return 20
+
     // Get all base/tall cabinets
-    const baseTallCabinets = viewCabinets.filter(c => c.cabinetType === 'base' || c.cabinetType === 'tall')
-    
+    const baseTallCabinets = targetCabinets.filter(c => c.cabinetType === 'base' || c.cabinetType === 'tall')
+
     // Get all overhead (top) cabinets
-    const overheadCabinets = viewCabinets.filter(c => c.cabinetType === 'top')
-    
+    const overheadCabinets = targetCabinets.filter(c => c.cabinetType === 'top')
+
     // If no base/tall or no overhead cabinets, return default
     if (baseTallCabinets.length === 0 || overheadCabinets.length === 0) return 20
-    
+
     // Find the HIGHEST base/tall cabinet top (Y + height)
     const highestBaseTop = Math.max(
       ...baseTallCabinets.map(c => c.group.position.y + c.carcass.dimensions.height)
     )
-    
+
     // Find the LOWEST overhead cabinet Y position (bottom)
     const lowestOverheadY = Math.min(
       ...overheadCabinets.map(c => c.group.position.y)
     )
-    
+
     // Calculate gap: Lowest Overhead Y minus Highest Base Top
     if (lowestOverheadY > highestBaseTop) {
       const gap = lowestOverheadY - highestBaseTop
       return Math.round(gap)
     }
-    
+
     // If overhead is below base (shouldn't happen normally), return default
     return 20
-  }, [cabinets])
+  }, [])
 
   // Calculate current kicker height from base/tall cabinets in the view
-  const calculateCurrentKickerHeight = useCallback((viewId: string | null): number => {
-    if (!viewId) return 100
-    
-    // Get all cabinets in the scene that belong to this view
-    const viewCabinets = cabinets.filter(c => c.viewId === viewId)
-    
+  const calculateCurrentKickerHeight = useCallback((targetCabinets: CabinetData[]): number => {
     // Get all base/tall cabinets
-    const baseTallCabinets = viewCabinets.filter(c => c.cabinetType === 'base' || c.cabinetType === 'tall')
-    
+    const baseTallCabinets = targetCabinets.filter(c => c.cabinetType === 'base' || c.cabinetType === 'tall')
+
     if (baseTallCabinets.length === 0) return 100
-    
+
     // Kicker height is the Y position of base/tall cabinets
     // Get the most common kicker height (or average if they differ)
     const kickerHeights = baseTallCabinets.map(c => c.group.position.y)
-    
+
     // Return the first kicker height found (they should all be the same in a view)
     // If they differ, return the most common one or average
     if (kickerHeights.length > 0) {
       // Round to nearest integer
       return Math.round(kickerHeights[0])
     }
-    
+
     return 100
-  }, [cabinets])
+  }, [])
 
   // Calculate min/max splashback height (max is fixed at 1000mm, constraints applied in handler)
   const calculateSplashbackLimits = useCallback((viewId: string | null): { min: number; max: number } => {
@@ -288,12 +300,12 @@ export const ViewDetailDrawer: React.FC<Props> = ({
 
   // State for kicker height - initialize with current value
   const [kickerHeightValue, setKickerHeightValue] = useState(() => {
-    return calculateCurrentKickerHeight(viewId)
+    return calculateCurrentKickerHeight(viewCabinets)
   })
 
   // State for splashback height - initialize with current gap
   const [splashbackHeightValue, setSplashbackHeightValue] = useState(() => {
-    return calculateCurrentGap(viewId)
+    return calculateCurrentGap(viewCabinets)
   })
 
   // Calculate splashback limits
@@ -322,12 +334,12 @@ export const ViewDetailDrawer: React.FC<Props> = ({
     )
 
     if (shouldInitialize) {
-      const currentKickerHeight = calculateCurrentKickerHeight(viewId)
+      const currentKickerHeight = calculateCurrentKickerHeight(viewCabinets)
       // Clamp to valid range (16-170mm)
       const clampedKickerHeight = Math.max(16, Math.min(170, currentKickerHeight))
       setKickerHeightValue(clampedKickerHeight)
     }
-  }, [isOpen, viewId, calculateCurrentKickerHeight])
+  }, [isOpen, viewId, calculateCurrentKickerHeight, viewCabinets])
 
   // Update splashback height when drawer opens or viewId changes
   React.useEffect(() => {
@@ -337,7 +349,7 @@ export const ViewDetailDrawer: React.FC<Props> = ({
     )
 
     if (shouldInitialize) {
-      const currentGap = calculateCurrentGap(viewId)
+      const currentGap = calculateCurrentGap(viewCabinets)
       // Clamp current gap to valid range
       const clampedGap = Math.max(
         splashbackLimits.min,
@@ -345,7 +357,7 @@ export const ViewDetailDrawer: React.FC<Props> = ({
       )
       setSplashbackHeightValue(clampedGap)
     }
-  }, [isOpen, viewId, calculateCurrentGap, splashbackLimits])
+  }, [isOpen, viewId, calculateCurrentGap, splashbackLimits, viewCabinets])
   
   // Group dimensions by threeJsType
   const groupedDimensions = useMemo(() => {
@@ -414,6 +426,24 @@ export const ViewDetailDrawer: React.FC<Props> = ({
 
             {/* Content */}
             <div className="p-4">
+              {viewId &&
+                formulaPieces &&
+                getGDFormula &&
+                onGDFormulaChange && (
+                  <GDFormulaSection
+                    viewId={viewId as ViewId}
+                    gdList={gdListWithSliders.map((gd) => ({
+                      gdId: gd.gdId,
+                      name: gd.name,
+                    }))}
+                    pieces={formulaPieces}
+                    getGDFormula={getGDFormula}
+                    onGDFormulaChange={onGDFormulaChange}
+                    getGDFormulaLastEvaluatedAt={getGDFormulaLastEvaluatedAt}
+                    activeCabinetId={viewCabinets[0]?.cabinetId}
+                  />
+                )}
+
               <h3 className="text-lg font-semibold text-gray-800 mb-4">Global Dimensions</h3>
               
               {!wsProducts ? (
@@ -529,52 +559,15 @@ export const ViewDetailDrawer: React.FC<Props> = ({
             </div>
             
             {/* Kicker Height Control - above Splashback */}
-            {viewId && (
+            {viewId && onKickerHeightChange && (
               <div className="mt-6 pt-6 border-t border-gray-300">
                 <div className="border border-gray-200 rounded-lg bg-white p-4">
                   <h3 className="font-semibold text-gray-800 mb-4">Kicker Height</h3>
-                  <div>
-                    <h4 className="font-medium text-gray-700 mb-3 text-sm">Leg Height for Base and Tall Cabinets</h4>
-                    
-                    {/* Number input and slider */}
-                    <div>
-                      <div className="flex items-center gap-1.5 mb-1.5">
-                        <input
-                          type="number"
-                          className="w-20 text-center text-sm px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent leading-tight"
-                          value={kickerHeightValue}
-                          min={16}
-                          max={170}
-                          onChange={(e) => {
-                            const val = Number(e.target.value)
-                            if (val >= 16 && val <= 170 && viewId) {
-                              setKickerHeightValue(val)
-                              onKickerHeightChange?.(viewId, val)
-                            }
-                          }}
-                        />
-                        <span className="text-sm text-gray-500">mm</span>
-                      </div>
-                      <input
-                        type="range"
-                        className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
-                        value={kickerHeightValue}
-                        min={16}
-                        max={170}
-                        onChange={(e) => {
-                          const val = Number(e.target.value)
-                          if (viewId) {
-                            setKickerHeightValue(val)
-                            onKickerHeightChange?.(viewId, val)
-                          }
-                        }}
-                      />
-                      <div className="flex justify-between text-xs text-gray-500 mt-1">
-                        <span>16</span>
-                        <span>170</span>
-                      </div>
-                    </div>
-                  </div>
+                  <KickerHeightSection
+                    viewId={viewId}
+                    currentKickerHeight={kickerHeightValue}
+                    onKickerHeightChange={onKickerHeightChange}
+                  />
                 </div>
               </div>
             )}

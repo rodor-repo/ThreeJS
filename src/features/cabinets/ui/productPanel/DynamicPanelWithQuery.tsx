@@ -21,6 +21,7 @@ export const DynamicPanelWithQuery: React.FC<ProductPanelProps> = ({
   selectedCabinet,
   onDimensionsChange,
   onMaterialChange,
+  onViewKickerHeightChange,
   onOverhangDoorToggle,
   onShelfCountChange,
   onDrawerHeightChange,
@@ -110,6 +111,7 @@ export const DynamicPanelWithQuery: React.FC<ProductPanelProps> = ({
       defaultMaterialSelections={defaultMaterialSelections}
       selectedCabinet={selectedCabinet}
       onDimensionsChange={onDimensionsChange}
+      onViewKickerHeightChange={onViewKickerHeightChange}
       onOverhangDoorToggle={onOverhangDoorToggle}
       onShelfCountChange={onShelfCountChange}
       onMaterialChange={onMaterialChange}

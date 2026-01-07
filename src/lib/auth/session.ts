@@ -19,7 +19,7 @@ export function getSessionTtlSeconds() {
   const rawValue = process.env.THREEJS_SESSION_TTL_SECONDS
   if (!rawValue) return DEFAULT_SESSION_TTL_SECONDS
 
-  const parsed = Number(rawValue)
+  const parsed = Number(rawValue.trim())
   if (!Number.isFinite(parsed) || parsed <= 0) {
     return DEFAULT_SESSION_TTL_SECONDS
   }
